@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile default="true" name="Default" enabled="true" />
+      <profile name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name="tenet-storage" />
+        <module name="tenet-metrics" />
+        <module name="tenet-gateway" />
+        <module name="tenet-common" />
+        <module name="tenet-orm" />
+        <module name="tenet-http" />
+        <module name="tenet-app" />
+        <module name="tenet-log" />
+        <module name="tenet-mint" />
+      </profile>
+    </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="client" target="19" />
+      <module name="common" target="19" />
+      <module name="log" target="19" />
+      <module name="rpc" target="19" />
+      <module name="server" target="19" />
+      <module name="tenet-cluster" target="19" />
+      <module name="tenet-metrics-client" target="19" />
+      <module name="tenet-metrics-server" target="19" />
+      <module name="tenet-network" target="19" />
+      <module name="tenet-rpc" target="19" />
+    </bytecodeTargetLevel>
+  </component>
+  <component name="JavacSettings">
+    <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="client" options="-parameters --enable-preview" />
+      <module name="common" options="-parameters --enable-preview" />
+      <module name="log" options="-parameters --enable-preview" />
+      <module name="rpc" options="-parameters --enable-preview" />
+      <module name="server" options="-parameters --enable-preview" />
+      <module name="tenet" options="" />
+      <module name="tenet-app" options="-parameters --enable-preview" />
+      <module name="tenet-cluster" options="-parameters --enable-preview" />
+      <module name="tenet-common" options="-parameters --enable-preview" />
+      <module name="tenet-gateway" options="-parameters --enable-preview" />
+      <module name="tenet-http" options="-parameters --enable-preview" />
+      <module name="tenet-log" options="-parameters --enable-preview" />
+      <module name="tenet-metrics" options="-parameters --enable-preview" />
+      <module name="tenet-metrics-client" options="-parameters --enable-preview" />
+      <module name="tenet-metrics-server" options="-parameters --enable-preview" />
+      <module name="tenet-mint" options="-parameters --enable-preview" />
+      <module name="tenet-network" options="-parameters --enable-preview" />
+      <module name="tenet-orm" options="-parameters --enable-preview" />
+      <module name="tenet-rpc" options="-parameters --enable-preview" />
+      <module name="tenet-storage" options="-parameters --enable-preview" />
+    </option>
+  </component>
+</project>
