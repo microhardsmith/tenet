@@ -24,8 +24,8 @@
 hs_err_pid*
 
 #idea
-.idea/
-target/
+.idea/*
+*/target/*
 
 #rocksdb cache dir
 *-cache/

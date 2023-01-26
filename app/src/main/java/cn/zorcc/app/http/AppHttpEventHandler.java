@@ -114,7 +114,7 @@ public class AppHttpEventHandler implements EventHandler<AppHttpEvent>, AppHttpM
             case Patch patch -> registerUrlMapping(impl, method, HttpMethod.PATCH, prefix + patch.path());
             case Put put -> registerUrlMapping(impl, method, HttpMethod.PUT, prefix + put.path());
             case Delete delete -> registerUrlMapping(impl, method, HttpMethod.DELETE, prefix + delete.path());
-            case default -> throw new FrameworkException(ExceptionType.HTTP, "Target annotation not found");
+            default -> throw new FrameworkException(ExceptionType.HTTP, "Target annotation not found");
         }
     }
 
