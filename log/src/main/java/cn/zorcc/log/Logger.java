@@ -27,7 +27,7 @@ public class Logger extends LegacyAbstractLogger {
 
 
     static {
-        LogConfig logConfig = ConfigUtil.loadJsonConfig(Constants.LOG_FILE_TYPE, LogConfig.class);
+        LogConfig logConfig = ConfigUtil.loadJsonConfig(Constants.DEFAULT_LOG_CONFIG_NAME, LogConfig.class);
         switch (logConfig.getLevel()) {
             case Constants.TRACE -> level = Constants.TRACE;
             case Constants.INFO -> level = Constants.INFO;

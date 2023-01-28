@@ -45,6 +45,7 @@ public class Constants {
     public static final Integer KB = 1024;
     public static final Integer MB = 1024 * 1024;
     public static final Integer PAGE_SIZE = 4 * KB;
+    public static final String UNREACHED = "Should never be reached";
 
     public static final String EMPTY_STRING = "";
     public static final String NULL_STRING = "null";

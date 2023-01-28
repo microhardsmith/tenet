@@ -6,8 +6,6 @@ import java.util.Queue;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 
 public class Q {
@@ -15,11 +13,10 @@ public class Q {
     private static volatile int m = 0;
 
     public static void main(String[] args) throws InterruptedException {
-//        for(int i = 0;i < 10; i++) {
-//            testQueue();
-//            testSpsc();
-//        }
-        testPark();
+        for(int i = 0;i < 10; i++) {
+            testQueue();
+            testSpsc();
+        }
     }
 
     public static void testPark() throws InterruptedException {
@@ -85,8 +82,9 @@ public class Q {
                 time++;
                 // !atomicBoolean.get() && atomicBoolean.compareAndSet(false, true)
                 if(m == 1) {
-                    LockSupport.unpark(consumer);
                     m = 0;
+                    LockSupport.unpark(consumer);
+
                 }
             }
             System.out.println("Producer Times : " + time);

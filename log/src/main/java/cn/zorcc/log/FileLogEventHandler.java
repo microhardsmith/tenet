@@ -1,10 +1,11 @@
 package cn.zorcc.log;
 
+import cn.zorcc.common.BlockingQ;
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.MpscBlockingQ;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.util.ThreadUtil;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -12,14 +13,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  *  日志文件记录,将日志采用追加写的方式写入本地磁盘中
  */
 public class FileLogEventHandler implements EventHandler<LogEvent> {
+    private static final String NAME = "logFileHandler";
     /**
      *  日志文件名映射
      */
@@ -61,13 +60,9 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
      */
     private long flushSize = 0L;
     /**
-     *  日志打印线程
+     *  日志消费者阻塞队列
      */
-    private final Thread thread;
-    /**
-     *  日志消费队列
-     */
-    private final BlockingQueue<LogEvent> queue = new LinkedBlockingQueue<>();
+    private final BlockingQ<LogEvent> blockingQ;
     public FileLogEventHandler(LogConfig logConfig) {
         try{
             String logDirPath = logConfig.getLogFileDir();
@@ -114,26 +109,20 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
             }else {
                 this.rollingCount = -1;
             }
-            this.thread = ThreadUtil.virtual("logFileHandler", () -> {
-                Thread currentThread = Thread.currentThread();
-                while (!currentThread.isInterrupted()) {
-                    try{
-                        LogEvent logEvent = queue.take();
-                        byte[] utf8FormattedMsg = logEvent.getLine().getBytes(StandardCharsets.UTF_8);
-                        fileSize += utf8FormattedMsg.length;
-                        if(fileSize > maxFileSize) {
-                            archiveLog();
-                        }
-                        fileOutputStream.write(utf8FormattedMsg);
-                        if(fileSize - flushSize > Constants.PAGE_SIZE) {
-                            fileOutputStream.flush();
-                            flushSize = fileSize;
-                        }
-                    }catch (InterruptedException e) {
-                        currentThread.interrupt();
-                    }catch (IOException e) {
-                        throw new FrameworkException(ExceptionType.LOG, "IOException caught while writing log into file", e);
+            this.blockingQ = new MpscBlockingQ<>(NAME, logEvent -> {
+                try{
+                    byte[] utf8FormattedMsg = logEvent.getLine().getBytes(StandardCharsets.UTF_8);
+                    fileSize += utf8FormattedMsg.length;
+                    if(fileSize > maxFileSize) {
+                        archiveLog();
                     }
+                    fileOutputStream.write(utf8FormattedMsg);
+                    if(fileSize - flushSize > Constants.PAGE_SIZE) {
+                        fileOutputStream.flush();
+                        flushSize = fileSize;
+                    }
+                }catch (IOException e) {
+                    throw new FrameworkException(ExceptionType.LOG, "IOException caught while writing log into file", e);
                 }
             });
         }catch (IOException e) {
@@ -143,22 +132,17 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
 
     @Override
     public void init() {
-        thread.start();
+        blockingQ.start();
     }
 
     @Override
     public void handle(LogEvent event) {
-        try {
-            queue.put(event);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new FrameworkException(ExceptionType.LOG, "Thread interrupt", e);
-        }
+        blockingQ.put(event);
     }
 
     @Override
     public void shutdown() {
-        thread.interrupt();
+        blockingQ.shutdown();
     }
 
     /**

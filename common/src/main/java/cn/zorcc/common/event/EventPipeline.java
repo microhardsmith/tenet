@@ -1,13 +1,10 @@
 package cn.zorcc.common.event;
 
-import cn.zorcc.common.Context;
 import cn.zorcc.common.LifeCycle;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -15,10 +12,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class EventPipeline<T extends Event> implements LifeCycle {
     private final AtomicBoolean initFlag = new AtomicBoolean(false);
-    private final List<EventHandler<T>> eventHandlers;
+    private final EventHandler<T>[] eventHandlers;
+    private final int size;
 
+    @SuppressWarnings("unchecked")
     public EventPipeline(List<EventHandler<T>> eventHandlers) {
-        this.eventHandlers = Collections.unmodifiableList(eventHandlers);
+        this.size = eventHandlers.size();
+        this.eventHandlers = (EventHandler<T>[]) new EventHandler[size];
+        for(int i = 0; i < size; i++) {
+            this.eventHandlers[i] = eventHandlers.get(i);
+        }
     }
 
     /**
@@ -26,11 +29,11 @@ public class EventPipeline<T extends Event> implements LifeCycle {
      */
     @Override
     public void init() {
-        if (initFlag.compareAndSet(false, true)) {
+        if (!initFlag.compareAndSet(false, true)) {
             throw new FrameworkException(ExceptionType.CONTEXT, "EventPipeline already in initialization");
         }
-        for (EventHandler<T> eventHandler : eventHandlers) {
-            eventHandler.init();
+        for(int i = 0; i < size; i++) {
+            eventHandlers[i].init();
         }
     }
 
@@ -40,8 +43,8 @@ public class EventPipeline<T extends Event> implements LifeCycle {
      *  尽量在新建的虚拟线程中触发事件，事件的触发是默认同步的
      */
     public void fireEvent(T event) {
-        for (EventHandler<T> eventHandler : eventHandlers) {
-            eventHandler.handle(event);
+        for(int i = 0; i < size; i++) {
+            eventHandlers[i].handle(event);
         }
     }
 
@@ -50,8 +53,8 @@ public class EventPipeline<T extends Event> implements LifeCycle {
      */
     @Override
     public void shutdown() {
-        for (EventHandler<T> eventHandler : eventHandlers) {
-            eventHandler.shutdown();
+        for(int i = 0; i < size; i++) {
+            eventHandlers[i].shutdown();
         }
     }
 }

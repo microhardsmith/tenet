@@ -11,7 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import java.lang.management.ManagementFactory;
 import java.lang.management.RuntimeMXBean;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -65,7 +64,7 @@ public class Context {
      * @param pipeline 事件对应pipeline对象
      */
     public static <T extends Event> void registerPipeline(Class<T> clazz, EventPipeline<T> pipeline) {
-        if (!Objects.equals(pipelineMap.putIfAbsent(clazz, pipeline), pipeline)) {
+        if (pipelineMap.putIfAbsent(clazz, pipeline) != null) {
             throw new FrameworkException(ExceptionType.CONTEXT, "Pipeline already exist for %s".formatted(clazz.getSimpleName()));
         }
     }
@@ -92,7 +91,7 @@ public class Context {
         if (!clazz.isAssignableFrom(obj.getClass())) {
             throw new FrameworkException(ExceptionType.CONTEXT, "Container doesn't match its class : %s".formatted(clazz.getSimpleName()));
         }
-        if(!Objects.equals(containerMap.putIfAbsent(clazz, obj), obj)) {
+        if(containerMap.putIfAbsent(clazz, obj) != null) {
             throw new FrameworkException(ExceptionType.CONTEXT, "Container already exist : %s".formatted(clazz.getSimpleName()));
         }
         ContextEvent contextEvent = new ContextEvent();

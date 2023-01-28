@@ -1,7 +1,6 @@
 package cn.zorcc.common.util;
 
 import cn.zorcc.common.Constants;
-import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicLong;
@@ -44,7 +43,7 @@ public class ThreadUtil {
     public static String threadName() {
         Thread currentThread = Thread.currentThread();
         String threadName = currentThread.getName();
-        if(threadName.isBlank()) {
+        if(threadName.isEmpty()) {
             return (currentThread.isVirtual() ? Constants.VIRTUAL_THREAD : Constants.PLATFORM_THREAD) + currentThread.threadId();
         }else {
             return threadName;

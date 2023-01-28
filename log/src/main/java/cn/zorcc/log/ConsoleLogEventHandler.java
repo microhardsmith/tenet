@@ -1,26 +1,24 @@
 package cn.zorcc.log;
 
+import cn.zorcc.common.BlockingQ;
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.enums.ExceptionType;
-import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.util.ThreadUtil;
+import cn.zorcc.common.MpscBlockingQ;
+import cn.zorcc.common.event.EventHandler;
 import org.slf4j.event.Level;
 
 import java.io.PrintStream;
 import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * 将日志打印至控制台
  */
-public class ConsoleLogEventHandler implements cn.zorcc.common.event.EventHandler<LogEvent>, cn.zorcc.common.LifeCycle {
+public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
+    private static final String NAME = "logConsoleHandler";
     /**
      *  系统输出流
      */
-    private static final PrintStream outPrintStream = new PrintStream(System.out, true);
+    private static final PrintStream outPrintStream = System.out;
     /**
      *  缓存指定长度的空格数
      */
@@ -59,13 +57,9 @@ public class ConsoleLogEventHandler implements cn.zorcc.common.event.EventHandle
      */
     private final String msgColor;
     /**
-     *  日志打印线程
+     *  日志消费者阻塞队列
      */
-    private final Thread thread;
-    /**
-     *  日志消费队列
-     */
-    private final BlockingQueue<LogEvent> queue = new LinkedBlockingQueue<>();
+    private final BlockingQ<LogEvent> blockingQ;
 
     public ConsoleLogEventHandler(LogConfig logConfig) {
         this.levelLen = logConfig.getLevelLen();
@@ -75,43 +69,29 @@ public class ConsoleLogEventHandler implements cn.zorcc.common.event.EventHandle
         this.threadNameColor = logConfig.getThreadNameColor();
         this.classNameColor = logConfig.getClassNameColor();
         this.msgColor = logConfig.getMsgColor();
-        this.thread = ThreadUtil.virtual("logConsoleHandler", () -> {
-            Thread currentThread = Thread.currentThread();
-            while (!currentThread.isInterrupted()) {
-                try{
-                    LogEvent logEvent = queue.take();
-                    String consoleMsg = createConsoleMsg(logEvent);
-                    outPrintStream.print(consoleMsg);
-                    Throwable throwable = logEvent.getThrowable();
-                    if (throwable != null) {
-                        throwable.printStackTrace(outPrintStream);
-                    }
-                }catch (InterruptedException e) {
-                    currentThread.interrupt();
-                }
+        this.blockingQ = new MpscBlockingQ<>(NAME, logEvent -> {
+            String consoleMsg = createConsoleMsg(logEvent);
+            outPrintStream.print(consoleMsg);
+            Throwable throwable = logEvent.getThrowable();
+            if (throwable != null) {
+                throwable.printStackTrace(outPrintStream);
             }
         });
-
     }
 
     @Override
     public void init() {
-        thread.start();
+        blockingQ.start();
     }
 
     @Override
     public void handle(LogEvent event) {
-        try {
-            queue.put(event);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new FrameworkException(ExceptionType.LOG, "Thread interrupt", e);
-        }
+        blockingQ.put(event);
     }
 
     @Override
     public void shutdown() {
-        thread.interrupt();
+        blockingQ.shutdown();
     }
 
     /**
@@ -149,7 +129,7 @@ public class ConsoleLogEventHandler implements cn.zorcc.common.event.EventHandle
     }
 
     private void wrap(StringBuilder stringBuilder, String color, String msg) {
-        if(!color.isBlank()) {
+        if(!color.isEmpty()) {
             stringBuilder.append(PREFIX).append(color).append(msg).append(SUFFIX);
         }else {
             stringBuilder.append(msg);
@@ -157,7 +137,7 @@ public class ConsoleLogEventHandler implements cn.zorcc.common.event.EventHandle
     }
 
     private void wrap(StringBuilder stringBuilder, String color, char[] msg) {
-        if(!color.isBlank()) {
+        if(!color.isEmpty()) {
             stringBuilder.append(PREFIX).append(color).append(msg).append(SUFFIX);
         }else {
             stringBuilder.append(msg);
