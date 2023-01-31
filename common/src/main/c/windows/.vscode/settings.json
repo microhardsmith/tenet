@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "stdbool.h": "c",
+        "climits": "c",
+        "stdint.h": "c",
+        "stdlib.h": "c",
+        "winsock2.h": "c",
+        "ws2tcpip.h": "c"
+    }
+}
