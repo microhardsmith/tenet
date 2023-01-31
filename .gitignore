@@ -27,6 +27,9 @@ hs_err_pid*
 .idea/*
 */target/*
 
+#vscode
+.vscode/*
+
 #rocksdb cache dir
 *-cache/
 
