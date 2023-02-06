@@ -12,7 +12,7 @@ public enum ExceptionType {
     HTTP,
     JSON,
     CACHE,
-    RPC,
+    NET,
     JOB,
     ORM,
     CLUSTER,

@@ -16,6 +16,8 @@ public class ThreadUtil {
 
     /**
      *  构建虚拟线程执行任务
+     * @param name 虚拟线程名称
+     * @param runnable 任务体
      * @return 执行任务的虚拟线程
      */
     public static Thread virtual(String name, Runnable runnable) {
@@ -23,6 +25,20 @@ public class ThreadUtil {
                 .allowSetThreadLocals(false)
                 .inheritInheritableThreadLocals(false)
                 .uncaughtExceptionHandler(Constants.DEFAULT_EXCEPTION_HANDLER)
+                .name(name)
+                .unstarted(runnable);
+    }
+
+    /**
+     *  构建平台线程执行任务
+     * @param name 平台线程名称
+     * @param runnable 任务体
+     * @return 执行任务的平台线程
+     */
+    public static Thread platform(String name, Runnable runnable) {
+        return Thread.ofPlatform()
+                .allowSetThreadLocals(false)
+                .inheritInheritableThreadLocals(false)
                 .name(name)
                 .unstarted(runnable);
     }

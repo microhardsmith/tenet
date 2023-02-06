@@ -111,8 +111,8 @@
             <arg>-Xlint</arg>
             <arg>--enable-preview</arg> <!-- enable virtual threads and ffi-->
           </compilerArgs>
-          <source>${java.version}</source>
-          <target>${java.version}</target>
+          <source>20</source>
+          <target>20</target>
           <release>${java.version}</release>
           <meminitial>256m</meminitial>
           <maxmem>1024m</maxmem>

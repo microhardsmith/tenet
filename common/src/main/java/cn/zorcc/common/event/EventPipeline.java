@@ -13,11 +13,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class EventPipeline<T extends Event> implements LifeCycle {
     private final AtomicBoolean initFlag = new AtomicBoolean(false);
     private final EventHandler<T>[] eventHandlers;
-    private final int size;
 
     @SuppressWarnings("unchecked")
     public EventPipeline(List<EventHandler<T>> eventHandlers) {
-        this.size = eventHandlers.size();
+        int size = eventHandlers.size();
         this.eventHandlers = (EventHandler<T>[]) new EventHandler[size];
         for(int i = 0; i < size; i++) {
             this.eventHandlers[i] = eventHandlers.get(i);
@@ -32,8 +31,8 @@ public class EventPipeline<T extends Event> implements LifeCycle {
         if (!initFlag.compareAndSet(false, true)) {
             throw new FrameworkException(ExceptionType.CONTEXT, "EventPipeline already in initialization");
         }
-        for(int i = 0; i < size; i++) {
-            eventHandlers[i].init();
+        for (EventHandler<T> eventHandler : eventHandlers) {
+            eventHandler.init();
         }
     }
 
@@ -43,8 +42,8 @@ public class EventPipeline<T extends Event> implements LifeCycle {
      *  尽量在新建的虚拟线程中触发事件，事件的触发是默认同步的
      */
     public void fireEvent(T event) {
-        for(int i = 0; i < size; i++) {
-            eventHandlers[i].handle(event);
+        for (EventHandler<T> eventHandler : eventHandlers) {
+            eventHandler.handle(event);
         }
     }
 
@@ -53,8 +52,8 @@ public class EventPipeline<T extends Event> implements LifeCycle {
      */
     @Override
     public void shutdown() {
-        for(int i = 0; i < size; i++) {
-            eventHandlers[i].shutdown();
+        for (EventHandler<T> eventHandler : eventHandlers) {
+            eventHandler.shutdown();
         }
     }
 }

@@ -2,18 +2,24 @@ package cn.zorcc.log;
 
 import cn.zorcc.common.Context;
 import cn.zorcc.common.event.EventPipeline;
+import cn.zorcc.common.pojo.Loc;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.lang.reflect.Field;
 
 @Slf4j
 public class LogTest {
     @Test
-    public void testLog() throws InterruptedException {
-
+    public void testReflect() throws InterruptedException {
+        Loc loc = new Loc("123",123);
+        Class<? extends Loc> clazz = loc.getClass();
+        for (Field declaredField : clazz.getDeclaredFields()) {
+            System.out.println(declaredField.getName());
+        }
     }
 
     public static void main(String[] args) throws InterruptedException {
