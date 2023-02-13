@@ -8,7 +8,7 @@ def searchClang():
     lines = []
     for line in process.stdout.readlines() + process.stderr.readlines():
         lines.append(str(line, encoding='utf-8'))
-    if lines[0].find('clang version') == 0:
+    if lines[0].find('clang version') >= 0:
         print('Clang installed')
         return lines[1]
     else:

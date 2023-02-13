@@ -13,9 +13,29 @@ import java.io.InputStream;
  * 配置加载类
  */
 public class ConfigUtil {
-
     private ConfigUtil() {
         throw new UnsupportedOperationException();
+    }
+
+    /**
+     *   检测ipv4地址字符串的合法性
+     */
+    public static boolean checkIp(String ip) {
+        if (ip.isBlank()) {
+            return false;
+        }
+        String[] strings = ip.split("\\.");
+        for (String s : strings) {
+            try{
+                int value = Integer.parseInt(s);
+                if(value < 0 || value > 255) {
+                    return false;
+                }
+            }catch (NumberFormatException e) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

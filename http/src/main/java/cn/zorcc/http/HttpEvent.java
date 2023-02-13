@@ -1,7 +1,6 @@
 package cn.zorcc.http;
 
 import cn.zorcc.common.event.Event;
-import cn.zorcc.http.HttpReq;
 import io.netty.channel.Channel;
 import io.netty.handler.codec.http.FullHttpRequest;
 

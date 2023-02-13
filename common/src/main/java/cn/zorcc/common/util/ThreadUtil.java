@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class ThreadUtil {
 
+    private static final AtomicLong counter = new AtomicLong(0L);
     private ThreadUtil() {
         throw new UnsupportedOperationException();
     }
@@ -39,17 +40,17 @@ public class ThreadUtil {
         return Thread.ofPlatform()
                 .allowSetThreadLocals(false)
                 .inheritInheritableThreadLocals(false)
+                .uncaughtExceptionHandler(Constants.DEFAULT_EXCEPTION_HANDLER)
                 .name(name)
                 .unstarted(runnable);
     }
 
     public static ThreadFactory threadFactory(String name) {
-        final AtomicLong counter = new AtomicLong(0L);
         return runnable -> Thread.ofPlatform()
-                .name(name + "-" + counter.getAndIncrement())
                 .allowSetThreadLocals(true)
                 .inheritInheritableThreadLocals(true)
                 .uncaughtExceptionHandler(Constants.DEFAULT_EXCEPTION_HANDLER)
+                .name(name + "-" + counter.getAndIncrement())
                 .unstarted(runnable);
     }
 

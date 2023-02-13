@@ -1,5 +1,6 @@
 package cn.zorcc.common;
 
+import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.PlatformUtil;
 import lombok.extern.slf4j.Slf4j;
 
@@ -13,10 +14,11 @@ import java.nio.charset.StandardCharsets;
 public class Constants {
     public static final String CONFIG_FILE = "configFile";
     public static final Thread.UncaughtExceptionHandler DEFAULT_EXCEPTION_HANDLER = (thread, throwable) -> {
-        log.error("Virtual Thread occur uncaught exception : {}", throwable.getClass().getSimpleName());
         throwable.printStackTrace();
+        if(throwable instanceof FrameworkException e) {
+            thread.interrupt();
+        }
     };
-
     public static final int TRACE = 0;
     public static final int DEBUG = 10;
     public static final int INFO = 20;
