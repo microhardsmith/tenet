@@ -44,9 +44,10 @@ public class Constants {
     public static final int DEFAULT_LOG_QUEUE_SIZE = PlatformUtil.getCpuCores() << 2;
     public static final int DEFAULT_STRING_BUILDER_SIZE = 128;
     public static final byte END_BYTE = 0;
-    public static final Integer KB = 1024;
-    public static final Integer MB = 1024 * 1024;
-    public static final Integer PAGE_SIZE = 4 * KB;
+    public static final int BYTE_SIZE = 8;
+    public static final int KB = 1024;
+    public static final int MB = 1024 * 1024;
+    public static final int PAGE_SIZE = 4 * KB;
     public static final String UNREACHED = "Should never be reached";
 
     public static final String EMPTY_STRING = "";
@@ -220,6 +221,14 @@ public class Constants {
     public static final int WHERE_LENGTH = 8;
     public static final String DYNAMIC_SQL_ERR = "Err occurred in dynamic sql";
     public static final String TEMP_DIR = "/temp/lithiasis";
+
+    /**
+     *  net
+     */
+    public static final int EPOLL_IN = 1;
+    public static final int EPOLL_OUT = 1 << 2;
+    public static final int EPOLL_ERR = 1 << 3;
+    public static final int EPOLL_HUP = 1 << 4;
 
 
     private Constants() {

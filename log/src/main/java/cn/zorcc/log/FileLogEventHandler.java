@@ -7,9 +7,7 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.exception.FrameworkException;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -46,7 +44,7 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
     /**
      *  日志输出流
      */
-    private FileOutputStream fileOutputStream;
+    private OutputStream fileOutputStream;
     /**
      *  当前日志文件Index
      */
@@ -102,7 +100,7 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
                     throw new FrameworkException(ExceptionType.LOG, "Log files corrupted, Index out of range");
                 }
             }
-            this.fileOutputStream = new FileOutputStream(logFilePath, true);
+            this.fileOutputStream = new BufferedOutputStream(new FileOutputStream(logFilePath, true));
             this.maxFileSize = logConfig.getMaxFileSize() * Constants.KB;
             if(Boolean.TRUE.equals(logConfig.isEnableRolling())) {
                 this.rollingCount = logConfig.getRollingFileCount();

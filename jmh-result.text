@@ -1,0 +1,3 @@
+Benchmark               Mode  Cnt    Score    Error  Units
+PrintfTest.testNative  thrpt    5  322.249 ± 22.117  ops/s
+PrintfTest.testSystem  thrpt    5   21.655 ±  1.535  ops/s

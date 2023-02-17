@@ -1,5 +1,3 @@
-
-
 #include <errno.h>
 #include <WinSock2.h>
 #include <WS2tcpip.h>
@@ -65,7 +63,7 @@ int main() {
     // 绑定
     struct sockaddr_in serverAddr;
     char loc[] = "127.0.0.1";
-    int serverPort = 19999;
+    int serverPort = 10705;
     int setSockAddrResult = w_set_sock_addr(&serverAddr, loc, serverPort);
     if(setSockAddrResult != 1) {
         printf("set sock addr result : %d \n", setSockAddrResult);
@@ -132,8 +130,12 @@ int main() {
                     if(n < 0) {
                         printf("read error \n");
                     }else if(n == 0) {
+                        printf("close socket : %d \n", fd);
                         if(w_epoll_ctl_del(handle, fd) == -1) {
                             printf("Err epoll ctl \n");
+                        }
+                        if(w_close_socket(fd) == -1) {
+                            printf("close err : %d \n", wsa_get_last_error());
                         }
                     }else {
                         printf("read bytes : %d \n", n);
@@ -145,6 +147,9 @@ int main() {
     }
     free(addrStr);
     addrStr = NULL;
+    if(w_close_socket(socket) == -1) {
+        printf("close socket err : %d \n", wsa_get_last_error());
+    }
     int close = w_epoll_close(handle);
     if(close == -1) {
         printf("Error at close epoll : %d \n", wsa_get_last_error());
@@ -193,6 +198,7 @@ int w_accept(SOCKET socket, struct sockaddr_in* clientAddr, int clientAddrSize) 
     return result;
 }
 
+// 获取IP地址字符串长度
 int w_address_len() {
     return INET_ADDRSTRLEN;
 }
@@ -265,9 +271,8 @@ int w_set_nonblocking(SOCKET socket) {
 int w_set_sock_addr(struct sockaddr_in* sockAddr, char* address, int port) {
     memset(sockAddr, 0, sizeof(struct sockaddr_in));  //每个字节都用0填充
     sockAddr -> sin_family = AF_INET;  //使用IPv4地址
-    int i = inet_pton(AF_INET, address == NULL ?  INADDR_ANY : address, &(sockAddr -> sin_addr)); //设置IP地址
     sockAddr -> sin_port = htons(port);  //设置端口
-    return i;
+    return inet_pton(AF_INET, address == NULL ?  INADDR_ANY : address, &(sockAddr -> sin_addr)); //设置IP地址
 }
 
 // 绑定socket到固定端口,失败则返回-1,成功则返回0
@@ -291,6 +296,15 @@ int w_listen(SOCKET socket, int backlog) {
 // 从socket接受数据,失败则返回-1,成功则返回已接收字节数,远端已关闭则返回0
 int w_recv(SOCKET socket, char* buf, int len) {
     int result = recv(socket, buf, len, 0);
+    if(result == SOCKET_ERROR) {
+        return -1;
+    }
+    return result;
+}
+
+// 关闭socket连接，失败则返回-1,成功则返回0
+int w_close_socket(SOCKET socket) {
+    int result = closesocket(socket);
     if(result == SOCKET_ERROR) {
         return -1;
     }

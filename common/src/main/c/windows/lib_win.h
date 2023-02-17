@@ -37,6 +37,8 @@ __declspec(dllexport) int w_listen(SOCKET socket, int backlog);
 
 __declspec(dllexport) int w_recv(SOCKET socket, char* buf, int len);
 
+__declspec(dllexport) int w_close_socket(SOCKET socket);
+
 __declspec(dllexport) int wsa_get_last_error();
 
 __declspec(dllexport) int wsa_clean_up();

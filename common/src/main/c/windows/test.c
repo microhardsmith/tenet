@@ -12,6 +12,10 @@ int hello(book* ptr) {
     return 0;
 }
 
+void pr(char* str) {
+    puts(str);
+}
+
 int main() {
     book t;
     int i = hello(&t);

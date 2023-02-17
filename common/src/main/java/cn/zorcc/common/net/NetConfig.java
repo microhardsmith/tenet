@@ -17,9 +17,9 @@ public class NetConfig {
      */
     private Boolean soKeepAlive = Boolean.FALSE;
     /**
-     *  是否启用Nagle算法
+     *  是否关闭Nagle算法
      */
-    private Boolean tcpNoDelay = Boolean.FALSE;
+    private Boolean tcpNoDelay = Boolean.TRUE;
     /**
      *  服务器ip地址
      */

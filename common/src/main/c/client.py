@@ -5,6 +5,7 @@ import time
 def start(clientPort, serverPort):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     print('successfully created socket')
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
     clientAddr = ('127.0.0.1', clientPort)
     s.bind(clientAddr)
@@ -17,8 +18,9 @@ def start(clientPort, serverPort):
             s.send(b'hello')
             time.sleep(5)
     except KeyboardInterrupt:
+        print('exit now ...')
         s.close()
-        exit()
+        exit(0)
 
 if __name__ == '__main__':
     print('Start')
