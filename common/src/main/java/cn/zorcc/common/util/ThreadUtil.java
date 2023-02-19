@@ -16,7 +16,7 @@ public class ThreadUtil {
     }
 
     /**
-     *  构建虚拟线程执行任务
+     *  构建虚拟线程执行任务,虚拟线程默认不允许thread-local
      * @param name 虚拟线程名称
      * @param runnable 任务体
      * @return 执行任务的虚拟线程
@@ -31,15 +31,15 @@ public class ThreadUtil {
     }
 
     /**
-     *  构建平台线程执行任务
+     *  构建平台线程执行任务,平台线程默认允许thread-local
      * @param name 平台线程名称
      * @param runnable 任务体
      * @return 执行任务的平台线程
      */
     public static Thread platform(String name, Runnable runnable) {
         return Thread.ofPlatform()
-                .allowSetThreadLocals(false)
-                .inheritInheritableThreadLocals(false)
+                .allowSetThreadLocals(true)
+                .inheritInheritableThreadLocals(true)
                 .uncaughtExceptionHandler(Constants.DEFAULT_EXCEPTION_HANDLER)
                 .name(name)
                 .unstarted(runnable);

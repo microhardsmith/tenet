@@ -3,16 +3,23 @@ package cn.zorcc.common;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.VarHandle;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
 /**
  *  Helper class when need to reach C native methods
  */
 public class NativeHelper {
     private static final Linker linker = Linker.nativeLinker();
+    private static final String tmpLibName = "tenet-lib";
 
     /**
      * 从C动态库中获取指定函数的MethodHandle
@@ -28,19 +35,28 @@ public class NativeHelper {
     }
 
     /**
-     * 从resource文件夹路径下加载动态链接库
+     * 从resource文件夹路径下加载动态链接库 note: 必须在platform thread下进行操作，需要拷贝文件可能阻塞
      * @param resourcePath 动态链接库路径
      */
     public static SymbolLookup loadLibraryFromResource(String resourcePath) {
-        URL resource = NativeHelper.class.getResource(resourcePath);
-        if(resource == null) {
-            throw new FrameworkException(ExceptionType.NATIVE, "ResourcePath is not valid");
-        }else {
-            String path = resource.getPath();
-            if(path.startsWith("/")) {
-                path = path.substring(Constants.ONE);
+        String suffix = resourcePath.substring(resourcePath.lastIndexOf('.'));
+        try(InputStream inputStream = NativeHelper.class.getResourceAsStream(resourcePath)) {
+            if(inputStream == null) {
+                throw new FrameworkException(ExceptionType.NATIVE, "ResourcePath is not valid");
+            }else {
+                final File tmp = File.createTempFile(tmpLibName, suffix);
+                Path path = tmp.toPath();
+                Files.copy(inputStream, path, StandardCopyOption.REPLACE_EXISTING);
+                if(tmp.exists()) {
+                    // when JVM exit, the tmp file will be destroyed
+                    tmp.deleteOnExit();
+                }else {
+                    throw new FrameworkException(ExceptionType.NATIVE, "File %s doesn't exist".formatted(tmp.getAbsolutePath()));
+                }
+                return SymbolLookup.libraryLookup(path, SegmentScope.global());
             }
-            return SymbolLookup.libraryLookup(path, SegmentScope.global());
+        }catch (IOException e) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Unable to load library", e);
         }
     }
 

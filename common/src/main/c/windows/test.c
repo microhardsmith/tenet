@@ -12,15 +12,13 @@ int hello(book* ptr) {
     return 0;
 }
 
-void pr(char* str) {
-    puts(str);
+int pr(char* str) {
+    return puts(str);
 }
 
 int main() {
-    book t;
-    int i = hello(&t);
-    printf("size : %llu \n", sizeof(book));
-    printf("result : %d \n", i);
-    printf("value a : %d \n", t.a);
-    printf("value b : %d \n", t.b);
+    char* str = "hello";
+    for(int i = 0; i < 1000; i++) {
+        pr(str);
+    }
 }

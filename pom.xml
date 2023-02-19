@@ -49,6 +49,7 @@
     <maven-compiler-plugin.version>3.10.1</maven-compiler-plugin.version>
     <maven.compiler.encoding>UTF-8</maven.compiler.encoding>
     <maven-surefile-plugin.version>3.0.0-M8</maven-surefile-plugin.version>
+    <maven-assembly-plugin.version>3.4.2</maven-assembly-plugin.version>
 
     <lombok.version>1.18.24</lombok.version>
     <slf4j.version>2.0.6</slf4j.version>
@@ -115,6 +116,13 @@
           <release>${java.version}</release>
           <meminitial>256m</meminitial>
           <maxmem>1024m</maxmem>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+              <version>${lombok.version}</version>
+            </path>
+          </annotationProcessorPaths>
         </configuration>
       </plugin>
 
