@@ -1,7 +1,7 @@
 package cn.zorcc.common;
 
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.util.PlatformUtil;
+import cn.zorcc.common.util.NativeUtil;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
@@ -41,7 +41,7 @@ public class Constants {
      * log配置文件名称
      */
     public static final String DEFAULT_LOG_CONFIG_NAME = "log-config.json";
-    public static final int DEFAULT_LOG_QUEUE_SIZE = PlatformUtil.getCpuCores() << 2;
+    public static final int DEFAULT_LOG_QUEUE_SIZE = NativeUtil.getCpuCores() << 2;
     public static final int DEFAULT_STRING_BUILDER_SIZE = 128;
     public static final byte END_BYTE = 0;
     public static final int BYTE_SIZE = 8;

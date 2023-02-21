@@ -189,15 +189,6 @@ int w_epoll_close(void* handle) {
     return epoll_close(handle);
 }
 
-// accept 连接,出现错误则返回-1,否则返回建立的fd
-int w_accept(SOCKET socket, struct sockaddr_in* clientAddr, int clientAddrSize) {
-    int result = accept(socket, (struct sockaddr *) clientAddr, &clientAddrSize);
-    if(result == INVALID_SOCKET) {
-        return -1;
-    }
-    return result;
-}
-
 // 获取IP地址字符串长度
 int w_address_len() {
     return INET_ADDRSTRLEN;
@@ -225,6 +216,24 @@ SOCKET w_socket_create() {
     }else {
         return servSock;
     }
+}
+
+// accept 连接,出现错误则返回-1,否则返回建立的fd
+int w_accept(SOCKET socket, struct sockaddr_in* clientAddr, int clientAddrSize) {
+    int result = accept(socket, (struct sockaddr *) clientAddr, &clientAddrSize);
+    if(result == INVALID_SOCKET) {
+        return -1;
+    }
+    return result;
+}
+
+
+// 设置sock addr,失败则返回-1,如果address字符串不合法会返回0,否则返回1
+int w_set_sock_addr(struct sockaddr_in* sockAddr, char* address, int port) {
+    memset(sockAddr, 0, sizeof(struct sockaddr_in));  //每个字节都用0填充
+    sockAddr -> sin_family = AF_INET;  //使用IPv4地址
+    sockAddr -> sin_port = htons(port);  //设置端口
+    return inet_pton(AF_INET, address == NULL ?  INADDR_ANY : address, &(sockAddr -> sin_addr)); //设置IP地址
 }
 
 // 设置TCP_NODELAY为指定值,失败返回-1,成功返回0
@@ -265,14 +274,6 @@ int w_set_nonblocking(SOCKET socket) {
         return -1;
     }
     return result;
-}
-
-// 设置sock addr,失败则返回-1,如果address字符串不合法会返回0,否则返回1
-int w_set_sock_addr(struct sockaddr_in* sockAddr, char* address, int port) {
-    memset(sockAddr, 0, sizeof(struct sockaddr_in));  //每个字节都用0填充
-    sockAddr -> sin_family = AF_INET;  //使用IPv4地址
-    sockAddr -> sin_port = htons(port);  //设置端口
-    return inet_pton(AF_INET, address == NULL ?  INADDR_ANY : address, &(sockAddr -> sin_addr)); //设置IP地址
 }
 
 // 绑定socket到固定端口,失败则返回-1,成功则返回0

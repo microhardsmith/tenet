@@ -48,10 +48,10 @@
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <maven-compiler-plugin.version>3.10.1</maven-compiler-plugin.version>
     <maven.compiler.encoding>UTF-8</maven.compiler.encoding>
-    <maven-surefile-plugin.version>3.0.0-M8</maven-surefile-plugin.version>
+    <maven-surefile-plugin.version>3.0.0-M9</maven-surefile-plugin.version>
     <maven-assembly-plugin.version>3.4.2</maven-assembly-plugin.version>
 
-    <lombok.version>1.18.24</lombok.version>
+    <lombok.version>1.18.26</lombok.version>
     <slf4j.version>2.0.6</slf4j.version>
     <netty.version>4.1.86.Final</netty.version>
     <jctools.version>4.0.1</jctools.version>
@@ -108,19 +108,23 @@
           <verbose>true</verbose>
           <parameters>true</parameters> <!-- adding -parameter so that java reflection could see the parameter names -->
           <compilerArgs>
-            <arg>-Xlint</arg>
             <arg>--enable-preview</arg> <!-- enable virtual threads and ffi-->
           </compilerArgs>
           <source>20</source>
           <target>20</target>
           <release>${java.version}</release>
           <meminitial>256m</meminitial>
-          <maxmem>1024m</maxmem>
+          <maxmem>2048m</maxmem>
           <annotationProcessorPaths>
             <path>
               <groupId>org.projectlombok</groupId>
               <artifactId>lombok</artifactId>
               <version>${lombok.version}</version>
+            </path>
+            <path>
+              <groupId>org.openjdk.jmh</groupId>
+              <artifactId>jmh-generator-annprocess</artifactId>
+              <version>${jmh.version}</version>
             </path>
           </annotationProcessorPaths>
         </configuration>

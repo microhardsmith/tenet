@@ -1,7 +1,7 @@
 package cn.zorcc.orm;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.util.PlatformUtil;
+import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.orm.pg.PgConstants;
 import lombok.Data;
 
@@ -42,7 +42,7 @@ public class DatabaseConfig {
     /**
      * 数据库最大连接池数量,建议设置数: (核心数 * 2) + 有效硬盘数
      */
-    private Integer maximumIdle = PlatformUtil.getCpuCores() * 2 + 4;
+    private Integer maximumIdle = NativeUtil.getCpuCores() * 2 + 4;
     /**
      * postgresql连接加密模式,默认为preferred,可配置为verify-ca（验证服务端证书）或verify-full（验证服务端证书与hostname）
      */
@@ -66,7 +66,7 @@ public class DatabaseConfig {
     /**
      * 允许分布式事务使用的最大连接数,该值必须小于maximumIdle
      */
-    private Integer maximumDistributedIdle = PlatformUtil.getCpuCores();
+    private Integer maximumDistributedIdle = NativeUtil.getCpuCores();
     /**
      * 数据库空闲连接存活最大时间,单位毫秒,当使用固定大小的连接池时,设置该参数无意义
      */

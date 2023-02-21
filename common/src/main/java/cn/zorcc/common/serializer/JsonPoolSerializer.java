@@ -1,9 +1,9 @@
 package cn.zorcc.common.serializer;
 
+import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.common.Pool;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.util.PlatformUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -17,7 +17,7 @@ public enum JsonPoolSerializer implements Serializer {
     private final Pool<ObjectMapper> objectMapperPool;
 
     JsonPoolSerializer() {
-        int capacity = PlatformUtil.getCpuCores() << 2;
+        int capacity = NativeUtil.getCpuCores() << 2;
         this.objectMapperPool = new Pool<>(capacity);
         for(int i = 0; i < capacity; i++) {
             ObjectMapper objectMapper = JsonSerializer.createObjectMapper();
