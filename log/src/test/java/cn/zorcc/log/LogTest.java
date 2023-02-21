@@ -1,14 +1,16 @@
 package cn.zorcc.log;
 
 import cn.zorcc.common.Context;
+import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.common.event.EventPipeline;
 import cn.zorcc.common.pojo.Loc;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.lang.foreign.SymbolLookup;
 import java.lang.reflect.Field;
 
 @Slf4j
@@ -29,6 +31,12 @@ public class LogTest {
             log.info(String.valueOf(i));
         }
         Thread.sleep(5000L);
+    }
+
+    @Test
+    public void testNative() {
+        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource("/lib/test.dll");
+        System.out.println(symbolLookup == null);
     }
 
     @Test

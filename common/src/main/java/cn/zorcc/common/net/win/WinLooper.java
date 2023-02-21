@@ -1,7 +1,7 @@
 package cn.zorcc.common.net.win;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.NativeHelper;
+import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.net.Looper;
@@ -35,7 +35,7 @@ public class WinLooper implements Looper {
             state.selfArena = Arena.openConfined();
             state.sharedArena = Arena.openShared();
             state.epollHandle = lib.epollCreate();
-            if(NativeHelper.checkNullPointer(state.epollHandle)) {
+            if(NativeUtil.checkNullPointer(state.epollHandle)) {
                 throw new FrameworkException(ExceptionType.NET, "EpollCreate() failed with NULL pointer exception");
             }
             state.socket = check(lib.socketCreate(), "socketCreate()");

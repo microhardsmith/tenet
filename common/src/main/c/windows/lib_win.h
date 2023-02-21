@@ -11,8 +11,6 @@ __declspec(dllexport) int w_epoll_wait(void* handle, struct epoll_event* events,
 
 __declspec(dllexport) int w_epoll_close(void* handle);
 
-__declspec(dllexport) int w_accept(SOCKET socket, struct sockaddr_in* clientAddr, int clientAddrSize);
-
 __declspec(dllexport) int w_address_len();
 
 __declspec(dllexport) int w_address(struct sockaddr_in* clientAddr, char* addrStr, int len);
@@ -21,6 +19,10 @@ __declspec(dllexport) int w_port(struct sockaddr_in* clientAddr);
 
 __declspec(dllexport) SOCKET w_socket_create();
 
+__declspec(dllexport) int w_accept(SOCKET socket, struct sockaddr_in* clientAddr, int clientAddrSize);
+
+__declspec(dllexport) int w_set_sock_addr(struct sockaddr_in* sockAddr, char* address, int port);
+
 __declspec(dllexport) int w_set_reuse_addr(SOCKET socket, boolean value);
 
 __declspec(dllexport) int w_set_keep_alive(SOCKET socket, boolean value);
@@ -28,8 +30,6 @@ __declspec(dllexport) int w_set_keep_alive(SOCKET socket, boolean value);
 __declspec(dllexport) int w_set_tcp_no_delay(SOCKET socket, boolean value);
 
 __declspec(dllexport) int w_set_nonblocking(SOCKET socket);
-
-__declspec(dllexport) int w_set_sock_addr(struct sockaddr_in* sockAddr, char* address, int port);
 
 __declspec(dllexport) int w_bind(struct sockaddr_in* sockAddr, SOCKET socket, int size);
 

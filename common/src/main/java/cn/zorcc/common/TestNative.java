@@ -1,5 +1,7 @@
 package cn.zorcc.common;
 
+import cn.zorcc.common.util.NativeUtil;
+
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 
@@ -9,8 +11,8 @@ public class TestNative {
     private final String nat = "\033[34mnative\033[0m";
 
     public TestNative() {
-        SymbolLookup symbolLookup = NativeHelper.loadLibraryFromResource("/test.dll");
-        this.methodHandle = NativeHelper.methodHandle(symbolLookup, "pr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource("/lib/test.dll");
+        this.methodHandle = NativeUtil.methodHandle(symbolLookup, "pr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         this.memorySegment = MemorySegment.allocateNative(1024, SegmentScope.global());
     }
     public static void main(String[] args) throws Throwable {

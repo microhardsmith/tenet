@@ -1,7 +1,7 @@
 package cn.zorcc.common.serializer;
 
+import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.common.Pool;
-import cn.zorcc.common.util.PlatformUtil;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
@@ -21,7 +21,7 @@ public enum KryoPoolSerializer implements Serializer {
     private final Pool<Kryo> kryoPool;
 
     KryoPoolSerializer() {
-        int capacity = PlatformUtil.getCpuCores() << 2;
+        int capacity = NativeUtil.getCpuCores() << 2;
         this.kryoPool = new Pool<>(capacity);
         for(int i = 0; i < capacity; i++) {
             Kryo kryo = new Kryo();

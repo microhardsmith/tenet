@@ -70,6 +70,11 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
         this.classNameColor = logConfig.getClassNameColor();
         this.msgColor = logConfig.getMsgColor();
         this.blockingQ = new MpscBlockingQ<>(NAME, logEvent -> {
+            if(logEvent.isFlush()) {
+
+            }else {
+
+            }
             String consoleMsg = createConsoleMsg(logEvent);
             outPrintStream.print(consoleMsg);
             Throwable throwable = logEvent.getThrowable();

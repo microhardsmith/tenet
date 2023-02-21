@@ -14,6 +14,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Getter
 @Setter
 public class LogEvent extends Event {
+    public static final LogEvent flushEvent = new LogEvent();
+    /**
+     *  是否为刷新事件
+     */
+    private final boolean flush;
     /**
      *  是否可重用
      */
@@ -63,7 +68,16 @@ public class LogEvent extends Event {
      */
     private String line;
 
+    private LogEvent() {
+        this.flush = true;
+        this.reusable = false;
+        this.logTime = null;
+        this.builder = null;
+        this.counter = null;
+    }
+
     public LogEvent(boolean reusable) {
+        this.flush = false;
         this.reusable = reusable;
         this.logTime = new LogTime();
         this.builder = new StringBuilder(Constants.DEFAULT_STRING_BUILDER_SIZE);

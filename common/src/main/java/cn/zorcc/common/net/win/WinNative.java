@@ -1,7 +1,7 @@
 package cn.zorcc.common.net.win;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.NativeHelper;
+import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 
@@ -56,16 +56,16 @@ public class WinNative {
     private final MethodHandle epollCtlDelMethodHandle;
     private final MethodHandle epollWaitMethodHandle;
     private final MethodHandle epollCloseMethodHandle;
-    private final MethodHandle acceptMethodHandle;
     private final MethodHandle addressLenMethodHandle;
     private final MethodHandle addressMethodHandle;
     private final MethodHandle portMethodHandle;
     private final MethodHandle socketCreateMethodHandle;
+    private final MethodHandle acceptMethodHandle;
+    private final MethodHandle setSockAddrMethodHandle;
     private final MethodHandle setReuseAddrMethodHandle;
     private final MethodHandle setKeepAliveMethodHandle;
     private final MethodHandle setTcpNoDelayMethodHandle;
     private final MethodHandle setNonBlockingMethodHandle;
-    private final MethodHandle setSockAddrMethodHandle;
     private final MethodHandle bindMethodHandle;
     private final MethodHandle listenMethodHandle;
     private final MethodHandle recvMethodHandle;
@@ -77,48 +77,48 @@ public class WinNative {
         if(!instanceFlag.compareAndSet(false, true)) {
             throw new FrameworkException(ExceptionType.NATIVE, "WinNative has been initialized");
         }
-        SymbolLookup symbolLookup = NativeHelper.loadLibraryFromResource(LIB_PATH);
-        this.epollCreateMethodHandle = NativeHelper.methodHandle(symbolLookup,
+        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(LIB_PATH);
+        this.epollCreateMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_epoll_create", FunctionDescriptor.of(ValueLayout.ADDRESS));
-        this.epollCtlAddMethodHandle = NativeHelper.methodHandle(symbolLookup,
+        this.epollCtlAddMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_epoll_ctl_add", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
-        this.epollCtlDelMethodHandle = NativeHelper.methodHandle(symbolLookup,
+        this.epollCtlDelMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_epoll_ctl_del", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
-        this.epollWaitMethodHandle = NativeHelper.methodHandle(symbolLookup,
+        this.epollWaitMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_epoll_wait", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
-        this.epollCloseMethodHandle = NativeHelper.methodHandle(symbolLookup,
+        this.epollCloseMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_epoll_close", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        this.acceptMethodHandle = NativeHelper.methodHandle(symbolLookup,
-                "w_accept", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        this.addressLenMethodHandle = NativeHelper.methodHandle(symbolLookup,
+        this.addressLenMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_address_len", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        this.addressMethodHandle = NativeHelper.methodHandle(symbolLookup,
+        this.addressMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_address", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        this.portMethodHandle = NativeHelper.methodHandle(symbolLookup,
+        this.portMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_port", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        this.socketCreateMethodHandle = NativeHelper.methodHandle(symbolLookup,
+        this.socketCreateMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_socket_create", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
-        this.setReuseAddrMethodHandle = NativeHelper.methodHandle(symbolLookup,
-                "w_set_reuse_addr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_BOOLEAN));
-        this.setKeepAliveMethodHandle = NativeHelper.methodHandle(symbolLookup,
-                "w_set_keep_alive", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_BOOLEAN));
-        this.setTcpNoDelayMethodHandle = NativeHelper.methodHandle(symbolLookup,
-                "w_set_tcp_no_delay", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_BOOLEAN));
-        this.setNonBlockingMethodHandle = NativeHelper.methodHandle(symbolLookup,
-                "w_set_nonblocking", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG));
-        this.setSockAddrMethodHandle = NativeHelper.methodHandle(symbolLookup,
+        this.acceptMethodHandle = NativeUtil.methodHandle(symbolLookup,
+                "w_accept", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        this.setSockAddrMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_set_sock_addr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        this.bindMethodHandle = NativeHelper.methodHandle(symbolLookup,
+        this.setReuseAddrMethodHandle = NativeUtil.methodHandle(symbolLookup,
+                "w_set_reuse_addr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_BOOLEAN));
+        this.setKeepAliveMethodHandle = NativeUtil.methodHandle(symbolLookup,
+                "w_set_keep_alive", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_BOOLEAN));
+        this.setTcpNoDelayMethodHandle = NativeUtil.methodHandle(symbolLookup,
+                "w_set_tcp_no_delay", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_BOOLEAN));
+        this.setNonBlockingMethodHandle = NativeUtil.methodHandle(symbolLookup,
+                "w_set_nonblocking", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG));
+        this.bindMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_bind", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT));
-        this.listenMethodHandle = NativeHelper.methodHandle(symbolLookup,
+        this.listenMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_listen", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT));
-        this.recvMethodHandle = NativeHelper.methodHandle(symbolLookup,
+        this.recvMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_recv", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        this.closeSocketMethodHandle = NativeHelper.methodHandle(symbolLookup,
+        this.closeSocketMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_close_socket", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG));
-        this.wsaGetLastErrorMethodHandle = NativeHelper.methodHandle(symbolLookup,
+        this.wsaGetLastErrorMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "wsa_get_last_error", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        this.wsaCleanUpMethodHandle = NativeHelper.methodHandle(symbolLookup,
+        this.wsaCleanUpMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "wsa_clean_up", FunctionDescriptor.of(ValueLayout.JAVA_INT));
     }
 
@@ -178,24 +178,13 @@ public class WinNative {
     }
 
     /**
-     *  corresponding to `int w_accept(SOCKET socket, struct sockaddr_in* clientAddr, int clientAddrSize)`
-     */
-    public int accept(long socket, MemorySegment clientAddr, int clientAddrSize) {
-        try{
-            return (int) acceptMethodHandle.invokeExact(socket, clientAddr, clientAddrSize);
-        }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking accept()", throwable);
-        }
-    }
-
-    /**
      *  corresponding to `int w_address_len()`
      */
     public int addressLen() {
         try{
             return (int) addressLenMethodHandle.invokeExact();
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking address()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking addressLen()", throwable);
         }
     }
 
@@ -229,6 +218,28 @@ public class WinNative {
             return (long) socketCreateMethodHandle.invokeExact();
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking socketCreate()", throwable);
+        }
+    }
+
+    /**
+     *  corresponding to `int w_accept(SOCKET socket, struct sockaddr_in* clientAddr, int clientAddrSize)`
+     */
+    public int accept(long socket, MemorySegment clientAddr, int clientAddrSize) {
+        try{
+            return (int) acceptMethodHandle.invokeExact(socket, clientAddr, clientAddrSize);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking accept()", throwable);
+        }
+    }
+
+    /**
+     *  corresponding to `int w_set_sock_addr(struct sockaddr_in* sockAddr, char* address, int port)`
+     */
+    public int setSockAddr(MemorySegment sockAddr, MemorySegment address, int port) {
+        try{
+            return (int) setSockAddrMethodHandle.invokeExact(sockAddr, address, port);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking setSockAddr()", throwable);
         }
     }
 
@@ -277,17 +288,6 @@ public class WinNative {
     }
 
     /**
-     *  corresponding to `int w_set_sock_addr(struct sockaddr_in* sockAddr, char* address, int port)`
-     */
-    public int setSockAddr(MemorySegment sockAddr, MemorySegment address, int port) {
-        try{
-            return (int) setSockAddrMethodHandle.invokeExact(sockAddr, address, port);
-        }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking setSockAddr()", throwable);
-        }
-    }
-
-    /**
      *  corresponding to `int w_bind(struct sockaddr_in* sockAddr, SOCKET socket, int size)`
      */
     public int bind(MemorySegment sockAddr, long socket, int size) {
@@ -327,7 +327,7 @@ public class WinNative {
         try{
             return (int) closeSocketMethodHandle.invokeExact(socket);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking recv()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking closeSocket()", throwable);
         }
     }
 
