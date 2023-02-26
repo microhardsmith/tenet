@@ -89,6 +89,15 @@ int main() {
     check(l_close(epfd));
 }
 
+// 向标准输出流输出字符
+void g_puts(char* str) {
+    puts(str);
+}
+
+// 向标准输出流刷新缓冲区
+void g_flush() {
+    fflush(stdout);
+}
 
 // 创建epoll,失败则返回-1,成功则返回生成的fd
 int l_epoll_create() {

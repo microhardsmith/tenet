@@ -4,7 +4,7 @@ For Windows (Visual studio needs to be installed):
 
 building executable : `clang -fcolor-diagnostics -fansi-escape-codes -g -O2 -o lib_win.exe -v wepoll.c lib_win.c`
 
-building shared : `clang -fcolor-diagnostics -fansi-escape-codes -g -shared -fPIC -O2 -o lib_win.dll -v wepoll.c lib_win.c`
+building shared : `clang -fcolor-diagnostics -fansi-escape-codes -g -shared -O2 -o lib_win.dll -v wepoll.c lib_win.c`
 
 
 
@@ -25,4 +25,9 @@ building executable : `clang -fcolor-diagnostics -fansi-escape-codes -g -O2 -o l
 building shared : `clang -fcolor-diagnostics -fansi-escape-codes -g -shared -fPIC -O2 -o lib_macos.dylib -v lib_macos.c`
 
 
-then copy the shared library under /resources/lib to use them.
+Then copy the shared library under /resources/lib to use them.
+
+Method start with w means implemented in windows.
+Method start with l means implemented in linux.
+Method start with m means implemented in macos.
+Method start with g means implemented in all platform.

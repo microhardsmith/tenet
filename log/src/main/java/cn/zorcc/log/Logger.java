@@ -7,19 +7,34 @@ import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.event.EventPipeline;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.ConfigUtil;
+import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.common.util.ThreadUtil;
 import org.jctools.queues.atomic.MpmcAtomicArrayQueue;
 import org.slf4j.Marker;
 import org.slf4j.event.Level;
 import org.slf4j.helpers.LegacyAbstractLogger;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.lang.foreign.MemorySegment;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 /**
- * 负责打印lithiasis项目中使用的日志
+ * 负责打印tenet项目中使用的日志
  */
 public class Logger extends LegacyAbstractLogger {
+    private static final Map<Level, MemorySegment> levelMap = Map.of(
+            Level.DEBUG, Constants.DEBUG_SEGMENT,
+            Level.TRACE, Constants.TRACE_SEGMENT,
+            Level.INFO, Constants.INFO_SEGMENT,
+            Level.WARN, Constants.WARN_SEGMENT,
+            Level.ERROR, Constants.ERROR_SEGMENT
+    );
     private static final int level;
     private static final MpmcAtomicArrayQueue<LogEvent> eventQueue;
     private static final EventPipeline<LogEvent> pipeline;
@@ -28,6 +43,7 @@ public class Logger extends LegacyAbstractLogger {
 
     static {
         LogConfig logConfig = ConfigUtil.loadJsonConfig(Constants.DEFAULT_LOG_CONFIG_NAME, LogConfig.class);
+        int bufferSize = Math.max(logConfig.getBufferSize(), Constants.KB);
         switch (logConfig.getLevel()) {
             case Constants.TRACE -> level = Constants.TRACE;
             case Constants.INFO -> level = Constants.INFO;
@@ -36,10 +52,13 @@ public class Logger extends LegacyAbstractLogger {
             case Constants.DEBUG -> level = Constants.DEBUG;
             default -> throw new FrameworkException(ExceptionType.LOG, "Unsupported Log default level");
         }
-        int queueSize = logConfig.getQueueSize();
+        // since we are using virtual threads, the concurrency should be well controlled, cpu-cores should be an ideal parameter
+        int queueSize = Math.max(logConfig.getQueueSize(), NativeUtil.getCpuCores() + 1);
         eventQueue = new MpmcAtomicArrayQueue<>(queueSize);
+        LocalDateTime now = LocalDateTime.now();
         for (int i = 0; i < queueSize; i++) {
-            if (!eventQueue.offer(new LogEvent(true))) {
+            LogEvent logEvent = new LogEvent(bufferSize, now);
+            if (!eventQueue.offer(logEvent)) {
                 throw new FrameworkException(ExceptionType.LOG, "BlockingQueue state corrupted");
             }
         }
@@ -84,53 +103,53 @@ public class Logger extends LegacyAbstractLogger {
         return null;
     }
 
+    /**
+     *  日志输出，日志分为五个部分： 时间 等级 线程名 类名 日志消息
+     */
     @Override
     protected void handleNormalizedLoggingCall(Level level, Marker marker, String s, Object[] objects, Throwable throwable) {
-        LogEvent logEvent = eventQueue.poll();
-        if(logEvent == null) {
-            // 当事件队列中无可用事件时，新建LogEvent使用
-            logEvent = new LogEvent(false);
+        LogEvent logEvent = null;
+        while (logEvent == null) {
+            logEvent = eventQueue.poll();
         }
-        logEvent.setThreadName(ThreadUtil.threadName());
-        logEvent.setLevel(level);
-        logEvent.setClassName(getName());
-        logEvent.setOriginMsg(s);
-        logEvent.setArgs(objects);
-        logEvent.setThrowable(throwable);
-        final StringBuilder builder = logEvent.getBuilder();
-        if (objects == null || objects.length == 0) {
-            logEvent.setMsg(s);
-        } else {
-            char[] chars = s.toCharArray();
-            int length = chars.length;
-            for (int i = 0, argIndex = 0; i < length; i++) {
-                char c = chars[i];
-                if (c == Constants.L_BRACE && i < length - 1 && chars[i + 1] == Constants.R_BRACE && argIndex < objects.length) {
-                    builder.append(objects[argIndex]);
-                    argIndex++;
-                    i++;
-                } else {
-                    builder.append(c);
-                }
-            }
-            logEvent.setMsg(builder.toString());
-            builder.setLength(Constants.ZERO);
+
+        final LogTime logTime = logEvent.getLogTime();
+        logTime.refresh();
+        logEvent.setTimestamp(logTime.timestamp());
+
+        logEvent.setLevel(levelMap.get(level));
+        logEvent.setThreadName(MemorySegment.ofArray(ThreadUtil.threadName().getBytes(StandardCharsets.UTF_8)));
+        logEvent.setClassName(MemorySegment.ofArray(getName().getBytes(StandardCharsets.UTF_8)));
+
+        if(throwable != null) {
+            // set log's throwable
+            StringWriter stringWriter = new StringWriter();
+            throwable.printStackTrace(new PrintWriter(stringWriter));
+            logEvent.setThrowable(MemorySegment.ofArray(stringWriter.toString().getBytes(StandardCharsets.UTF_8)));
         }
-        builder.append(logEvent.getLogTime().timeArray())
-                .append(Constants.BLANK)
+
+        final SegmentBuilder builder = logEvent.getBuilder();
+        builder.reset();
+        builder.append(logTime.segment())
                 .append(logEvent.getLevel())
-                .append(Constants.BLANK)
-                .append(Constants.L_SQUARE)
+                .append(Constants.b2)
+                .append(Constants.b7)
                 .append(logEvent.getThreadName())
-                .append(Constants.R_SQUARE)
-                .append(Constants.BLANK)
+                .append(Constants.b8)
+                .append(Constants.b2)
                 .append(logEvent.getClassName())
-                .append(Constants.HYPHEN)
-                .append(logEvent.getMsg())
-                .append(Constants.LINE_SEPARATOR);
-        logEvent.setLine(builder.toString());
-        builder.setLength(Constants.ZERO);
-        // 触发日志事件
+                .append(Constants.b2)
+                .append(Constants.b1)
+                .append(Constants.b2);
+        MemorySegment msg = MemorySegment.ofArray(s.getBytes(StandardCharsets.UTF_8));
+        if(objects == null || objects.length == 0) {
+            builder.append(msg);
+            logEvent.setMsg(msg);
+        }else {
+            List<MemorySegment> list = Arrays.stream(objects).map(o -> MemorySegment.ofArray(o.toString().getBytes(StandardCharsets.UTF_8))).toList();
+            logEvent.setMsg(builder.append(msg, list));
+        }
+        // fire logEvent, whether or not using throwable is depending on the handler
         pipeline.fireEvent(logEvent);
     }
 

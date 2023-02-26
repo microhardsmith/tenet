@@ -39,7 +39,7 @@ public class ConfigUtil {
     }
 
     /**
-     * 加载项目配置json文件
+     * 加载项目配置json文件,从调用者线程检索项目resource下json文件
      * @param fileName 配置文件名称
      * @param configClass 配置文件类
      * @return 配置类

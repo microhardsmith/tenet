@@ -4,9 +4,10 @@ import cn.zorcc.common.Clock;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 
-public class TimerJob implements Comparable<TimerJob> {
+public final class TimerJob implements Comparable<TimerJob> {
     /**
      * 任务指定执行时间
      */
@@ -26,7 +27,7 @@ public class TimerJob implements Comparable<TimerJob> {
     /**
      * 循环周期,单位毫秒,如果不参与循环则为-1
      */
-    private long period;
+    private final long period;
     /**
      * 是否已经取消,单次执行的任务在执行之后会被置为取消状态
      */
@@ -45,8 +46,9 @@ public class TimerJob implements Comparable<TimerJob> {
     private TimerJob prev;
     /**
      * 是否重置定时任务,如果已重置,则将任务的下一个执行时间点置为resetTime + period
+     * 需要保证多线程可见性
      */
-    private long resetTime = -1L;
+    private final AtomicLong resetTime = new AtomicLong(-1L);
 
     /**
      * 用于构建头结点,不存储具体任务
@@ -75,20 +77,30 @@ public class TimerJob implements Comparable<TimerJob> {
         };
     }
 
-    @Override
-    public int compareTo(TimerJob job) {
-        return Long.compare(executionTime, job.executionTime());
-    }
-
+    /**
+     *  更新重置时间为当前时间
+     */
     public void reset() {
         long currentTime = Clock.current();
-        if(currentTime > resetTime) {
-            resetTime = currentTime;
-        }
+        resetTime.updateAndGet(t -> Math.max(currentTime, t));
+    }
+
+    /**
+     *  返回当前任务已执行次数
+     */
+    public int count() {
+        return count;
+    }
+
+    /**
+     *  取消任务
+     */
+    public boolean cancel() {
+        return cancel.compareAndSet(false, true);
     }
 
     public long resetTime() {
-        return resetTime;
+        return resetTime.get();
     }
 
     public long executionTime() {
@@ -97,10 +109,6 @@ public class TimerJob implements Comparable<TimerJob> {
 
     public void setExecutionTime(long executionTime) {
         this.executionTime = executionTime;
-    }
-
-    public int count() {
-        return count;
     }
 
     public int pos() {
@@ -127,10 +135,6 @@ public class TimerJob implements Comparable<TimerJob> {
         return period;
     }
 
-    public void setPeriod(long period) {
-        this.period = period;
-    }
-
     public TimerJob next() {
         return next;
     }
@@ -151,7 +155,8 @@ public class TimerJob implements Comparable<TimerJob> {
         return cancel.get();
     }
 
-    public boolean cancel() {
-        return cancel.compareAndSet(false, true);
+    @Override
+    public int compareTo(TimerJob job) {
+        return Long.compare(executionTime, job.executionTime());
     }
 }

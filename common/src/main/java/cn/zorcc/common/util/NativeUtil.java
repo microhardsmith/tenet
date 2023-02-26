@@ -9,6 +9,7 @@ import java.io.InputStream;
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.VarHandle;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -145,5 +146,20 @@ public class NativeUtil {
             varHandle.set(memorySegment, s);
         }
         return memorySegment;
+    }
+
+    /**
+     *   返回与jvm生命周期相同的全局内存
+     */
+    public static MemorySegment globalSegment(String str) {
+        return MemorySegment.ofArray(str.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public static void test(MemorySegment segment, long index, String remark) {
+        byte[] b = new byte[(int) index];
+        for(int i = 0 ;i < index; i++) {
+            b[i] = segment.get(ValueLayout.JAVA_BYTE, i);
+        }
+        System.out.println(remark + new String(b));
     }
 }

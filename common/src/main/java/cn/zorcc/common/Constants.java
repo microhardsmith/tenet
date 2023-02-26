@@ -4,8 +4,12 @@ import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
 import lombok.extern.slf4j.Slf4j;
 
+import java.lang.foreign.MemorySegment;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.OffsetTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 
 /**
  *  定义项目中使用到的所有常量
@@ -19,6 +23,22 @@ public class Constants {
             thread.interrupt();
         }
     };
+
+    public static final String TIME_FORMAT = "yyyy-MM-dd hh:mm:ss.SSS";
+    public static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern(TIME_FORMAT);
+    public static final ZoneOffset LOCAL_ZONE_OFFSET = OffsetTime.now().getOffset();
+
+    public static final byte b1 = (byte) '-';
+    public static final byte b2 = (byte) ' ';
+    public static final byte b3 = (byte) ':';
+    public static final byte b4 = (byte) '.';
+    public static final byte b5 = (byte) '{';
+    public static final byte b6 = (byte) '}';
+    public static final byte b7 = (byte) '[';
+    public static final byte b8 = (byte) ']';
+    public static final byte b9 = (byte) '\n';
+    public static final byte b0 = (byte) '\0';
+
     public static final int TRACE = 0;
     public static final int DEBUG = 10;
     public static final int INFO = 20;
@@ -27,6 +47,16 @@ public class Constants {
     public static final String DEFAULT_LOG_DIR = "log";
     public static final String DEFAULT_LOG_FILE_NAME = "app";
     public static final String LOG_FILE_TYPE = ".log";
+    /**
+     *  Ansi格式的带颜色的控制台字符控制
+     */
+    public static final MemorySegment ANSI_PREFIX = MemorySegment.ofArray("\033[".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment ANSI_SUFFIX = MemorySegment.ofArray(" \033[0m".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment TRACE_SEGMENT = MemorySegment.ofArray("TRACE".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment DEBUG_SEGMENT = MemorySegment.ofArray("DEBUG".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment INFO_SEGMENT = MemorySegment.ofArray("INFO".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment WARN_SEGMENT = MemorySegment.ofArray("WARN".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment ERROR_SEGMENT = MemorySegment.ofArray("ERROR".getBytes(StandardCharsets.UTF_8));
     public static final String RED = "31m ";
     public static final String GREEN = "32m ";
     public static final String YELLOW = "33m ";
@@ -46,7 +76,12 @@ public class Constants {
     public static final byte END_BYTE = 0;
     public static final int BYTE_SIZE = 8;
     public static final int KB = 1024;
-    public static final int MB = 1024 * 1024;
+    public static final int MB = 1024 * KB;
+    public static final int GB = 1024 * MB;
+    public static final int SECOND = 1000;
+    public static final int MINUTE = 60 * SECOND;
+    public static final int HOUR = 60 * MINUTE;
+    public static final int DAY = 24 * HOUR;
     public static final int PAGE_SIZE = 4 * KB;
     public static final String UNREACHED = "Should never be reached";
 
@@ -220,7 +255,6 @@ public class Constants {
     public static final String WHERE = "#where{}";
     public static final int WHERE_LENGTH = 8;
     public static final String DYNAMIC_SQL_ERR = "Err occurred in dynamic sql";
-    public static final String TEMP_DIR = "/temp/lithiasis";
 
     /**
      *  net

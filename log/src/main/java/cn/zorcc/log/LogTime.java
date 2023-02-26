@@ -1,100 +1,139 @@
 package cn.zorcc.log;
 
 import cn.zorcc.common.Clock;
+import cn.zorcc.common.Constants;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.time.LocalDateTime;
-import java.time.OffsetTime;
-import java.time.ZoneOffset;
-import java.util.concurrent.TimeUnit;
 
 /**
- * 用于在日志中记录时间
+ * 用于在日志中记录时间,固定日志时间格式为 yyyy-MM-dd hh:mm:ss.SSS
  * 每超过一分钟重新获取时间进行刷新
  */
 public class LogTime {
     /**
-     * 时间戳
+     * 基准时间戳
+     */
+    private long baseline;
+    /**
+     * baseline对应毫秒数
+     */
+    private int milli;
+    /**
+     * baseline对应秒数
+     */
+    private int second;
+    /**
+     *  上一次刷新时的时间戳
      */
     private long timestamp;
     /**
-     * 时间戳对应毫秒数
-     */
-    private long milli;
-    /**
-     * 时间戳对应秒数
-     */
-    private long second;
-
-    /**
-     *  时间戳格式,该项可根据项目具体情况进行调整
-     */
-    private static final String defaultFormat = "yyyy-MM-dd hh:mm:ss.SSS";
-    private static final ZoneOffset localZoneOffset = OffsetTime.now().getOffset();
-    /**
      *  时间刷新间隔,默认每个被复用的LogTime每隔30s或分钟数产生变化时刷新一次当前时间
      */
-    private static final long refreshIntervalSecond = 30L;
-    private final char[] timeArray = new char[defaultFormat.length()];
+    private static final int refreshIntervalSecond = 30;
+    private static final String format = "yyyy-MM-dd hh:mm:ss.SSS ";
+    private final MemorySegment segment = MemorySegment.ofArray(new byte[format.length()]);
 
-    public LogTime() {
-        timeArray[4] = timeArray[7] = '-';
-        timeArray[10] = ' ';
-        timeArray[13] = timeArray[16] = ':';
-        timeArray[19] = '.';
-        refreshTime();
+    public LogTime(LocalDateTime base) {
+        this.baseline = base.toInstant(Constants.LOCAL_ZONE_OFFSET).toEpochMilli();
+        this.milli = base.getNano() / 1_000_000;
+        this.second = base.getSecond();
+        fillIrrelevant();
+        fillMajor(base.getYear(), base.getMonthValue(), base.getDayOfMonth(), base.getHour(), base.getMinute());
+        fillMinor(second, milli);
     }
 
     /**
-     * 向指定StringBuilder中添加当前时间的字符串,格式如yyyy-MM-dd hh:mm:ss.SSS
-     * 该方法并不是线程安全的,日志模型保证了LogEvent始终被单线程处理
+     *  获取当前MemorySegment
      */
-    public char[] timeArray() {
-        long interval = Clock.current() - timestamp;
-        if (interval < 0) {
-            // 出现时间回滚的情况,直接返回当前时间戳
-            return timeArray;
+    public MemorySegment segment() {
+        return segment;
+    }
+
+    /**
+     *  获取当前MemorySegment对应时间戳
+     */
+    public long timestamp() {
+        return timestamp;
+    }
+
+    /**
+     *  刷新当前时间格式对应的MemorySegment,非线程安全
+     */
+    public void refresh() {
+        this.timestamp = Clock.current();
+        int interval = (int) (timestamp - baseline);
+        if(interval < 0) {
+            // time rollback happens, just use old timestamp
+            return ;
         }
-        long intervalSecond = interval / 1000;
-        long intervalMilli = interval % 1000;
-        long currentMilli = milli + intervalMilli;
-        long currentSec = second + intervalSecond;
-        if (currentMilli >= 1000) {
-            currentMilli -= 1000;
+        int intervalSecond = interval / 1_000;
+        int intervalMilli = interval % 1_000;
+        int currentMilli = this.milli + intervalMilli;
+        int currentSec = this.second + intervalSecond;
+        if (currentMilli >= 1_000) {
+            currentMilli -= 1_000;
             currentSec += 1;
         }
-        if (intervalSecond >= refreshIntervalSecond || currentSec >= 60) {
-            // 刷新时间并返回新的计时
-            refreshTime();
-            return timeArray();
-        } else {
-            fillArray((int) currentSec, 2, timeArray, 17);
-            fillArray((int) currentMilli, 3, timeArray, 20);
-            return timeArray;
+        if(intervalSecond >= refreshIntervalSecond || currentSec >= 60) {
+            // needs to refresh local timestamp
+            LocalDateTime now = LocalDateTime.now();
+            this.baseline = now.toInstant(Constants.LOCAL_ZONE_OFFSET).toEpochMilli();
+            this.milli = now.getNano() / 1_000_000;
+            this.second = now.getSecond();
+            fillMajor(now.getYear(), now.getMonthValue(), now.getDayOfMonth(), now.getHour(), now.getMinute());
+            fillMinor(this.second, this.milli);
+        }else {
+            // if the minute value haven't changed, we can only update the minor
+            fillMinor(currentSec, currentMilli);
         }
     }
 
     /**
-     * 更新当前时间参数
+     *  填充不相关的字符
      */
-    private void refreshTime() {
-        LocalDateTime now = LocalDateTime.now();
-        this.timestamp = now.toInstant(localZoneOffset).toEpochMilli();
-        this.milli = TimeUnit.NANOSECONDS.toMillis(now.getNano());
-        this.second = now.getSecond();
-        fillArray(now.getYear(), 4, timeArray, 0);
-        fillArray(now.getMonthValue(), 2, timeArray, 5);
-        fillArray(now.getDayOfMonth(), 2, timeArray, 8);
-        fillArray(now.getHour(), 2, timeArray, 11);
-        fillArray(now.getMinute(), 2, timeArray, 14);
+    private void fillIrrelevant() {
+        segment.set(ValueLayout.JAVA_BYTE, 4, Constants.b1);
+        segment.set(ValueLayout.JAVA_BYTE, 7, Constants.b1);
+        segment.set(ValueLayout.JAVA_BYTE, 10, Constants.b2);
+        segment.set(ValueLayout.JAVA_BYTE, 23, Constants.b2);
+        segment.set(ValueLayout.JAVA_BYTE, 13, Constants.b3);
+        segment.set(ValueLayout.JAVA_BYTE, 16, Constants.b3);
+        segment.set(ValueLayout.JAVA_BYTE, 19, Constants.b4);
+        segment.set(ValueLayout.JAVA_BYTE, 23, Constants.b2);
     }
 
     /**
-     * 根据数值给char数组填充具体字符
+     *  填充年月日时分数据
      */
-    private void fillArray(int value, int length, char[] target, int index) {
-        for (int i = 1; i <= length; i++) {
-            target[index + length - i] = Character.forDigit(value % 10, 10);
-            value = value / 10;
+    private void fillMajor(int year, int month, int day, int hour, int minute) {
+        fill(0, 4, year);
+        fill(5, 2, month);
+        fill( 8, 2, day);
+        fill(11, 2, hour);
+        fill(14, 2, minute);
+    }
+
+    /**
+     *  填充秒级和毫秒级数据
+     */
+    private void fillMinor(int second, int milli) {
+        fill( 17, 2, second);
+        fill( 20, 3, milli);
+    }
+
+    /**
+     * 按照十进制填充MemorySegment各个位
+     * @param index 起始索引
+     * @param offset 填充长度
+     * @param value 填充值
+     */
+    private void fill(int index, int offset, int value) {
+        final int max = index + offset - 1;
+        for(int i = max; i >= index; i--) {
+            segment.set(ValueLayout.JAVA_BYTE, i, (byte) ((value % 10) + 48));
+            value /= 10;
         }
     }
 

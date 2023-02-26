@@ -163,6 +163,16 @@ int main() {
     return 0;
 }
 
+// 向标准输出流输出字符
+void g_puts(char* str) {
+    puts(str);
+}
+
+// 向标准输出流刷新缓冲区
+void g_flush() {
+    fflush(stdout);
+}
+
 // 创建epoll,返回创建的epoll句柄
 void* w_epoll_create() {
     // the size parameter means noting now, must be positive

@@ -1,6 +1,7 @@
 package cn.zorcc.log;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.util.NativeUtil;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -17,7 +18,11 @@ public class LogConfig {
     /**
      * 日志队列大小
      */
-    private int queueSize = 1 << 10;
+    private int queueSize = NativeUtil.getCpuCores() << 1;
+    /**
+     *  初始日志行内存大小
+     */
+    private int bufferSize = 4 * Constants.KB;
     /**
      * 是否将日志输出到控制台,默认为true,基于性能考虑可以考虑关闭该项(输出至文件会比输出至控制台快许多)
      */
@@ -25,15 +30,15 @@ public class LogConfig {
     /**
      *  日志等级Console输出预留长度
      */
-    private int levelLen = 5;
+    private long levelLen = 5L;
     /**
      *  线程名Console输出预留长度
      */
-    private int threadNameLen = 15;
+    private long threadNameLen = 15L;
     /**
      *  类名Console输出预留长度
      */
-    private int classNameLen = 60;
+    private long classNameLen = 60L;
     /**
      *  打印日志时间的颜色
      */
@@ -59,13 +64,19 @@ public class LogConfig {
      */
     private String logFileDir = Constants.EMPTY_STRING;
     /**
-     * 日志文件名称
+     * 日志文件名称前缀,默认为app
      */
     private String logFileName = Constants.DEFAULT_LOG_FILE_NAME;
     /**
-     * 日志文件大小限制设置,超过将重命名旧日志文件为当前时间,将新日志写入新文件中,单位KB
+     * 日志文件大小限制设置,超过将重命名旧日志文件为当前时间,将新日志写入新文件中,单位字节
+     * 设置该值小于等于0则使用默认 1GB 的大小限制
      */
-    private int maxFileSize = 200 * 1024;
+    private int maxFileSize = Constants.GB;
+    /**
+     *  日志记录时间间隔，默认每隔一天新建日志文件进行写入，单位毫秒
+     *  设置该值小于等于0表示不限制日志时间
+     */
+    private int maxRecordingTime = Constants.DAY;
     /**
      *  是否启用滚动更新
      */

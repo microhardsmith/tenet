@@ -1,6 +1,10 @@
 #ifndef LIB_LINUX_H
 #define LIB_LINUX_H
 
+void g_puts(char* str);
+
+void g_flush();
+
 int l_epoll_create();
 
 int l_epoll_ctl_add(int epfd, int socket, struct epoll_event* ev);

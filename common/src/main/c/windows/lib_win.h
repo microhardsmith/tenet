@@ -1,6 +1,10 @@
 #ifndef LIB_WIN_H
 #define LIB_WIN_H
 
+__declspec(dllexport) void g_puts(char* str);
+
+__declspec(dllexport) void g_flush();
+
 __declspec(dllexport) void* w_epoll_create();
 
 __declspec(dllexport) int w_epoll_ctl_add(void* handle, SOCKET socket, struct epoll_event* event);

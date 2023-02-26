@@ -69,7 +69,7 @@ public class ClusterConfig {
      */
     private String backupDir = Constants.EMPTY_STRING;
     /**
-     * raft临时文件存放位置,默认存放到/temp/lithiasis文件夹下
+     * raft临时文件存放位置,默认存放到临时文件夹下
      */
     private String tempDir = Constants.EMPTY_STRING;
     /**
