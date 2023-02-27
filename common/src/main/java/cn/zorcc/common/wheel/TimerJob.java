@@ -81,8 +81,11 @@ public final class TimerJob implements Comparable<TimerJob> {
      *  更新重置时间为当前时间
      */
     public void reset() {
-        long currentTime = Clock.current();
-        resetTime.updateAndGet(t -> Math.max(currentTime, t));
+        reset(Clock.current());
+    }
+
+    public void reset(long timestamp) {
+        resetTime.updateAndGet(t -> Math.max(timestamp, t));
     }
 
     /**

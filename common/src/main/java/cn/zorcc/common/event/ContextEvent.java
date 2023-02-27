@@ -1,9 +1,10 @@
-package cn.zorcc.common;
+package cn.zorcc.common.event;
 
 import cn.zorcc.common.enums.ContextEventType;
-import cn.zorcc.common.event.Event;
 import lombok.Getter;
 import lombok.Setter;
+
+import java.util.List;
 
 /**
  *  应用上下文事件

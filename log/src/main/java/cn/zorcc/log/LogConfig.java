@@ -18,7 +18,11 @@ public class LogConfig {
     /**
      * 日志队列大小
      */
-    private int queueSize = NativeUtil.getCpuCores() << 1;
+    private String timeFormat = Constants.TIME_FORMAT;
+    /**
+     *  flush间隔，单位毫秒
+     */
+    private long flushInterval = 200L;
     /**
      *  初始日志行内存大小
      */

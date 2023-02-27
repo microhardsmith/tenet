@@ -22,7 +22,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * 时间线较近的任务会被直接添加至时间轮中进行调度,时间线较远的任务会在等待队列中先等待,直到期限接近时才会被加入至时间轮
  */
 @Slf4j
-public class TimeWheelImpl implements TimeWheel {
+public final class TimeWheelImpl implements TimeWheel {
     /**
      *  虚拟线程名前缀
      */
@@ -83,7 +83,7 @@ public class TimeWheelImpl implements TimeWheel {
         public static TimerStatus DEFAULT = new TimerStatus(-1L, -1);
     }
 
-    public TimeWheelImpl(int slots, long tick, long boundary) {
+    private TimeWheelImpl(int slots, long tick, long boundary) {
         if(!instanceFlag.compareAndSet(false, true)) {
             throw new FrameworkException(ExceptionType.CONTEXT, "TimeWheel could only have a single instance");
         }
@@ -102,6 +102,8 @@ public class TimeWheelImpl implements TimeWheel {
             timeWheelLocks[i] = new ReentrantLock();
         }
     }
+
+    public static final TimeWheel instance = new TimeWheelImpl(TimeWheel.slots, TimeWheel.tick, TimeWheel.boundary);
 
     @Override
     public void start() {

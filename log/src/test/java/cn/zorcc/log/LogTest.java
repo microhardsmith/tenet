@@ -2,39 +2,34 @@ package cn.zorcc.log;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.Context;
+import cn.zorcc.common.event.ContextEvent;
 import cn.zorcc.common.event.EventPipeline;
-import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.NativeUtil;
+import cn.zorcc.common.wheel.TimeWheel;
+import cn.zorcc.common.wheel.TimeWheelImpl;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
-import java.lang.foreign.*;
-import java.lang.reflect.Field;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.OpenOption;
-import java.nio.file.Path;
-import java.time.LocalDateTime;
-import java.time.OffsetTime;
-import java.util.Set;
-
-import static java.nio.file.StandardOpenOption.*;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentScope;
+import java.lang.foreign.SymbolLookup;
 
 @Slf4j
 public class LogTest {
     public static void main(String[] args) throws Throwable {
-        SegmentBuilder segmentBuilder = new SegmentBuilder(Arena.openConfined(), 1024);
-        segmentBuilder.append(Constants.DEBUG_SEGMENT, NativeUtil.globalSegment(Constants.RED), 5);
-        NativeUtil.test(segmentBuilder.segment(), 5, "");
+        TimeWheel.instance().start();
+        log.info("hello");
+        Thread.sleep(Long.MAX_VALUE);
+    }
+
+    private static void testAnsi() {
+        System.out.println();
     }
 
     private static void testLog() throws InterruptedException {
         EventPipeline<LogEvent> pipeline = Context.pipeline(LogEvent.class);
         pipeline.init();
-        log.info("hello world");
+        // log.info("hello world");
         Thread.sleep(Long.MAX_VALUE);
     }
 

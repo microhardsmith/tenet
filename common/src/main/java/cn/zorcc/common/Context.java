@@ -2,6 +2,7 @@ package cn.zorcc.common;
 
 import cn.zorcc.common.enums.ContextEventType;
 import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.event.ContextEvent;
 import cn.zorcc.common.event.Event;
 import cn.zorcc.common.event.EventPipeline;
 import cn.zorcc.common.exception.FrameworkException;
@@ -94,11 +95,14 @@ public class Context {
         if(containerMap.putIfAbsent(clazz, obj) != null) {
             throw new FrameworkException(ExceptionType.CONTEXT, "Container already exist : %s".formatted(clazz.getSimpleName()));
         }
-        ContextEvent contextEvent = new ContextEvent();
-        contextEvent.setType(ContextEventType.Load);
-        contextEvent.setClazz(clazz);
-        contextEvent.setContainer(obj);
-        pipeline(ContextEvent.class).fireEvent(contextEvent);
+        EventPipeline<ContextEvent> pipeline = pipeline(ContextEvent.class);
+        if(pipeline != null) {
+            ContextEvent contextEvent = new ContextEvent();
+            contextEvent.setType(ContextEventType.Load);
+            contextEvent.setClazz(clazz);
+            contextEvent.setContainer(obj);
+            pipeline.fireEvent(contextEvent);
+        }
     }
 
     /**
@@ -109,10 +113,13 @@ public class Context {
     @SuppressWarnings("unchecked")
     public static <T> T getContainer(Class<T> clazz) {
         return (T) containerMap.computeIfAbsent(clazz, k -> {
-            ContextEvent contextEvent = new ContextEvent();
-            contextEvent.setType(ContextEventType.Get);
-            contextEvent.setClazz(clazz);
-            pipeline(ContextEvent.class).fireEvent(contextEvent);
+            EventPipeline<ContextEvent> pipeline = pipeline(ContextEvent.class);
+            if(pipeline != null) {
+                ContextEvent contextEvent = new ContextEvent();
+                contextEvent.setType(ContextEventType.Get);
+                contextEvent.setClazz(clazz);
+                pipeline.fireEvent(contextEvent);
+            }
             return autoMap.get(clazz);
         });
     }

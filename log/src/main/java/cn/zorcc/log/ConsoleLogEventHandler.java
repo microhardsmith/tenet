@@ -7,14 +7,10 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
-import org.slf4j.event.Level;
 
-import java.io.PrintStream;
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 将日志打印至控制台
@@ -60,6 +56,7 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
     private final MethodHandle flushHandle;
     private final Arena arena;
     private final SegmentBuilder builder;
+    private int counter;
 
     public ConsoleLogEventHandler(LogConfig logConfig) {
         // console builder should have a larger size than logEvent
@@ -68,6 +65,7 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
         SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.commonLib());
         this.putsHandle = NativeUtil.methodHandle(symbolLookup, "g_puts", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         this.flushHandle = NativeUtil.methodHandle(symbolLookup, "g_flush", FunctionDescriptor.ofVoid());
+
 
         this.levelLen = logConfig.getLevelLen();
         this.threadNameLen = logConfig.getThreadNameLen();
@@ -78,14 +76,13 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
         this.msgColor = MemorySegment.ofArray(logConfig.getMsgColor().getBytes(StandardCharsets.UTF_8));
 
         this.blockingQ = new MpscBlockingQ<>(NAME, logEvent -> {
-            if(logEvent.isFlush()) {
-                // need to flush the buffer
-                flush();
-            }else {
+            // Console output will ignore the flush event since it flushes every time
+            if(!logEvent.isFlush()) {
                 builder.reset();
                 MemorySegment level = logEvent.getLevel();
-                builder.append(logEvent.getLogTime().segment(), timeColor)
-                        .append(level, getLevelColor(level), levelLen)
+                builder.append(logEvent.getTime(), timeColor)
+                        .append(Constants.b2)
+                        .append(level, getLevelColorSegment(level), levelLen)
                         .append(Constants.b2)
                         .append(Constants.b7)
                         .append(logEvent.getThreadName(), threadNameColor, threadNameLen)
@@ -101,7 +98,8 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
                 }
                 builder.append(Constants.b0);
                 // DEBUG
-                // puts(builder.segment());
+                puts(builder.segment());
+                flush();
             }
         });
     }
@@ -128,13 +126,40 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
         }
     }
 
-    private MemorySegment getLevelColor(MemorySegment level) {
+    /**
+     *  获取当前日志等级对应的颜色
+     */
+    private MemorySegment getLevelColorSegment(MemorySegment level) {
         if(level.equals(Constants.ERROR_SEGMENT)) {
-            return ERROR;
+            return Constants.RED_SEGMENT;
         }else if(level.equals(Constants.WARN_SEGMENT)) {
-            return WARN;
+            return Constants.YELLOW_SEGMENT;
         }else {
-            return NORMAL;
+            return Constants.GREEN_SEGMENT;
+        }
+    }
+
+    private MemorySegment getColorSegment(String color) {
+        switch (color) {
+            case Constants.RED -> {
+                return Constants.RED_SEGMENT;
+            }
+            case Constants.GREEN -> {
+                return Constants.GREEN_SEGMENT;
+            }
+            case Constants.YELLOW -> {
+                return Constants.YELLOW_SEGMENT;
+            }
+            case Constants.BLUE -> {
+                return Constants.BLUE_SEGMENT;
+            }
+            case Constants.MAGENTA -> {
+                return Constants.MAGENTA_SEGMENT;
+            }
+            case Constants.CYAN -> {
+                return Constants.CYAN_SEGMENT;
+            }
+            default -> throw new FrameworkException(ExceptionType.LOG, "Unable to get target color");
         }
     }
 
@@ -151,5 +176,6 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
     @Override
     public void shutdown() {
         blockingQ.shutdown();
+        flush();
     }
 }

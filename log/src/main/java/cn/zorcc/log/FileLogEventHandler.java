@@ -132,6 +132,7 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
     public void shutdown() {
         try{
             this.blockingQ.shutdown();
+            flush();
             this.fc.close();
         }catch (IOException e) {
             throw new FrameworkException(ExceptionType.LOG, "IOException caught when shutting down FileLogEventHandler");

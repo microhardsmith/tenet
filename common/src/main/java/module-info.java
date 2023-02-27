@@ -14,6 +14,7 @@ module tenet.common {
     requires com.fasterxml.jackson.datatype.jsr310;
     requires com.fasterxml.jackson.annotation;
     requires org.objenesis;
+    requires jdk.incubator.concurrent;
 
     exports cn.zorcc.common;
     exports cn.zorcc.common.config;

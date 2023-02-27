@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -26,6 +27,10 @@ public class NativeUtil {
     private static final boolean MAC = OS_NAME.contains("mac") && OS_NAME.contains("os");
     private static final int CPU_CORES = Runtime.getRuntime().availableProcessors();
     private static final Linker linker = Linker.nativeLinker();
+    /**
+     *  TODO 需要加一个shutdown hook 参考https://xie.infoq.cn/article/96202307b31fe425936f899ef
+     */
+    private static final Arena globalArena = Arena.openShared();
     /**
      *   临时库拷贝文件名
      */
@@ -74,12 +79,15 @@ public class NativeUtil {
         return linker.downcallHandle(methodPointer, functionDescriptor);
     }
 
+    /**
+     *  从当前的common模块下resource中加载动态链接库
+     */
     public static SymbolLookup loadLibraryFromResource(String resourcePath) {
         return loadLibraryFromResource(resourcePath, null);
     }
 
     /**
-     * 从resource文件夹路径下加载动态链接库 必须在platform thread下进行操作，因为拷贝文件可能阻塞
+     * 从指定Class下的resource文件夹路径加载动态链接库 必须在platform thread下进行操作，因为拷贝文件可能阻塞
      * @param resourcePath 动态链接库路径
      * @param clazz 需要加载资源的检索类，如果指定为null则从common项目下加载
      * @return 指定库对应SymbolLookup
@@ -106,6 +114,16 @@ public class NativeUtil {
                 throw new FrameworkException(ExceptionType.NATIVE, "Unable to load library", e);
             }
         });
+    }
+
+    /**
+     *  从操作系统已加载的动态链接库中获取函数索引
+     */
+    public static MethodHandle getNativeMethodHandle(String methodName, FunctionDescriptor functionDescriptor) {
+        return linker.downcallHandle(linker.defaultLookup()
+                .find(methodName)
+                .orElseThrow(() -> new FrameworkException(ExceptionType.NATIVE, "Unable to locate [%s] native method".formatted(methodName))),
+                functionDescriptor);
     }
 
     /**
@@ -149,10 +167,17 @@ public class NativeUtil {
     }
 
     /**
-     *   返回与jvm生命周期相同的全局内存
+     *   返回与jvm生命周期相同的全局堆内存
      */
-    public static MemorySegment globalSegment(String str) {
+    public static MemorySegment globalHeapSegment(String str) {
         return MemorySegment.ofArray(str.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     *  返回与jvm生命周期相同的全局直接内存
+     */
+    public static MemorySegment globalNativeSegment(String str) {
+        return globalArena.allocateArray(ValueLayout.JAVA_BYTE, str.getBytes(StandardCharsets.UTF_8));
     }
 
     public static void test(MemorySegment segment, long index, String remark) {
@@ -160,6 +185,9 @@ public class NativeUtil {
         for(int i = 0 ;i < index; i++) {
             b[i] = segment.get(ValueLayout.JAVA_BYTE, i);
         }
-        System.out.println(remark + new String(b));
+        System.out.println(Arrays.toString(b));
+        String t = remark + new String(b);
+        int l = t.length();
+        System.out.println(t + "|len : " + l);
     }
 }

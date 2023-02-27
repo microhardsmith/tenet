@@ -2,6 +2,7 @@ package cn.zorcc.log;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.event.Event;
+import cn.zorcc.common.util.NativeUtil;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -21,11 +22,10 @@ public class LogEvent extends Event {
      *  用于刷新事件
      */
     public static final LogEvent flushEvent = new LogEvent();
-    private final Arena arena = Arena.openShared();
     /**
-     *  日志时间
+     *  当前日志内存作用域
      */
-    private final LogTime logTime;
+    private final Arena arena = Arena.openShared();
     /**
      *  是否为刷新事件
      */
@@ -41,7 +41,11 @@ public class LogEvent extends Event {
     /**
      *  日志时间戳
      */
-    private long timestamp = -1L;
+    private long timestamp;
+    /**
+     *  日志时间
+     */
+    private MemorySegment time;
     /**
      * 日志等级
      */
@@ -63,30 +67,28 @@ public class LogEvent extends Event {
      */
     private MemorySegment msg;
 
+    public void test() {
+        NativeUtil.test(time, time.byteSize(), "time: ");
+        NativeUtil.test(level, level.byteSize(), "level: ");
+        NativeUtil.test(threadName, threadName.byteSize(), "threadName: ");
+        NativeUtil.test(className, className.byteSize(), "className: ");
+        NativeUtil.test(msg, msg.byteSize(), "msg: ");
+    }
 
     /**
      *  用于构建flush event
      */
     private LogEvent() {
-        this.logTime = null;
         this.flush = true;
         this.builder = null;
     }
 
     /**
-     *  用于构建可重用的日志事件,在使用完成后释放回队列
+     *  用于构建普通日志事件
      */
-    public LogEvent(int size, LocalDateTime time) {
+    public LogEvent(int size) {
         this.flush = false;
-        this.logTime = new LogTime(time);
         this.builder = new SegmentBuilder(arena, size);
-    }
-
-    /**
-     *  重置当前日志事件
-     */
-    public void reset() {
-
     }
 
 }

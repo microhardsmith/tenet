@@ -1,6 +1,9 @@
 package cn.zorcc.common.util;
 
 import cn.zorcc.common.Constants;
+import jdk.incubator.concurrent.ScopedValue;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicLong;
@@ -9,7 +12,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *  虚拟线程工具类
  */
 public class ThreadUtil {
-
+    private static final ScopedValue<Logger> loggerScopedValue = ScopedValue.newInstance();
     private static final AtomicLong counter = new AtomicLong(0L);
     private ThreadUtil() {
         throw new UnsupportedOperationException();
@@ -21,13 +24,16 @@ public class ThreadUtil {
      * @param runnable 任务体
      * @return 执行任务的虚拟线程
      */
-    public static Thread virtual(String name, Runnable runnable) {
+    public static Thread virtual(final String name, final Runnable runnable) {
+        final String actualName = name + "-" + counter.getAndIncrement();
         return Thread.ofVirtual()
                 .allowSetThreadLocals(false)
                 .inheritInheritableThreadLocals(false)
-                .uncaughtExceptionHandler(Constants.DEFAULT_EXCEPTION_HANDLER)
-                .name(name)
-                .unstarted(runnable);
+                .uncaughtExceptionHandler((thread, throwable) -> {
+                    loggerScopedValue.get().error("Exception caught in virtual thread", throwable);
+                })
+                .name(actualName)
+                .unstarted(() -> ScopedValue.where(loggerScopedValue, LoggerFactory.getLogger(actualName)).run(runnable));
     }
 
     /**
@@ -40,9 +46,11 @@ public class ThreadUtil {
         return Thread.ofPlatform()
                 .allowSetThreadLocals(true)
                 .inheritInheritableThreadLocals(true)
-                .uncaughtExceptionHandler(Constants.DEFAULT_EXCEPTION_HANDLER)
+                .uncaughtExceptionHandler((thread, throwable) -> {
+                    loggerScopedValue.get().error("Exception caught in virtual thread", throwable);
+                })
                 .name(name)
-                .unstarted(runnable);
+                .unstarted(() -> ScopedValue.where(loggerScopedValue, LoggerFactory.getLogger(name)).run(runnable));
     }
 
     public static ThreadFactory threadFactory(String name) {

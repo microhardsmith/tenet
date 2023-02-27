@@ -14,7 +14,6 @@ import java.time.format.DateTimeFormatter;
 /**
  *  定义项目中使用到的所有常量
  */
-@Slf4j
 public class Constants {
     public static final String CONFIG_FILE = "configFile";
     public static final Thread.UncaughtExceptionHandler DEFAULT_EXCEPTION_HANDLER = (thread, throwable) -> {
@@ -50,19 +49,25 @@ public class Constants {
     /**
      *  Ansi格式的带颜色的控制台字符控制
      */
-    public static final MemorySegment ANSI_PREFIX = MemorySegment.ofArray("\033[".getBytes(StandardCharsets.UTF_8));
-    public static final MemorySegment ANSI_SUFFIX = MemorySegment.ofArray(" \033[0m".getBytes(StandardCharsets.UTF_8));
-    public static final MemorySegment TRACE_SEGMENT = MemorySegment.ofArray("TRACE".getBytes(StandardCharsets.UTF_8));
-    public static final MemorySegment DEBUG_SEGMENT = MemorySegment.ofArray("DEBUG".getBytes(StandardCharsets.UTF_8));
-    public static final MemorySegment INFO_SEGMENT = MemorySegment.ofArray("INFO".getBytes(StandardCharsets.UTF_8));
-    public static final MemorySegment WARN_SEGMENT = MemorySegment.ofArray("WARN".getBytes(StandardCharsets.UTF_8));
-    public static final MemorySegment ERROR_SEGMENT = MemorySegment.ofArray("ERROR".getBytes(StandardCharsets.UTF_8));
-    public static final String RED = "31m ";
-    public static final String GREEN = "32m ";
-    public static final String YELLOW = "33m ";
-    public static final String BLUE = "34m ";
-    public static final String MAGENTA = "35m ";
-    public static final String CYAN = "36m ";
+    public static final MemorySegment ANSI_PREFIX = NativeUtil.globalNativeSegment("\033["); // 2 bytes
+    public static final MemorySegment ANSI_SUFFIX = NativeUtil.globalNativeSegment("\033[0m"); // 4 bytes
+    public static final MemorySegment TRACE_SEGMENT = NativeUtil.globalNativeSegment("TRACE");
+    public static final MemorySegment DEBUG_SEGMENT = NativeUtil.globalNativeSegment("DEBUG");
+    public static final MemorySegment INFO_SEGMENT = NativeUtil.globalNativeSegment("INFO");
+    public static final MemorySegment WARN_SEGMENT = NativeUtil.globalNativeSegment("WARN");
+    public static final MemorySegment ERROR_SEGMENT = NativeUtil.globalNativeSegment("ERROR");
+    public static final MemorySegment RED_SEGMENT = NativeUtil.globalNativeSegment("31m");
+    public static final MemorySegment GREEN_SEGMENT = NativeUtil.globalNativeSegment("32m");
+    public static final MemorySegment YELLOW_SEGMENT = NativeUtil.globalNativeSegment("33m");
+    public static final MemorySegment BLUE_SEGMENT = NativeUtil.globalNativeSegment("34m");
+    public static final MemorySegment MAGENTA_SEGMENT = NativeUtil.globalNativeSegment("35m");
+    public static final MemorySegment CYAN_SEGMENT = NativeUtil.globalNativeSegment("36m");
+    public static final String RED = "red";
+    public static final String GREEN = "green";
+    public static final String YELLOW = "yellow";
+    public static final String BLUE = "blue";
+    public static final String MAGENTA = "magenta";
+    public static final String CYAN = "cyan";
     /**
      * 文件分隔符在windows linux macOS中都应该使用'/'
      */

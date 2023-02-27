@@ -10,6 +10,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentScope;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -73,8 +74,6 @@ public final class SegmentBuilder {
         }
         MemorySegment.copy(target, 0, segment, index, len);
         index = nextIndex;
-        // DEBUG
-        NativeUtil.test(segment, index, "Append: ");
         return this;
     }
 
@@ -89,8 +88,6 @@ public final class SegmentBuilder {
      *  向当前segment中添加内容，如果长度小于width则填充空格，长度小于width则截断
      */
     public SegmentBuilder append(MemorySegment target, long width) {
-        NativeUtil.test(segment, index, "segment: ");
-        NativeUtil.test(target, target.byteSize(), "target: ");
         long len = target.byteSize();
         if(width == len) {
             return append(target);
