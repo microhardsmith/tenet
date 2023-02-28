@@ -68,19 +68,25 @@ public final class TimeWheelImpl implements TimeWheel {
      */
     private final Lock waitingTreeSetLock = new ReentrantLock();
     /**
-     * 时间轮运行信息
+     * 时间轮刻度
      */
-    private final AtomicReference<TimerStatus> status = new AtomicReference<>(TimerStatus.DEFAULT);
+    private final AtomicReference<Scale> scale = new AtomicReference<>(Scale.DOWN);
+    /**
+     *  时间轮线程
+     */
     private Thread coreThread = null;
+    /**
+     *  等待队列线程
+     */
     private Thread waitThread = null;
 
     /**
-     * 时间刻度记录
-     * @param lastNano 上一个应进入运行槽位的纳秒时间
-     * @param lastSlot 上一个运行槽位
+     * 时间刻度记录，每次进入时间轮将更新当前TimerStatus为下次运行状态
+     * @param nano 应进入运行槽位的纳秒时间
+     * @param slot 应运行槽位
      */
-    record TimerStatus(long lastNano, int lastSlot) {
-        public static TimerStatus DEFAULT = new TimerStatus(-1L, -1);
+    private record Scale(long nano, int slot) {
+        public static Scale DOWN = new Scale(Long.MIN_VALUE, Integer.MIN_VALUE);
     }
 
     private TimeWheelImpl(int slots, long tick, long boundary) {
@@ -98,7 +104,7 @@ public final class TimeWheelImpl implements TimeWheel {
         this.timeWheel = new TimerJob[slots];
         this.timeWheelLocks = new Lock[slots];
         for (int i = 0; i < slots; i++) {
-            timeWheel[i] = new TimerJob(); // empty head
+            timeWheel[i] = new TimerJob(); // empty head node
             timeWheelLocks[i] = new ReentrantLock();
         }
     }
@@ -107,7 +113,7 @@ public final class TimeWheelImpl implements TimeWheel {
 
     @Override
     public void start() {
-        if (!status.compareAndSet(TimerStatus.DEFAULT, new TimerStatus(Clock.nano(), -1))) {
+        if (!scale.compareAndSet(Scale.DOWN, new Scale(Clock.nano(), 0))) {
             throw new FrameworkException(ExceptionType.CONTEXT, "TimeWheel already started");
         }
         this.coreThread = ThreadUtil.virtual(Constants.WHEEL_CORE, this::inspectingTimeWheel);
@@ -120,22 +126,24 @@ public final class TimeWheelImpl implements TimeWheel {
     public void shutdown() {
         coreThread.interrupt();
         waitThread.interrupt();
-        status.set(TimerStatus.DEFAULT);
+        scale.set(Scale.DOWN);
     }
 
     @SuppressWarnings({"BusyWait"})
     private void inspectingTimeWheel() {
-        final Thread currentThread = this.coreThread;
-        if(currentThread == null) {
-            throw new FrameworkException(ExceptionType.CONTEXT, "TimeWheel is not initialized");
-        }
+        final Thread currentThread = Thread.currentThread();
         while (!currentThread.isInterrupted()) {
-            TimerStatus lastTimeStatus = status.get();
-            int slot = (lastTimeStatus.lastSlot() + 1) & mask;
-            long nano = lastTimeStatus.lastNano() + tick;
-            status.set(new TimerStatus(nano, slot));
-            TimerJob head = timeWheel[slot];
-            Lock lock = timeWheelLocks[slot];
+            final Scale currentScale = scale.get();
+            final int slot = currentScale.slot();
+            final int nextSlot = (slot + 1) & mask;
+            final long nano = currentScale.nano();
+            final long nextNano = currentScale.nano() + TimeUnit.MILLISECONDS.toNanos(tick);
+            Scale nextScale = new Scale(nextNano, nextSlot);
+            if(!scale.compareAndSet(currentScale, nextScale)) {
+                throw new FrameworkException(ExceptionType.CONTEXT, "TimeWheel corrupted");
+            }
+            final TimerJob head = timeWheel[slot];
+            final Lock lock = timeWheelLocks[slot];
             lock.lock();
             try {
                 TimerJob current = head.next();
@@ -172,14 +180,13 @@ public final class TimeWheelImpl implements TimeWheel {
             } finally {
                 lock.unlock();
             }
-            long sleepTime = tick - Clock.elapsed(nano);
-            if (sleepTime > 0) {
-                try{
-                    Thread.sleep(sleepTime);
-                }catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
+            long sleepNano = nextNano - Clock.nano();
+            System.out.println(sleepNano);
+            try{
+                TimeUnit.NANOSECONDS.sleep(sleepNano);
+            }catch (InterruptedException e) {
+                currentThread.interrupt();
+                break;
             }
         }
     }
@@ -190,10 +197,7 @@ public final class TimeWheelImpl implements TimeWheel {
 
     @SuppressWarnings({"BusyWait"})
     private void inspectingWaitingTreeSet() {
-        final Thread currentThread = this.coreThread;
-        if(currentThread == null) {
-            throw new FrameworkException(ExceptionType.CONTEXT, "TimeWheel is not initialized");
-        }
+        final Thread currentThread = Thread.currentThread();
         while (!currentThread.isInterrupted()) {
             long current = Clock.current();
             Iterator<TimerJob> iterator = waitingTreeSet.iterator();
@@ -242,7 +246,7 @@ public final class TimeWheelImpl implements TimeWheel {
     /**
      *  使用头插法添加节点
      */
-    private void addNode(TimerJob head, TimerJob target) {
+    private void addNode(final TimerJob head, final TimerJob target) {
         TimerJob next = head.next();
         head.setNext(target);
         target.setPrev(head);
@@ -255,7 +259,7 @@ public final class TimeWheelImpl implements TimeWheel {
     /**
      *  从链表中移除节点
      */
-    private void removeNode(TimerJob target) {
+    private void removeNode(final TimerJob target) {
         TimerJob prev = target.prev();
         TimerJob next = target.next();
         prev.setNext(next);
@@ -267,7 +271,7 @@ public final class TimeWheelImpl implements TimeWheel {
     /**
      * 将任务添加到等待队列中
      */
-    private TimerJob toWaitingSet(TimerJob timerJob) {
+    private TimerJob toWaitingSet(final TimerJob timerJob) {
         waitingTreeSetLock.lock();
         try {
             waitingTreeSet.add(timerJob);
@@ -281,9 +285,9 @@ public final class TimeWheelImpl implements TimeWheel {
      * 将任务添加到时间轮,如果任务需要立刻执行则将其下一个周期添加至时间轮
      */
     private TimerJob toTimeWheel(TimerJob timerJob) {
-        TimerStatus timerStatus = status.get();
+        Scale scale = this.scale.get();
         long executionTime = timerJob.executionTime();
-        long ticks = (executionTime - timerStatus.lastNano()) / tick;
+        long ticks = (executionTime - scale.nano()) / tick;
         if(ticks <= 1L) {
             execute(timerJob);
             long period = timerJob.period();
@@ -294,7 +298,7 @@ public final class TimeWheelImpl implements TimeWheel {
                 return timerJob;
             }
         }
-        timerJob.setPos((int) ((ticks + timerStatus.lastSlot()) & mask));
+        timerJob.setPos((int) ((ticks + scale.slot()) & mask));
         timerJob.setRounds((int) ticks / slots);
         insertTimerJob(timerJob);
         return timerJob;

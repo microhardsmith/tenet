@@ -18,7 +18,6 @@ import java.lang.foreign.SymbolLookup;
 public class LogTest {
     public static void main(String[] args) throws Throwable {
         TimeWheel.instance().start();
-        log.info("hello");
         Thread.sleep(Long.MAX_VALUE);
     }
 
@@ -27,9 +26,10 @@ public class LogTest {
     }
 
     private static void testLog() throws InterruptedException {
+        TimeWheel.instance().start();
         EventPipeline<LogEvent> pipeline = Context.pipeline(LogEvent.class);
         pipeline.init();
-        // log.info("hello world");
+        log.info("hello world");
         Thread.sleep(Long.MAX_VALUE);
     }
 

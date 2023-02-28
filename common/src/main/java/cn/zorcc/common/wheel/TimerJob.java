@@ -68,6 +68,7 @@ public final class TimerJob implements Comparable<TimerJob> {
         this.period = period;
         this.count = 0;
         this.job = () -> {
+            // self calibration
             long sleepTime = executionTime - Clock.current();
             if (sleepTime > 0) {
                 LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(sleepTime));
