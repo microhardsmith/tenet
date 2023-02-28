@@ -11,7 +11,6 @@ import java.util.Iterator;
 import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -24,13 +23,9 @@ import java.util.concurrent.locks.ReentrantLock;
 @Slf4j
 public final class TimeWheelImpl implements TimeWheel {
     /**
-     *  虚拟线程名前缀
+     *  virtual thread name
      */
-    private static final String prefix = "Job-";
-    /**
-     *  虚拟线程计数器
-     */
-    private static final AtomicLong counter = new AtomicLong(0L);
+    private static final String NAME = "Job";
     /**
      *  单例标识
      */
@@ -82,11 +77,12 @@ public final class TimeWheelImpl implements TimeWheel {
 
     /**
      * 时间刻度记录，每次进入时间轮将更新当前TimerStatus为下次运行状态
-     * @param nano 应进入运行槽位的纳秒时间
-     * @param slot 应运行槽位
+     * @param nano  应进入槽位的纳秒时间 用于计算时间间隔
+     * @param milli 应进入槽位的毫秒时间戳 用于获取当前时间
+     * @param slot  应运行槽位
      */
-    private record Scale(long nano, int slot) {
-        public static Scale DOWN = new Scale(Long.MIN_VALUE, Integer.MIN_VALUE);
+    private record Scale(long nano, long milli, int slot) {
+        public static Scale DOWN = new Scale(Long.MIN_VALUE, Long.MIN_VALUE, Integer.MIN_VALUE);
     }
 
     private TimeWheelImpl(int slots, long tick, long boundary) {
@@ -104,7 +100,7 @@ public final class TimeWheelImpl implements TimeWheel {
         this.timeWheel = new TimerJob[slots];
         this.timeWheelLocks = new Lock[slots];
         for (int i = 0; i < slots; i++) {
-            timeWheel[i] = new TimerJob(); // empty head node
+            timeWheel[i] = TimerJob.HEAD; // empty head node
             timeWheelLocks[i] = new ReentrantLock();
         }
     }
@@ -113,7 +109,7 @@ public final class TimeWheelImpl implements TimeWheel {
 
     @Override
     public void start() {
-        if (!scale.compareAndSet(Scale.DOWN, new Scale(Clock.nano(), 0))) {
+        if (!scale.compareAndSet(Scale.DOWN, new Scale(Clock.nano(), Clock.current(), 0))) {
             throw new FrameworkException(ExceptionType.CONTEXT, "TimeWheel already started");
         }
         this.coreThread = ThreadUtil.virtual(Constants.WHEEL_CORE, this::inspectingTimeWheel);
@@ -134,11 +130,13 @@ public final class TimeWheelImpl implements TimeWheel {
         final Thread currentThread = Thread.currentThread();
         while (!currentThread.isInterrupted()) {
             final Scale currentScale = scale.get();
+            final long nano = currentScale.nano();
+            final long nextNano = nano + TimeUnit.MILLISECONDS.toNanos(tick);
+            final long milli = currentScale.milli();
+            final long nextMilli = milli + tick;
             final int slot = currentScale.slot();
             final int nextSlot = (slot + 1) & mask;
-            final long nano = currentScale.nano();
-            final long nextNano = currentScale.nano() + TimeUnit.MILLISECONDS.toNanos(tick);
-            Scale nextScale = new Scale(nextNano, nextSlot);
+            Scale nextScale = new Scale(nextNano, nextMilli, nextSlot);
             if(!scale.compareAndSet(currentScale, nextScale)) {
                 throw new FrameworkException(ExceptionType.CONTEXT, "TimeWheel corrupted");
             }
@@ -157,21 +155,12 @@ public final class TimeWheelImpl implements TimeWheel {
                             current.setRounds(rounds - 1);
                         } else {
                             removeNode(current);
-                            // 如果是循环任务,重新添加到时间轮中
+                            execute(current);
                             long period = current.period();
-                            if (period != -1) {
-                                long executionTime = current.executionTime();
-                                long due = current.resetTime() + period;
-                                if(due > executionTime) {
-                                    current.setExecutionTime(due);
-                                    add(due - executionTime, current);
-                                }else {
-                                    execute(current);
-                                    current.setExecutionTime(executionTime + period);
-                                    add(period, current);
-                                }
-                            } else {
-                                execute(current);
+                            if (period != TimerJob.ONCE) {
+                                // period job, re-add to wheel
+                                current.setExecMilli(current.execMilli() + period);
+                                add(period, current);
                             }
                         }
                     }
@@ -180,7 +169,7 @@ public final class TimeWheelImpl implements TimeWheel {
             } finally {
                 lock.unlock();
             }
-            long sleepNano = nextNano - Clock.nano();
+            final long sleepNano = nextNano - Clock.nano();
             System.out.println(sleepNano);
             try{
                 TimeUnit.NANOSECONDS.sleep(sleepNano);
@@ -192,20 +181,20 @@ public final class TimeWheelImpl implements TimeWheel {
     }
 
     private void execute(TimerJob timerJob) {
-        ThreadUtil.virtual(prefix + counter.getAndIncrement(), timerJob.job()).start();
+        ThreadUtil.virtual(NAME, timerJob.job()).start();
     }
 
     @SuppressWarnings({"BusyWait"})
     private void inspectingWaitingTreeSet() {
         final Thread currentThread = Thread.currentThread();
         while (!currentThread.isInterrupted()) {
-            long current = Clock.current();
+            long currentMilli = Clock.current();
             Iterator<TimerJob> iterator = waitingTreeSet.iterator();
             waitingTreeSetLock.lock();
             try {
                 while (iterator.hasNext()) {
                     TimerJob timerJob = iterator.next();
-                    long delay = timerJob.executionTime() - current;
+                    long delay = timerJob.execMilli() - currentMilli;
                     if (delay < boundary) {
                         iterator.remove();
                         long ticks = delay / tick;
@@ -282,23 +271,25 @@ public final class TimeWheelImpl implements TimeWheel {
     }
 
     /**
-     * 将任务添加到时间轮,如果任务需要立刻执行则将其下一个周期添加至时间轮
+     * 将任务添加到时间轮,如果任务需要立刻执行且为周期任务则将其下一个周期添加至时间轮
      */
     private TimerJob toTimeWheel(TimerJob timerJob) {
-        Scale scale = this.scale.get();
-        long executionTime = timerJob.executionTime();
-        long ticks = (executionTime - scale.nano()) / tick;
+        final Scale currentScale = scale.get();
+        long execMilli = timerJob.execMilli();
+        // round down
+        long ticks = (execMilli - currentScale.milli()) / tick;
         if(ticks <= 1L) {
+            // too close to add to the wheel
             execute(timerJob);
             long period = timerJob.period();
-            if(period != -1L) {
-                timerJob.setExecutionTime(executionTime + period);
+            if(period != TimerJob.ONCE) {
+                timerJob.setExecMilli(execMilli + period);
                 ticks += period / tick;
             }else {
                 return timerJob;
             }
         }
-        timerJob.setPos((int) ((ticks + scale.slot()) & mask));
+        timerJob.setPos((int) ((ticks + currentScale.slot()) & mask));
         timerJob.setRounds((int) ticks / slots);
         insertTimerJob(timerJob);
         return timerJob;
@@ -307,7 +298,7 @@ public final class TimeWheelImpl implements TimeWheel {
     @Override
     public TimerJob addJob(Runnable job, long delay, TimeUnit timeUnit) {
         long delayMillis = timeUnit.toMillis(delay);
-        TimerJob timerJob = new TimerJob(Clock.current() + delayMillis, -1, job);
+        TimerJob timerJob = new TimerJob(Clock.current() + delayMillis, TimerJob.ONCE, job);
         return add(delayMillis, timerJob);
     }
 
@@ -316,13 +307,16 @@ public final class TimeWheelImpl implements TimeWheel {
         long delayMillis = timeUnit.toMillis(delay);
         long periodDelayMillis = timeUnit.toMillis(periodDelay);
         if (periodDelayMillis < tick) {
-            throw new FrameworkException(ExceptionType.CONTEXT, "Timer tick is too large");
+            throw new FrameworkException(ExceptionType.CONTEXT, "TimeWheel tick is too large for current task, might consider tuning TimeWheel's default parameters");
         }
         TimerJob timerJob = new TimerJob(Clock.current() + delayMillis, periodDelayMillis, job);
         return add(delayMillis, timerJob);
     }
 
+    /**
+     *  根据等待时间长短选择添加至等待队列或时间轮中
+     */
     private TimerJob add(long delayMillis, TimerJob timerJob) {
-        return delayMillis > boundary ? toWaitingSet(timerJob) : toTimeWheel(timerJob);
+        return delayMillis >= boundary ? toWaitingSet(timerJob) : toTimeWheel(timerJob);
     }
 }

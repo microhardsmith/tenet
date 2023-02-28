@@ -13,7 +13,7 @@ public sealed interface TimeWheel permits TimeWheelImpl {
     int slots = 1024;
     /**
      * 时间轮tick大小,单位毫秒,默认精度为25ms
-     * 如果启用了集群,时间轮精度需要满足raft算法的需求,单机情况下可适当放大该值
+     * 如果启用了集群,时间轮精度需要满足raft算法的需求,单机情况下可适当放大该值以减少cpu占用率
      */
     long tick = 25L;
     /**
@@ -24,7 +24,6 @@ public sealed interface TimeWheel permits TimeWheelImpl {
     static TimeWheel instance() {
         return TimeWheelImpl.instance;
     }
-
 
     /**
      * 启动时间轮
