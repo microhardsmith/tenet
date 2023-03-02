@@ -10,7 +10,7 @@ import java.lang.annotation.*;
 @Documented
 public @interface PathVariable {
     /**
-     *  是否必须，在缺失时会抛出ServiceException异常
+     *  是否必须,在缺失时会抛出ServiceException异常
      */
     boolean required() default false;
 }

@@ -3,20 +3,16 @@ package cn.zorcc.log;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentScope;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
  *   可扩容native byte数组,非线程安全
- *   初始分配的内存为全局作用域，在jvm生命周期中不会释放，扩容的内存可被gc
+ *   初始分配的内存为全局作用域,在jvm生命周期中不会释放,扩容的内存可被gc
  */
 public final class SegmentBuilder {
     /**
@@ -44,10 +40,23 @@ public final class SegmentBuilder {
      */
     private long index;
 
+    /**
+     *   构建生命周期确定的SegmentBuilder
+     */
     public SegmentBuilder(Arena arena, int size) {
         this.arena = arena;
         this.initialSize = this.size = size;
         this.initialSegment = this.segment = arena.allocateArray(ValueLayout.JAVA_BYTE, size);
+        this.index = 0;
+    }
+
+    /**
+     *   构建生命周期与jvm绑定的SegmentBuilder
+     */
+    public SegmentBuilder(int size) {
+        this.arena = null;
+        this.initialSize = this.size = size;
+        this.initialSegment = this.segment = MemorySegment.allocateNative(size, SegmentScope.global());
         this.index = 0;
     }
 
@@ -81,35 +90,35 @@ public final class SegmentBuilder {
      *  向当前segment中添加内容,使用ansi color格式包裹填充内容
      */
     public SegmentBuilder append(MemorySegment segment, MemorySegment color) {
-        return append(Constants.ANSI_PREFIX).append(color).append(segment).append(Constants.ANSI_SUFFIX);
+        if(color != null) {
+            return append(Constants.ANSI_PREFIX).append(color).append(segment).append(Constants.ANSI_SUFFIX);
+        }else {
+            return append(segment);
+        }
     }
 
     /**
-     *  向当前segment中添加内容，如果长度小于width则填充空格，长度小于width则截断
+     *  向当前segment中添加内容,如果长度小于width则填充空格,长度小于width则截断
      */
     public SegmentBuilder append(MemorySegment target, long width) {
-        long len = target.byteSize();
-        if(width == len) {
-            return append(target);
-        }
-        long nextIndex = index + Math.min(len, width);
+        long len = Math.min(target.byteSize(), width);
+        long nextIndex = index + width;
         if(nextIndex >= size) {
             resize(nextIndex);
         }
-        MemorySegment.copy(target, 0, segment, index, width);
-        index = nextIndex;
+        MemorySegment.copy(target, 0, segment, index, len);
         if(width > len) {
             long l = width - len;
             for(long i = 0; i < l; i++) {
-                this.segment.set(ValueLayout.JAVA_BYTE, index + i, Constants.b2);
+                this.segment.set(ValueLayout.JAVA_BYTE, index + len + i, Constants.b2);
             }
-            index = index + l;
         }
+        index = index + width;
         return this;
     }
 
     /**
-     *  向当前segment中添加内容,使用ansi color格式包裹填充内容，如果长度小于width则填充空格，长度小于width则截断
+     *  向当前segment中添加内容,使用ansi color格式包裹填充内容,如果长度小于width则填充空格,长度小于width则截断
      */
     public SegmentBuilder append(MemorySegment target, MemorySegment color, long width) {
         if(width <= 0) {
@@ -120,9 +129,9 @@ public final class SegmentBuilder {
     }
 
     /**
-     *  向当前segment中添加可格式化内容，将{}替换为list中的元素，返回添加的信息段
+     *  向当前segment中添加可格式化内容,将{}替换为list中的元素,返回添加的信息段
      */
-    public MemorySegment append(MemorySegment target, List<MemorySegment> list) {
+    public MemorySegment appendWithArgs(MemorySegment target, List<MemorySegment> list) {
         if(list == null || list.isEmpty()) {
             final long currentIndex = index;
             append(target);
@@ -162,10 +171,10 @@ public final class SegmentBuilder {
     }
 
     /**
-     *  返回当前segment
+     *  返回当前segment,按照index进行切片
      */
     public MemorySegment segment() {
-        return segment;
+        return index == segment.byteSize() ? segment : segment.asSlice(0, index);
     }
 
     /**
@@ -187,7 +196,7 @@ public final class SegmentBuilder {
         if(newSize < 0) {
             throw new FrameworkException(ExceptionType.NATIVE, "MemorySize overflow");
         }
-        MemorySegment newSegment = arena.allocateArray(ValueLayout.JAVA_BYTE, newSize);
+        MemorySegment newSegment = arena == null ? MemorySegment.allocateNative(newSize, SegmentScope.auto()) : arena.allocateArray(ValueLayout.JAVA_BYTE, newSize);
         newSegment.copyFrom(segment);
         size = newSegment.byteSize();
         segment =  newSegment;

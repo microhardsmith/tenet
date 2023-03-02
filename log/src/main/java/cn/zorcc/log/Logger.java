@@ -7,11 +7,8 @@ import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.event.EventPipeline;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.ConfigUtil;
-import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.common.util.ThreadUtil;
-import cn.zorcc.common.wheel.TimeWheel;
-import cn.zorcc.common.wheel.TimerJob;
-import org.jctools.queues.atomic.MpmcAtomicArrayQueue;
+import cn.zorcc.common.wheel.Wheel;
 import org.slf4j.Marker;
 import org.slf4j.event.Level;
 import org.slf4j.helpers.LegacyAbstractLogger;
@@ -23,7 +20,6 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -46,8 +42,7 @@ public class Logger extends LegacyAbstractLogger {
     private static final int bufferSize;
     private static final DateTimeFormatter formatter;
     private static final EventPipeline<LogEvent> pipeline;
-    private static final int pipelineSize;
-    private static final TimerJob flushJob;
+    public static final int pipelineSize;
 
 
     static {
@@ -75,14 +70,12 @@ public class Logger extends LegacyAbstractLogger {
         pipeline = new EventPipeline<>(eventHandlers);
         pipelineSize = eventHandlers.size();
         Context.registerPipeline(LogEvent.class, pipeline);
-        flushJob = TimeWheel.instance().addPeriodicJob(() -> pipeline.fireEvent(LogEvent.flushEvent), 0L, logConfig.getFlushInterval(), TimeUnit.MILLISECONDS);
-    }
 
-    /**
-     *  获取日志事件pipeline大小
-     */
-    public static int pipelineSize() {
-        return pipelineSize;
+        // add periodic flush job
+        if(logConfig.isUsingFile() || logConfig.isUsingMetrics()) {
+            Wheel.wheel().addPeriodicJob(() -> pipeline.fireEvent(LogEvent.flushEvent), 0L, logConfig.getFlushInterval(), TimeUnit.MILLISECONDS);
+        }
+
     }
 
     public Logger(String name) {
@@ -95,7 +88,7 @@ public class Logger extends LegacyAbstractLogger {
     }
 
     /**
-     *  日志输出，日志分为五个部分： 时间 等级 线程名 类名 日志消息
+     *  日志输出,日志分为五个部分： 时间 等级 线程名 类名 日志消息
      */
     @Override
     protected void handleNormalizedLoggingCall(Level level, Marker marker, String s, Object[] objects, Throwable throwable) {
@@ -136,9 +129,9 @@ public class Logger extends LegacyAbstractLogger {
             logEvent.setMsg(msg);
         }else {
             List<MemorySegment> list = Arrays.stream(objects).map(o -> MemorySegment.ofArray(o.toString().getBytes(StandardCharsets.UTF_8))).toList();
-            logEvent.setMsg(builder.append(msg, list));
+            logEvent.setMsg(builder.appendWithArgs(msg, list));
         }
-        logEvent.test(); //DEBUG
+        // logEvent.test(); //DEBUG
         pipeline.fireEvent(logEvent);
     }
 

@@ -141,7 +141,7 @@ public class AppHttpEventHandler implements EventHandler<AppHttpEvent>, AppHttpM
     }
 
     /**
-     * 处理HttpMapping中的参数解析部分，将HttpReq中的值提取至Args中
+     * 处理HttpMapping中的参数解析部分,将HttpReq中的值提取至Args中
      * @param parameter 参数体
      * @return AppHttpEvent事件映射
      */

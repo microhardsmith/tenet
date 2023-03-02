@@ -4,8 +4,6 @@ import cn.zorcc.common.enums.ContextEventType;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.util.List;
-
 /**
  *  应用上下文事件
  */

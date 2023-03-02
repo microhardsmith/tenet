@@ -2,40 +2,37 @@ package cn.zorcc.log;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.Context;
-import cn.zorcc.common.event.ContextEvent;
 import cn.zorcc.common.event.EventPipeline;
-import cn.zorcc.common.util.NativeUtil;
-import cn.zorcc.common.wheel.TimeWheel;
-import cn.zorcc.common.wheel.TimeWheelImpl;
+import cn.zorcc.common.wheel.Wheel;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentScope;
-import java.lang.foreign.SymbolLookup;
 
 @Slf4j
 public class LogTest {
     public static void main(String[] args) throws Throwable {
-        TimeWheel.instance().start();
-        Thread.sleep(Long.MAX_VALUE);
-    }
-
-    private static void testAnsi() {
-        System.out.println();
+        testLog();
     }
 
     private static void testLog() throws InterruptedException {
-        TimeWheel.instance().start();
+        Wheel.wheel().init();
         EventPipeline<LogEvent> pipeline = Context.pipeline(LogEvent.class);
         pipeline.init();
-        log.info("hello world");
+        for(int i = 0;i < 100000; i++) {
+            log.info("hello " + i);
+        }
         Thread.sleep(Long.MAX_VALUE);
     }
 
+    private static void testConsole() throws InterruptedException {
+        System.out.println("\033[31mhello\033[0m");
+    }
+
     private static void testNative() {
-        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource("/lib/test.dll");
-        System.out.println(symbolLookup == null);
+        MemorySegment memorySegment = MemorySegment.allocateNative(100, SegmentScope.auto());
+        MemorySegment.copy(Constants.BLUE_SEGMENT, 0, memorySegment, 0, 3);
     }
 
     private static void testFile() throws IOException {

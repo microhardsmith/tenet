@@ -1,7 +1,7 @@
 package cn.zorcc.common.net;
 
-import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.common.net.win.WinLooper;
+import cn.zorcc.common.util.NativeUtil;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.*;

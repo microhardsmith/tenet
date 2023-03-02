@@ -1,7 +1,5 @@
 package cn.zorcc.common;
 
-import java.util.concurrent.TimeUnit;
-
 /**
  * 系统时钟类
  */

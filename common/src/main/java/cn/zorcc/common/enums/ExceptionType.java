@@ -5,6 +5,7 @@ package cn.zorcc.common.enums;
  */
 public enum ExceptionType {
     NATIVE,
+    WHEEL,
     CONTEXT,
     CONFIG,
     HTTP,

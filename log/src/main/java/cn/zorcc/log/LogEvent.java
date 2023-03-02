@@ -30,9 +30,6 @@ public class LogEvent extends Event {
      *  是否为刷新事件
      */
     private final boolean flush;
-    /**
-     *  日志pipeline并发控制
-     */
     private final AtomicInteger counter = new AtomicInteger(0);
     /**
      *  日志行直接内存
@@ -67,14 +64,6 @@ public class LogEvent extends Event {
      */
     private MemorySegment msg;
 
-    public void test() {
-        NativeUtil.test(time, time.byteSize(), "time: ");
-        NativeUtil.test(level, level.byteSize(), "level: ");
-        NativeUtil.test(threadName, threadName.byteSize(), "threadName: ");
-        NativeUtil.test(className, className.byteSize(), "className: ");
-        NativeUtil.test(msg, msg.byteSize(), "msg: ");
-    }
-
     /**
      *  用于构建flush event
      */
@@ -89,6 +78,15 @@ public class LogEvent extends Event {
     public LogEvent(int size) {
         this.flush = false;
         this.builder = new SegmentBuilder(arena, size);
+    }
+
+    /**
+     *  尝试释放LogEvent占用的内存资源
+     */
+    public void tryRelease() {
+        if(counter.incrementAndGet() == Logger.pipelineSize) {
+            arena.close();
+        }
     }
 
 }

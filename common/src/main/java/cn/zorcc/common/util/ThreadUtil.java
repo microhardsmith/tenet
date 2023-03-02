@@ -1,19 +1,11 @@
 package cn.zorcc.common.util;
 
 import cn.zorcc.common.Constants;
-import jdk.incubator.concurrent.ScopedValue;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  *  虚拟线程工具类
  */
 public class ThreadUtil {
-    private static final ScopedValue<Logger> loggerScopedValue = ScopedValue.newInstance();
-    private static final AtomicLong counter = new AtomicLong(0L);
     private ThreadUtil() {
         throw new UnsupportedOperationException();
     }
@@ -25,15 +17,14 @@ public class ThreadUtil {
      * @return 执行任务的虚拟线程
      */
     public static Thread virtual(final String name, final Runnable runnable) {
-        final String actualName = name + "-" + counter.getAndIncrement();
         return Thread.ofVirtual()
                 .allowSetThreadLocals(false)
                 .inheritInheritableThreadLocals(false)
                 .uncaughtExceptionHandler((thread, throwable) -> {
-                    loggerScopedValue.get().error("Exception caught in virtual thread", throwable);
+                    throwable.printStackTrace();
                 })
-                .name(actualName)
-                .unstarted(() -> ScopedValue.where(loggerScopedValue, LoggerFactory.getLogger(actualName)).run(runnable));
+                .name(name)
+                .unstarted(runnable);
     }
 
     /**
@@ -47,18 +38,9 @@ public class ThreadUtil {
                 .allowSetThreadLocals(true)
                 .inheritInheritableThreadLocals(true)
                 .uncaughtExceptionHandler((thread, throwable) -> {
-                    loggerScopedValue.get().error("Exception caught in virtual thread", throwable);
+                    throwable.printStackTrace();
                 })
                 .name(name)
-                .unstarted(() -> ScopedValue.where(loggerScopedValue, LoggerFactory.getLogger(name)).run(runnable));
-    }
-
-    public static ThreadFactory threadFactory(String name) {
-        return runnable -> Thread.ofPlatform()
-                .allowSetThreadLocals(true)
-                .inheritInheritableThreadLocals(true)
-                .uncaughtExceptionHandler(Constants.DEFAULT_EXCEPTION_HANDLER)
-                .name(name + "-" + counter.getAndIncrement())
                 .unstarted(runnable);
     }
 

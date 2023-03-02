@@ -2,7 +2,6 @@ package cn.zorcc.common;
 
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
-import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.MemorySegment;
 import java.math.BigDecimal;

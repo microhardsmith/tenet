@@ -14,7 +14,7 @@ import java.nio.charset.StandardCharsets;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
 /**
- *  http协议工具类，避免与Netty本身的HttpUtil重名
+ *  http协议工具类,避免与Netty本身的HttpUtil重名
  */
 public class HttpTools {
     private static final String FAILURE = "Failure: ";

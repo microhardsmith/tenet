@@ -1,11 +1,11 @@
 package cn.zorcc.common.net.win;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.net.Looper;
 import cn.zorcc.common.net.NetConfig;
+import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.common.util.ThreadUtil;
 import lombok.extern.slf4j.Slf4j;
 
@@ -132,7 +132,7 @@ public class WinLooper implements Looper {
     }
 
     /**
-     * 检查返回值的合法性，返回值为-1时返回异常
+     * 检查返回值的合法性,返回值为-1时返回异常
      *
      * @param value 实际返回值
      * @param op    操作名称

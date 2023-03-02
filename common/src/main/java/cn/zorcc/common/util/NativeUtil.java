@@ -13,7 +13,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -36,7 +35,7 @@ public class NativeUtil {
      */
     private static final String tmpLibName = "tenet-lib";
     /**
-     *   动态链接库缓存，避免重复加载
+     *   动态链接库缓存,避免重复加载
      */
     private static final Map<String, SymbolLookup> cache = new ConcurrentHashMap<>();
 
@@ -87,9 +86,9 @@ public class NativeUtil {
     }
 
     /**
-     * 从指定Class下的resource文件夹路径加载动态链接库 必须在platform thread下进行操作，因为拷贝文件可能阻塞
+     * 从指定Class下的resource文件夹路径加载动态链接库 必须在platform thread下进行操作,因为拷贝文件可能阻塞
      * @param resourcePath 动态链接库路径
-     * @param clazz 需要加载资源的检索类，如果指定为null则从common项目下加载
+     * @param clazz 需要加载资源的检索类,如果指定为null则从common项目下加载
      * @return 指定库对应SymbolLookup
      */
     public static SymbolLookup loadLibraryFromResource(String resourcePath, Class<?> clazz) {
@@ -178,16 +177,5 @@ public class NativeUtil {
      */
     public static MemorySegment globalNativeSegment(String str) {
         return globalArena.allocateArray(ValueLayout.JAVA_BYTE, str.getBytes(StandardCharsets.UTF_8));
-    }
-
-    public static void test(MemorySegment segment, long index, String remark) {
-        byte[] b = new byte[(int) index];
-        for(int i = 0 ;i < index; i++) {
-            b[i] = segment.get(ValueLayout.JAVA_BYTE, i);
-        }
-        System.out.println(Arrays.toString(b));
-        String t = remark + new String(b);
-        int l = t.length();
-        System.out.println(t + "|len : " + l);
     }
 }

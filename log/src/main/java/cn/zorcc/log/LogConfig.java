@@ -1,7 +1,6 @@
 package cn.zorcc.log;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.util.NativeUtil;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -20,7 +19,7 @@ public class LogConfig {
      */
     private String timeFormat = Constants.TIME_FORMAT;
     /**
-     *  flush间隔，单位毫秒
+     *  flush间隔,单位毫秒
      */
     private long flushInterval = 200L;
     /**
@@ -58,7 +57,7 @@ public class LogConfig {
     /**
      *  打印日志消息的颜色
      */
-    private String msgColor = Constants.BLUE;
+    private String msgColor = Constants.DEFAULT;
     /**
      * 是否将日志输出到文件,默认为false
      */
@@ -77,7 +76,7 @@ public class LogConfig {
      */
     private int maxFileSize = Constants.GB;
     /**
-     *  日志记录时间间隔，默认每隔一天新建日志文件进行写入，单位毫秒
+     *  日志记录时间间隔,默认每隔一天新建日志文件进行写入,单位毫秒
      *  设置该值小于等于0表示不限制日志时间
      */
     private int maxRecordingTime = Constants.DAY;

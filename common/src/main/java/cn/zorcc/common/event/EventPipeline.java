@@ -39,7 +39,7 @@ public class EventPipeline<T extends Event> implements LifeCycle {
 
     /**
      *  主动触发事件,事件在init之前并不会被处理
-     *  尽量在新建的虚拟线程中触发事件，事件的触发是默认同步的
+     *  尽量在新建的虚拟线程中触发事件,事件的触发是默认同步的
      */
     public void fireEvent(T event) {
         for (EventHandler<T> eventHandler : eventHandlers) {

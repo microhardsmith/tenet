@@ -1,10 +1,9 @@
 package cn.zorcc.common.exception;
 
 import cn.zorcc.common.enums.ExceptionType;
-import lombok.extern.slf4j.Slf4j;
 
 /**
- *  框架层出现的异常，出现该类异常意味着在通用框架层面出现了问题，应用可能不能正常运行，开发者需要根据报错信息对应用进行调整
+ *  框架层出现的异常,出现该类异常意味着在通用框架层面出现了问题,应用可能不能正常运行,开发者需要根据报错信息对应用进行调整
  */
 public class FrameworkException extends RuntimeException {
 

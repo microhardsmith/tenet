@@ -94,7 +94,7 @@ public class UrlTree {
     }
 
     /**
-     *  按照“/"分隔路径，去除多余的空格和分隔符
+     *  按照“/"分隔路径,去除多余的空格和分隔符
      */
     public List<String> trimSplit(String path) {
         char[] chars = path.trim().toCharArray();

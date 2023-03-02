@@ -8,18 +8,17 @@ import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
 
-import java.lang.foreign.*;
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SymbolLookup;
+import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
-import java.nio.charset.StandardCharsets;
 
 /**
  * 将日志打印至控制台
  */
 public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
     private static final String NAME = "logConsoleHandler";
-    private static final MemorySegment NORMAL = MemorySegment.ofArray(Constants.GREEN.getBytes(StandardCharsets.UTF_8));
-    private static final MemorySegment WARN = MemorySegment.ofArray(Constants.YELLOW.getBytes(StandardCharsets.UTF_8));
-    private static final MemorySegment ERROR = MemorySegment.ofArray(Constants.RED.getBytes(StandardCharsets.UTF_8));
     /**
      *  日志等级Console输出预留长度
      */
@@ -54,14 +53,12 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
     private final BlockingQ<LogEvent> blockingQ;
     private final MethodHandle putsHandle;
     private final MethodHandle flushHandle;
-    private final Arena arena;
     private final SegmentBuilder builder;
     private int counter;
 
     public ConsoleLogEventHandler(LogConfig logConfig) {
         // console builder should have a larger size than logEvent
-        this.arena = Arena.openConfined();
-        this.builder = new SegmentBuilder(arena, logConfig.getBufferSize() << 1);
+        this.builder = new SegmentBuilder(logConfig.getBufferSize() << 1);
         SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.commonLib());
         this.putsHandle = NativeUtil.methodHandle(symbolLookup, "g_puts", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         this.flushHandle = NativeUtil.methodHandle(symbolLookup, "g_flush", FunctionDescriptor.ofVoid());
@@ -70,10 +67,10 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
         this.levelLen = logConfig.getLevelLen();
         this.threadNameLen = logConfig.getThreadNameLen();
         this.classNameLen = logConfig.getClassNameLen();
-        this.timeColor = MemorySegment.ofArray(logConfig.getTimeColor().getBytes(StandardCharsets.UTF_8));
-        this.threadNameColor = MemorySegment.ofArray(logConfig.getThreadNameColor().getBytes(StandardCharsets.UTF_8));
-        this.classNameColor = MemorySegment.ofArray(logConfig.getClassNameColor().getBytes(StandardCharsets.UTF_8));
-        this.msgColor = MemorySegment.ofArray(logConfig.getMsgColor().getBytes(StandardCharsets.UTF_8));
+        this.timeColor = getColorSegment(logConfig.getTimeColor());
+        this.threadNameColor = getColorSegment(logConfig.getThreadNameColor());
+        this.classNameColor = getColorSegment(logConfig.getClassNameColor());
+        this.msgColor = getColorSegment(logConfig.getMsgColor());
 
         this.blockingQ = new MpscBlockingQ<>(NAME, logEvent -> {
             // Console output will ignore the flush event since it flushes every time
@@ -96,8 +93,9 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
                 if(throwable != null) {
                     builder.append(Constants.b9).append(throwable);
                 }
+                // add '\0'
                 builder.append(Constants.b0);
-                // DEBUG
+                // print to the console
                 puts(builder.segment());
                 flush();
             }
@@ -127,7 +125,7 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
     }
 
     /**
-     *  获取当前日志等级对应的颜色
+     *   获取当前日志等级对应的MemorySegment
      */
     private MemorySegment getLevelColorSegment(MemorySegment level) {
         if(level.equals(Constants.ERROR_SEGMENT)) {
@@ -139,7 +137,10 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
         }
     }
 
-    private MemorySegment getColorSegment(String color) {
+    /**
+     *   获取颜色对应的MemorySegment
+     */
+    private static MemorySegment getColorSegment(String color) {
         switch (color) {
             case Constants.RED -> {
                 return Constants.RED_SEGMENT;
@@ -159,7 +160,10 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
             case Constants.CYAN -> {
                 return Constants.CYAN_SEGMENT;
             }
-            default -> throw new FrameworkException(ExceptionType.LOG, "Unable to get target color");
+            default -> {
+                // no color wrapped
+                return null;
+            }
         }
     }
 

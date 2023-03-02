@@ -15,7 +15,7 @@ public class HttpConfig {
      */
     private int port = 8000;
     /**
-     * Http client worker线程数，最低为1
+     * Http client worker线程数,最低为1
      */
     private int httpClientThreads = 1;
     /**

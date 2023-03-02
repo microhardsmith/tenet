@@ -29,7 +29,7 @@ import java.io.File;
 
 /**
  *  Http服务器(http1.1版本,http2主要在请求静态资源上有较大提升,在动态请求上差距不大)
- *  Http服务器是独立于net通用服务器的实现，通过触发HttpEvent来实现业务逻辑
+ *  Http服务器是独立于net通用服务器的实现,通过触发HttpEvent来实现业务逻辑
  */
 @Slf4j
 public class HttpServer {
