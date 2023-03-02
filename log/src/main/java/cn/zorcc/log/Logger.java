@@ -19,12 +19,10 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -41,6 +39,7 @@ public class Logger extends LegacyAbstractLogger {
     private static final int level;
     private static final int bufferSize;
     private static final DateTimeFormatter formatter;
+    private static final TimeResolver timeResolver;
     private static final EventPipeline<LogEvent> pipeline;
     public static final int pipelineSize;
 
@@ -48,7 +47,22 @@ public class Logger extends LegacyAbstractLogger {
     static {
         LogConfig logConfig = ConfigUtil.loadJsonConfig(Constants.DEFAULT_LOG_CONFIG_NAME, LogConfig.class);
         bufferSize = Math.max(logConfig.getBufferSize(), Constants.KB);
-        formatter = DateTimeFormatter.ofPattern(logConfig.getTimeFormat());
+        String timeFormat = logConfig.getTimeFormat();
+        formatter = DateTimeFormatter.ofPattern(timeFormat, Locale.getDefault());
+        String resolver = logConfig.getTimeResolver();
+        if(resolver != null && !resolver.isEmpty()) {
+            try {
+                Class<?> timeResolverClass = Class.forName(resolver);
+                if(!TimeResolver.class.isAssignableFrom(timeResolverClass)) {
+                    throw new FrameworkException(ExceptionType.LOG, "Target TimeResolver is not valid");
+                }
+                timeResolver = (TimeResolver) timeResolverClass.getConstructor().newInstance();
+            } catch (Exception e) {
+                throw new FrameworkException(ExceptionType.LOG, "Unable to instantiate target TimeResolver", e);
+            }
+        }else {
+            timeResolver = null;
+        }
         switch (logConfig.getLevel()) {
             case Constants.TRACE -> level = Constants.TRACE;
             case Constants.INFO -> level = Constants.INFO;
@@ -95,9 +109,16 @@ public class Logger extends LegacyAbstractLogger {
         LogEvent logEvent = new LogEvent(bufferSize);
         Arena arena = logEvent.getArena();
 
-        LocalDateTime now = LocalDateTime.now();
-        logEvent.setTimestamp(now.toInstant(Constants.LOCAL_ZONE_OFFSET).toEpochMilli());
-        logEvent.setTime(arena.allocateArray(ValueLayout.JAVA_BYTE, formatter.format(now).getBytes(StandardCharsets.UTF_8)));
+        final Instant instant = Constants.SYSTEM_CLOCK.instant();
+        final LocalDateTime now = LocalDateTime.ofEpochSecond(instant.getEpochSecond(), instant.getNano(), Constants.LOCAL_ZONE_OFFSET);
+        logEvent.setTimestamp(instant.toEpochMilli());
+
+        if(timeResolver == null) {
+            logEvent.setTime(arena.allocateArray(ValueLayout.JAVA_BYTE, formatter.format(now).getBytes(StandardCharsets.UTF_8)));
+        }else {
+            logEvent.setTime(arena.allocateArray(ValueLayout.JAVA_BYTE, timeResolver.format(now)));
+        }
+
         logEvent.setLevel(levelMap.get(level));
         logEvent.setThreadName(arena.allocateArray(ValueLayout.JAVA_BYTE, ThreadUtil.threadName().getBytes(StandardCharsets.UTF_8)));
         logEvent.setClassName(arena.allocateArray(ValueLayout.JAVA_BYTE, getName().getBytes(StandardCharsets.UTF_8)));

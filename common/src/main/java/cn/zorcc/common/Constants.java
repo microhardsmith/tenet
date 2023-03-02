@@ -6,6 +6,7 @@ import cn.zorcc.common.util.NativeUtil;
 import java.lang.foreign.MemorySegment;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.OffsetTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -22,7 +23,9 @@ public class Constants {
         }
     };
 
-    public static final String TIME_FORMAT = "yyyy-MM-dd hh:mm:ss.SSS";
+    public static final Clock SYSTEM_CLOCK = Clock.systemDefaultZone();
+    public static final String TIME_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS";
+    public static final String TIME_RESOLVER = "cn.zorcc.log.DefaultTimeResolver";
     public static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern(TIME_FORMAT);
     public static final ZoneOffset LOCAL_ZONE_OFFSET = OffsetTime.now().getOffset();
 

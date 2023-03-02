@@ -9,6 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentScope;
+import java.time.Instant;
+import java.time.LocalDateTime;
 
 @Slf4j
 public class LogTest {
@@ -20,10 +22,18 @@ public class LogTest {
         Wheel.wheel().init();
         EventPipeline<LogEvent> pipeline = Context.pipeline(LogEvent.class);
         pipeline.init();
-        for(int i = 0;i < 100000; i++) {
+        for(int i = 0;i < 1000; i++) {
             log.info("hello " + i);
         }
         Thread.sleep(Long.MAX_VALUE);
+    }
+
+    private static void testTime() {
+        final Instant instant = Constants.SYSTEM_CLOCK.instant();
+        final LocalDateTime now = LocalDateTime.ofEpochSecond(instant.getEpochSecond(), instant.getNano(), Constants.LOCAL_ZONE_OFFSET);
+        System.out.println(now);
+        System.out.println(instant.toEpochMilli());
+        System.out.println(System.currentTimeMillis());
     }
 
     private static void testConsole() throws InterruptedException {
