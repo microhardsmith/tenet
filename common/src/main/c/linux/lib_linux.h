@@ -37,7 +37,7 @@ int l_bind(struct sockaddr_in* sockAddr, int socket, int size);
 
 int l_listen(int socket, int backlog);
 
-int l_recv(int socket, void* buf, int len);
+ssize_t l_recv(int socket, void* buf, size_t len);
 
 int l_close(int fd);
 

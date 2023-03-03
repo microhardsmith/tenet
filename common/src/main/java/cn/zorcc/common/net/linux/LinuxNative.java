@@ -12,10 +12,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class LinuxNative {
     /**
-     *  动态链接库路径
-     */
-    private static final String LIB_PATH = "/lib_win.dll";
-    /**
      *  corresponding to union epoll_data in epoll.h
      */
     public static final MemoryLayout epollDataLayout = MemoryLayout.unionLayout(
@@ -70,7 +66,7 @@ public class LinuxNative {
         if(!instanceFlag.compareAndSet(false, true)) {
             throw new FrameworkException(ExceptionType.NATIVE, "LinuxNative has been initialized");
         }
-        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(LIB_PATH);
+        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.commonLib());
         this.epollCreateMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "l_epoll_create", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         this.epollCtlAddMethodHandle = NativeUtil.methodHandle(symbolLookup,
@@ -114,9 +110,9 @@ public class LinuxNative {
     /**
      *  corresponding to `int l_epoll_create()`
      */
-    public MemorySegment epollCreate() {
+    public int epollCreate() {
         try{
-            return (MemorySegment) epollCreateMethodHandle.invokeExact();
+            return (int) epollCreateMethodHandle.invokeExact();
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking epollCreate()", throwable);
         }
@@ -288,7 +284,7 @@ public class LinuxNative {
     }
 
     /**
-     *  corresponding to `int l_recv(int socket, void* buf, int len)`
+     *  corresponding to `ssize_t l_recv(int socket, void* buf, size_t len)`
      */
     public int recv(int socket, MemorySegment buf, int len) {
         try{

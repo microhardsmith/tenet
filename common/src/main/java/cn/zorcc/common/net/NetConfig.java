@@ -15,7 +15,7 @@ public class NetConfig {
     /**
      *  是否周期性发送保活报文以维持连接
      */
-    private Boolean soKeepAlive = Boolean.FALSE;
+    private Boolean keepAlive = Boolean.FALSE;
     /**
      *  是否关闭Nagle算法
      */

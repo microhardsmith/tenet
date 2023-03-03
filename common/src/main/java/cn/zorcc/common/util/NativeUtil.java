@@ -23,7 +23,7 @@ public class NativeUtil {
     private static final String OS_NAME = System.getProperty("os.name").toLowerCase();
     private static final boolean LINUX = OS_NAME.contains("linux");
     private static final boolean WINDOWS = OS_NAME.contains("windows");
-    private static final boolean MAC = OS_NAME.contains("mac") && OS_NAME.contains("os");
+    private static final boolean MACOS = OS_NAME.contains("mac") && OS_NAME.contains("os");
     private static final int CPU_CORES = Runtime.getRuntime().availableProcessors();
     private static final Linker linker = Linker.nativeLinker();
     /**
@@ -43,6 +43,18 @@ public class NativeUtil {
         throw new UnsupportedOperationException();
     }
 
+    public static boolean isLinux() {
+        return LINUX;
+    }
+
+    public static boolean isWindows() {
+        return WINDOWS;
+    }
+
+    public static boolean isMacos() {
+        return MACOS;
+    }
+
     /**
      *   获取当前系统CPU核心数
      */
@@ -58,7 +70,7 @@ public class NativeUtil {
             return "/lib/lib_linux.so";
         }else if(WINDOWS) {
             return "/lib/lib_win.dll";
-        }else if(MAC) {
+        }else if(MACOS) {
             return "/lib/lib_macos.dylib";
         }else {
             throw new FrameworkException(ExceptionType.NATIVE, "Unsupported operating system : %s".formatted(OS_NAME));

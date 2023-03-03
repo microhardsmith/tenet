@@ -63,13 +63,9 @@ int main() {
     }
 }
 
-// 向标准输出流输出字符
-void g_puts(char* str) {
+// 向标准输出流输出字符并刷新缓冲区
+void g_print(char* str) {
     puts(str);
-}
-
-// 向标准输出流刷新缓冲区
-void g_flush() {
     fflush(stdout);
 }
 

@@ -1,9 +1,7 @@
 #ifndef LIB_WIN_H
 #define LIB_WIN_H
 
-__declspec(dllexport) void g_puts(char* str);
-
-__declspec(dllexport) void g_flush();
+__declspec(dllexport) void g_print(char* str);
 
 __declspec(dllexport) void* w_epoll_create();
 

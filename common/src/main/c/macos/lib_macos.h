@@ -1,9 +1,7 @@
 #ifndef LIB_MACOS_H
 #define LIB_MACOS_H
 
-void g_puts(char* str);
-
-void g_flush();
+void g_prints(char* str);
 
 int m_kqueue();
 

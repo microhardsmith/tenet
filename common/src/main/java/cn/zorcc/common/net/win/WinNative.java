@@ -15,10 +15,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class WinNative {
     /**
-     *  动态链接库路径
-     */
-    private static final String LIB_PATH = "/lib_win.dll";
-    /**
      *  corresponding to union epoll_data in wepoll.h
      */
     public static final MemoryLayout epollDataLayout = MemoryLayout.unionLayout(
@@ -77,7 +73,7 @@ public class WinNative {
         if(!instanceFlag.compareAndSet(false, true)) {
             throw new FrameworkException(ExceptionType.NATIVE, "WinNative has been initialized");
         }
-        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(LIB_PATH);
+        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.commonLib());
         this.epollCreateMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_epoll_create", FunctionDescriptor.of(ValueLayout.ADDRESS));
         this.epollCtlAddMethodHandle = NativeUtil.methodHandle(symbolLookup,
@@ -350,22 +346,6 @@ public class WinNative {
             return (int) wsaCleanUpMethodHandle.invokeExact();
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking wsaCleanUp()", throwable);
-        }
-    }
-
-    /**
-     *  win错误处理,关闭epoll句柄与wsa库
-     */
-    public void clean(MemorySegment handle) {
-        int closeResult = epollClose(handle);
-        if(closeResult == -1) {
-            int err = getLastError();
-            throw new FrameworkException(ExceptionType.NET, "Closing epoll failed with error code : %d", err);
-        }
-        int cleanUpResult = cleanUp();
-        if(cleanUpResult == -1) {
-            int err = getLastError();
-            throw new FrameworkException(ExceptionType.NET, "Wsa clean up failed with error code : %d", err);
         }
     }
 

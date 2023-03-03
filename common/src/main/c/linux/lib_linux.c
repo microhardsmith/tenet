@@ -192,7 +192,7 @@ int l_listen(int socket, int backlog) {
 }
 
 // 从socket接受数据，失败则返回-1，成功则返回接受的字节数
-int l_recv(int socket, void* buf, int len) {
+ssize_t l_recv(int socket, void* buf, size_t len) {
     return recv(socket, buf, len, 0);
 }
 

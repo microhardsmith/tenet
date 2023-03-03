@@ -4,6 +4,8 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.ConfigUtil;
 
+import java.lang.foreign.Arena;
+
 /**
  *  selector thread
  */
@@ -26,4 +28,21 @@ public interface Looper {
             throw new FrameworkException(ExceptionType.NET, "MaxEvents must be a positive number");
         }
     }
+
+    void create(Arena arena);
+
+    void socket(Arena arena);
+
+    void bind(Arena arena);
+
+    void listen(Arena arena);
+
+    void ctl(Arena arena);
+
+    void loop(Arena arena);
+
+    /**
+     *   释放当前looper占用资源
+     */
+    void release();
 }
