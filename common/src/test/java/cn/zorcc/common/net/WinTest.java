@@ -34,6 +34,6 @@ public class WinTest {
     }
 
     public static void main(String[] args) {
-        new WinLooper(new NetConfig()).start();
+        new WinLooper(new NetConfig()).init();
     }
 }

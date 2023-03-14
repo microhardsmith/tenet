@@ -42,7 +42,6 @@ public class WinNative {
             ValueLayout.JAVA_SHORT.withName("sin_family"),
             ValueLayout.JAVA_SHORT.withName("sin_port"),
             ValueLayout.JAVA_INT.withName("sin_addr"),
-            // MemoryLayout.sequenceLayout(8, ValueLayout.JAVA_BYTE)
             MemoryLayout.paddingLayout(8 * Constants.BYTE_SIZE)
     );
     public static final int sockAddrSize = (int) sockAddrLayout.byteSize();

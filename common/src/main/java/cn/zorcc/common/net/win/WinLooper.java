@@ -131,22 +131,19 @@ public class WinLooper implements Looper {
         });
     }
 
-    /**
-     *  启动WinLooper线程
-     */
-    public void start() {
+    @Override
+    public void init() {
         if(!startFlag.compareAndSet(false, true)) {
             throw new FrameworkException(ExceptionType.NET, "WinLooper already started");
         }
         this.loopThread.start();
     }
 
-
     @Override
     public void create(Arena arena) {
         MemorySegment handle = lib.epollCreate();
         if(NativeUtil.checkNullPointer(handle)) {
-            throw new FrameworkException(ExceptionType.NET, "EpollCreate() failed with NULL pointer exception");
+            throw new FrameworkException(ExceptionType.NET, "Failed to create wepoll with NULL pointer exception");
         }
         state.setHandle(handle);
     }
@@ -156,45 +153,72 @@ public class WinLooper implements Looper {
         final long serverSocket = lib.socketCreate();
         if(serverSocket == -1L) {
             int err = lib.getLastError();
-            throw new FrameworkException(ExceptionType.NET, "socketCreate() failed with err code : %d", err);
+            throw new FrameworkException(ExceptionType.NET, "Failed to create socket with err code : %d", err);
         }
         state.setServerSocket(serverSocket);
         final int reuseAddr = lib.setReuseAddr(serverSocket, config.getReuseAddr());
         if(reuseAddr == -1) {
             int err = lib.getLastError();
-            throw new FrameworkException(ExceptionType.NET, "setReuseAddr() failed with err code : %d", err);
+            throw new FrameworkException(ExceptionType.NET, "Failed to setReuseAddr with err code : %d", err);
         }
         final int keepAlive = lib.setKeepAlive(serverSocket, config.getKeepAlive());
         if(keepAlive == -1) {
             int err = lib.getLastError();
-            throw new FrameworkException(ExceptionType.NET, "setKeepAlive() failed with err code : %d", err);
+            throw new FrameworkException(ExceptionType.NET, "Failed to setKeepAlive with err code : %d", err);
         }
         final int tcpNoDelay = lib.setTcpNoDelay(serverSocket, config.getTcpNoDelay());
         if(tcpNoDelay == -1) {
             int err = lib.getLastError();
-            throw new FrameworkException(ExceptionType.NET, "setTcpNoDelay() failed with err code : %d", err);
+            throw new FrameworkException(ExceptionType.NET, "Failed to setTcpNoDelay with err code : %d", err);
         }
         final int nonBlocking = lib.setNonBlocking(serverSocket);
         if(nonBlocking == -1) {
             int err = lib.getLastError();
-            throw new FrameworkException(ExceptionType.NET, "setNonBlocking() failed with err code : %d", err);
+            throw new FrameworkException(ExceptionType.NET, "Failed to setNonBlocking with err code : %d", err);
         }
-
     }
 
     @Override
     public void bind(Arena arena) {
-
+        MemorySegment serverAddr = arena.allocate(WinNative.sockAddrLayout);
+        int addressLen = lib.addressLen();
+        MemorySegment ipString = arena.allocateArray(ValueLayout.JAVA_BYTE, addressLen);
+        ipString.setUtf8String(0L, config.getIp());
+        int port = config.getPort();
+        int setSockAddr = lib.setSockAddr(serverAddr, ipString, port);
+        if(setSockAddr == -1) {
+            int err = lib.getLastError();
+            throw new FrameworkException(ExceptionType.NET, "Failed to set server address with err code : %d", err);
+        }else if(setSockAddr == 0) {
+            throw new FrameworkException(ExceptionType.NET, "IpAddress is not valid : %s", config.getIp());
+        }
+        int bind = lib.bind(serverAddr, state.getServerSocket(), WinNative.sockAddrSize);
+        if(bind == -1) {
+            int err = lib.getLastError();
+            throw new FrameworkException(ExceptionType.NET, "Failed to bind server address with err code : %d", err);
+        }
     }
 
     @Override
     public void listen(Arena arena) {
-
+        int listen = lib.listen(state.getServerSocket(), config.getBacklog());
+        if(listen == -1) {
+            int err = lib.getLastError();
+            throw new FrameworkException(ExceptionType.NET, "Failed to listen server address with err code : %d", err);
+        }
     }
 
     @Override
     public void ctl(Arena arena) {
-
+//            MemorySegment ev = state.selfArena.allocate(WinNative.epollEventLayout);
+//            ev.fill((byte) 0);
+//            WinNative.eventsHandle.set(ev, Constants.EPOLL_IN);
+//            WinNative.fdHandle.set(ev, (int) state.socket);
+//            check(lib.epollCtlAdd(state.epollHandle, state.socket, ev), "epollCtlAdd()");
+        MemorySegment ev = arena.allocate(WinNative.epollEventLayout);
+        ev.fill(Constants.b0);
+        WinNative.eventsHandle.set(ev, Constants.EPOLL_IN);
+        // TODO 验证一下设置里面的socket是否可行，因为数据类型感觉有点对不上
     }
 
     @Override
@@ -203,7 +227,7 @@ public class WinLooper implements Looper {
     }
 
     @Override
-    public void release() {
+    public void shutdown() {
         // release handle
         MemorySegment handle = state.getHandle();
         if(handle != null) {

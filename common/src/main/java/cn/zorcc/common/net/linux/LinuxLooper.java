@@ -11,6 +11,11 @@ public class LinuxLooper implements Looper {
     }
 
     @Override
+    public void init() {
+
+    }
+
+    @Override
     public void create(Arena arena) {
 
     }
@@ -41,7 +46,7 @@ public class LinuxLooper implements Looper {
     }
 
     @Override
-    public void release() {
+    public void shutdown() {
 
     }
 }

@@ -1,5 +1,6 @@
 package cn.zorcc.common.net;
 
+import cn.zorcc.common.LifeCycle;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.ConfigUtil;
@@ -9,12 +10,12 @@ import java.lang.foreign.Arena;
 /**
  *  selector thread
  */
-public interface Looper {
+public interface Looper extends LifeCycle {
 
     /**
      *  校验NetConfig字段
      */
-    default void validate(NetConfig netConfig) {
+    static void validate(NetConfig netConfig) {
         if(!ConfigUtil.checkIp(netConfig.getIp())) {
             throw new FrameworkException(ExceptionType.NET, "IP address is illegal");
         }
@@ -29,20 +30,33 @@ public interface Looper {
         }
     }
 
+    /**
+     *   创建多路复用资源(wepoll, epoll or kqueue)
+     */
     void create(Arena arena);
 
+    /**
+     *   创建socket资源
+     */
     void socket(Arena arena);
 
+    /**
+     *   绑定指定端口
+     */
     void bind(Arena arena);
 
+    /**
+     *   监听指定端口
+     */
     void listen(Arena arena);
 
+    /**
+     *   注册多路复用操作
+     */
     void ctl(Arena arena);
 
-    void loop(Arena arena);
-
     /**
-     *   释放当前looper占用资源
+     *   服务端主循环
      */
-    void release();
+    void loop(Arena arena);
 }

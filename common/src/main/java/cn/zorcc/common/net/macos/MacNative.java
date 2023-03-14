@@ -12,37 +12,38 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MacNative {
     /**
-     *  corresponding to union epoll_data in epoll.h
+     *  corresponding to struct kevent in event.h
      */
-    public static final MemoryLayout epollDataLayout = MemoryLayout.unionLayout(
-            ValueLayout.ADDRESS.withName("ptr"),
-            ValueLayout.JAVA_INT.withName("fd"),
-            ValueLayout.JAVA_INT.withName("u32"),
-            ValueLayout.JAVA_LONG.withName("u64")
+    public static final MemoryLayout keventLayout = MemoryLayout.structLayout(
+            ValueLayout.JAVA_LONG.withName("ident"),
+            ValueLayout.JAVA_SHORT.withName("filter"),
+            ValueLayout.JAVA_SHORT.withName("flags"),
+            ValueLayout.JAVA_INT.withName("fflags"),
+            ValueLayout.JAVA_LONG.withName("data"),
+            ValueLayout.ADDRESS.withName("udata")
     );
-    /**
-     *  corresponding to struct epoll_event in epoll.h
-     */
-    public static final MemoryLayout epollEventLayout = MemoryLayout.structLayout(
-            ValueLayout.JAVA_INT.withName("events"),
-            MemoryLayout.paddingLayout(4 * Constants.BYTE_SIZE),
-            epollDataLayout.withName("data")
-    );
-    public static final VarHandle eventsHandle = epollEventLayout.varHandle(MemoryLayout.PathElement.groupElement("events"));
-    public static final VarHandle fdHandle = epollEventLayout.varHandle(MemoryLayout.PathElement.groupElement("data"), MemoryLayout.PathElement.groupElement("fd"));
+    public static final VarHandle identHandle = keventLayout.varHandle(MemoryLayout.PathElement.groupElement("ident"));
+    public static final VarHandle flagsHandle = keventLayout.varHandle(MemoryLayout.PathElement.groupElement("flags"));
+    public static final VarHandle filterHandle = keventLayout.varHandle(MemoryLayout.PathElement.groupElement("filter"));
+    public static final VarHandle dataHandle = keventLayout.varHandle(MemoryLayout.PathElement.groupElement("data"));
+
     /**
      *  corresponding to struct sockaddr_in in in.h
      */
     public static final MemoryLayout sockAddrLayout = MemoryLayout.structLayout(
-            ValueLayout.JAVA_SHORT.withName("sin_family"),
+            ValueLayout.JAVA_BYTE.withName("sin_len"),
+            ValueLayout.JAVA_BYTE.withName("sin_family"),
             ValueLayout.JAVA_SHORT.withName("sin_port"),
             ValueLayout.JAVA_INT.withName("sin_addr"),
-            // MemoryLayout.sequenceLayout(8, ValueLayout.JAVA_BYTE)
             MemoryLayout.paddingLayout(8 * Constants.BYTE_SIZE)
     );
     public static final int sockAddrSize = (int) sockAddrLayout.byteSize();
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
     private final MethodHandle kqueueMethodHandle;
+    private final MethodHandle keventErrMethodHandle;
+    private final MethodHandle keventEofMethodHandle;
+    private final MethodHandle ewouldblockMethodHandle;
+    private final MethodHandle einprogressMethodHandle;
     private final MethodHandle keventAddMethodHandle;
     private final MethodHandle keventWaitMethodHandle;
     private final MethodHandle addressLenMethodHandle;
@@ -68,6 +69,14 @@ public class MacNative {
         SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.commonLib());
         this.kqueueMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_kqueue", FunctionDescriptor.of(ValueLayout.JAVA_INT));
+        this.keventErrMethodHandle = NativeUtil.methodHandle(symbolLookup,
+                "m_kevent_err", FunctionDescriptor.of(ValueLayout.JAVA_SHORT));
+        this.keventEofMethodHandle = NativeUtil.methodHandle(symbolLookup,
+                "m_kevent_eof", FunctionDescriptor.of(ValueLayout.JAVA_SHORT));
+        this.ewouldblockMethodHandle = NativeUtil.methodHandle(symbolLookup,
+                "m_ewouldblock", FunctionDescriptor.of(ValueLayout.JAVA_INT));
+        this.einprogressMethodHandle = NativeUtil.methodHandle(symbolLookup,
+                "m_einprogress", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         this.keventAddMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_kevent_add", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_SHORT));
         this.keventWaitMethodHandle = NativeUtil.methodHandle(symbolLookup,
@@ -112,6 +121,52 @@ public class MacNative {
             return (int) kqueueMethodHandle.invokeExact();
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking kqueue()", throwable);
+        }
+    }
+
+    /**
+     *  corresponding to `u_int16_t m_kevent_err()`
+     */
+    public short keventErr() {
+        try{
+            return (short) keventErrMethodHandle.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking keventErr()", throwable);
+        }
+    }
+
+    /**
+     *  corresponding to `u_int16_t m_kevent_eof()`
+     */
+    public short keventEof() {
+        try{
+            return (short) keventEofMethodHandle.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking keventEof()", throwable);
+        }
+    }
+
+
+
+    /**
+     *  corresponding to `u_int16_t m_kevent_err()`
+     */
+    public int ewouldblock() {
+        try{
+            return (int) ewouldblockMethodHandle.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking ewouldblock()", throwable);
+        }
+    }
+
+    /**
+     *  corresponding to `u_int16_t m_kevent_err()`
+     */
+    public int einprogress() {
+        try{
+            return (int) einprogressMethodHandle.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking einprogress()", throwable);
         }
     }
 
