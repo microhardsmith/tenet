@@ -20,6 +20,7 @@ public final class WheelImpl implements Wheel {
     private static final AtomicBoolean startFlag = new AtomicBoolean(false);
     private final int mask;
     private final long tick;
+    private final long tickNano;
     private final long bound;
     private final int cMask;
     private final Queue<JobImpl> queue;
@@ -38,6 +39,7 @@ public final class WheelImpl implements Wheel {
         }
         this.mask = slots - 1;
         this.tick = tick;
+        this.tickNano = TimeUnit.MILLISECONDS.toNanos(tick);
         this.bound = slots * tick;
         this.cMask = mask >> 1;
         this.queue = new MpscUnboundedAtomicArrayQueue<>(slots);
@@ -101,17 +103,16 @@ public final class WheelImpl implements Wheel {
 
             // inspecting if there are tasks that should be added to the wheel
             for( ; ;) {
-                JobImpl job = queue.poll();
+                final JobImpl job = queue.poll();
                 if(job == null) {
                     break;
                 }
-                // if delay is smaller than current milli, we will run it in current slot
+                // if delay is smaller than current milli, we should run it in current slot, so we select tasks before running wheel
                 final long delayMillis = Math.max(job.execMilli - milli, 0L);
                 if(delayMillis >= bound) {
                     waitSet.add(job);
                 }else {
-                    long ticks = delayMillis / tick;
-                    job.pos = (int) ((slot + ticks) & mask);
+                    job.pos = (int) ((slot + (delayMillis / tick)) & mask);
                     insert(job);
                 }
             }
@@ -136,24 +137,17 @@ public final class WheelImpl implements Wheel {
                 Iterator<JobImpl> iter = waitSet.iterator();
                 while (iter.hasNext()) {
                     JobImpl job = iter.next();
-                    long delay = job.execMilli - milli;
-                    if(delay < bound) {
+                    if(job.execMilli - milli < bound) {
                         iter.remove();
-
                     }else {
+                        // if current task is not for scheduling, then the following tasks won't be available
                         break;
                     }
                 }
             }
             
-            // sleep until next slot
-            final long sleepNano = scale.nano - Clock.nano();
-            try{
-                TimeUnit.NANOSECONDS.sleep(sleepNano);
-            }catch (InterruptedException e) {
-                currentThread.interrupt();
-                break;
-            }
+            // park until next slot
+            LockSupport.parkNanos(scale.nano - Clock.nano());
         }
     }
 
@@ -210,7 +204,7 @@ public final class WheelImpl implements Wheel {
          *   更新当前时间槽状态为下一时刻
          */
         public void update() {
-            nano = nano + TimeUnit.MILLISECONDS.toNanos(tick);
+            nano = nano + tickNano;
             milli = milli + tick;
             slot = (slot + 1) & mask;
         }
@@ -232,7 +226,7 @@ public final class WheelImpl implements Wheel {
             this.execMilli = execMilli;
             this.period = period;
             this.mission = () -> {
-                // self calibration
+                // self calibration inside job itself
                 LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(execMilli - Clock.current()));
                 runnable.run();
                 count.incrementAndGet();
