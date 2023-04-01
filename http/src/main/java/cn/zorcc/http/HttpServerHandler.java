@@ -35,7 +35,7 @@ public class HttpServerHandler extends SimpleChannelInboundHandler<Object> {
         this.enableWebSocket = enableWebSocket;
         this.httpPipeline = Context.pipeline(HttpEvent.class);
         if(enableWebSocket) {
-            this.wsFactory = new WebSocketServerHandshakerFactory(WS + Context.self().loc().url(), null, false);
+            this.wsFactory = new WebSocketServerHandshakerFactory(WS + Context.self().loc(), null, false);
             this.shakerMap = new ConcurrentHashMap<>();
             this.websocketPipeline = Context.pipeline(WebSocketEvent.class);
         }else {

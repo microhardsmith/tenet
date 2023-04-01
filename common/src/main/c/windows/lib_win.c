@@ -10,11 +10,11 @@
 static inline void clean(void* handle) {
     int close = epoll_close(handle);
     if(close == -1) {
-        printf("Error at close epoll : %d \n", wsa_get_last_error());
+        printf("Error at close epoll : %d \n", w_get_last_error());
     }
-    int clean = wsa_clean_up();
+    int clean = w_clean_up();
     if(clean == -1) {
-        printf("Error at cleaning up : %d \n", wsa_get_last_error());
+        printf("Error at cleaning up : %d \n", w_get_last_error());
     }
     exit(-1);
 }
@@ -28,28 +28,27 @@ int main() {
     }
     SOCKET socket = w_socket_create();
     if(socket == -1) {
-        printf("Error at creating socket : %d \n", wsa_get_last_error());
+        printf("Error at creating socket : %d \n", w_get_last_error());
         clean(handle);
     }
     printf("Creating socket : %llu \n", socket);
 
-    boolean yes = TRUE, no = FALSE;
     // 设置reuse addr
-    int reuseAddrResult = w_set_reuse_addr(socket, TRUE);
+    int reuseAddrResult = w_set_reuse_addr(socket, 1);
     if(reuseAddrResult == -1) {
-        printf("Error at set reuse addr : %d \n", wsa_get_last_error());
+        printf("Error at set reuse addr : %d \n", w_get_last_error());
         clean(handle);
     }
     // 设置keepalive
-    int keepAliveResult = w_set_keep_alive(socket, FALSE);
+    int keepAliveResult = w_set_keep_alive(socket, 0);
     if(keepAliveResult == -1) {
-        printf("Error at set keep alive : %d \n", wsa_get_last_error());
+        printf("Error at set keep alive : %d \n", w_get_last_error());
         clean(handle);
     }
     // 设置tcp nodelay
-    int noDelayResult = w_set_tcp_no_delay(socket, FALSE);
+    int noDelayResult = w_set_tcp_no_delay(socket, 0);
     if(noDelayResult == -1) {
-        printf("Error at set no delay result : %d \n", wsa_get_last_error());
+        printf("Error at set no delay result : %d \n", w_get_last_error());
         clean(handle);
     }
 
@@ -57,7 +56,7 @@ int main() {
     long long arg = 1;
     int nonBlockingResult = w_set_nonblocking(socket);
     if(nonBlockingResult == -1) {
-        printf("Error at set NonBlocking : %d \n", wsa_get_last_error());
+        printf("Error at set NonBlocking : %d \n", w_get_last_error());
         clean(handle);
     }
     // 绑定
@@ -67,28 +66,28 @@ int main() {
     int setSockAddrResult = w_set_sock_addr(&serverAddr, loc, serverPort);
     if(setSockAddrResult != 1) {
         printf("set sock addr result : %d \n", setSockAddrResult);
-        printf("Error at set socket addr : %d \n", wsa_get_last_error());
+        printf("Error at set socket addr : %d \n", w_get_last_error());
         clean(handle);
     }
     printf("sin family : %hu", serverAddr.sin_family);
-    int bindResult = w_bind(&serverAddr, socket, sizeof(serverAddr));
+    int bindResult = w_bind(socket, &serverAddr, sizeof(serverAddr));
     if(bindResult == -1) {
-        printf("Error at binding socket : %d \n", wsa_get_last_error());
+        printf("Error at binding socket : %d \n", w_get_last_error());
         clean(handle);
     }
     // 监听,backlog size设置为128
     int listenResult = w_listen(socket, 128);
     if(listenResult == -1) {
-        printf("Error at listening socket : %d \n", wsa_get_last_error());
+        printf("Error at listening socket : %d \n", w_get_last_error());
         clean(handle);
     }
-    
+
     struct epoll_event ev, events[20];
     ev.events = EPOLLIN;
     ev.data.fd = socket;
     int epollCtlResult = w_epoll_ctl_add(handle, socket, &ev);
     if(epollCtlResult == -1) {
-        printf("Error at epoll ctl : %d \n", wsa_get_last_error());
+        printf("Error at epoll ctl : %d \n", w_get_last_error());
         clean(handle);
     }
 
@@ -104,11 +103,11 @@ int main() {
             if(event.data.fd == socket) {
                 int client = w_accept(socket, &clientAddr, sizeof(clientAddr));
                 if(client == -1) {
-                    printf("Error at accept : %d \n", wsa_get_last_error());
+                    printf("Error at accept : %d \n", w_get_last_error());
                 }
                 int addressResult = w_address(&clientAddr, addrStr, len);
                 if(addressResult == -1) {
-                    printf("Parsing client address failed : %d \n", wsa_get_last_error());
+                    printf("Parsing client address failed : %d \n", w_get_last_error());
                 }
                 p = w_port(&clientAddr);
                 printf("Receiving connection from remote : %s:%d \n", addrStr, p);
@@ -119,7 +118,7 @@ int main() {
                 if(w_epoll_ctl_add(handle, client, &ev) == -1) {
                     printf("Err epoll ctl \n");
                 }
-            
+
             }else {
                 printf("handle event : %d \n", event.events);
                 if(ev.events == EPOLLIN) {
@@ -135,7 +134,7 @@ int main() {
                             printf("Err epoll ctl \n");
                         }
                         if(w_close_socket(fd) == -1) {
-                            printf("close err : %d \n", wsa_get_last_error());
+                            printf("close err : %d \n", w_get_last_error());
                         }
                     }else {
                         printf("read bytes : %d \n", n);
@@ -148,16 +147,16 @@ int main() {
     free(addrStr);
     addrStr = NULL;
     if(w_close_socket(socket) == -1) {
-        printf("close socket err : %d \n", wsa_get_last_error());
+        printf("close socket err : %d \n", w_get_last_error());
     }
     int close = w_epoll_close(handle);
     if(close == -1) {
-        printf("Error at close epoll : %d \n", wsa_get_last_error());
+        printf("Error at close epoll : %d \n", w_get_last_error());
         return -1;
     }
-    int clean = wsa_clean_up();
+    int clean = w_clean_up();
     if(clean == SOCKET_ERROR) {
-        printf("Error at cleaning up : %d \n", wsa_get_last_error());
+        printf("Error at cleaning up : %d \n", w_get_last_error());
         return -1;
     }
     return 0;
@@ -167,6 +166,21 @@ int main() {
 void g_print(char* str) {
     puts(str);
     fflush(stdout);
+}
+
+// 返回connect导致阻塞的错误码
+int w_connect_block_code() {
+    return WSAEWOULDBLOCK;
+}
+
+// 返回send导致阻塞的错误码
+int w_send_block_code() {
+    return WSAEWOULDBLOCK;
+}
+
+// 获取IP地址字符串长度
+int w_address_len() {
+    return INET_ADDRSTRLEN;
 }
 
 // 创建epoll,返回创建的epoll句柄
@@ -193,11 +207,6 @@ int w_epoll_wait(void* handle, struct epoll_event* events, int maxevents, int ti
 // epoll_close,出现错误则返回-1,否则返回0
 int w_epoll_close(void* handle) {
     return epoll_close(handle);
-}
-
-// 获取IP地址字符串长度
-int w_address_len() {
-    return INET_ADDRSTRLEN;
 }
 
 // 获取客户端连接的地址,写入到指定addrStr下出现错误则返回-1,否则返回0
@@ -243,7 +252,7 @@ int w_set_sock_addr(struct sockaddr_in* sockAddr, char* address, int port) {
 }
 
 // 设置TCP_NODELAY为指定值,失败返回-1,成功返回0
-int w_set_reuse_addr(SOCKET socket, boolean value) {
+int w_set_reuse_addr(SOCKET socket, int value) {
     void* ptr = &value;
     int result = setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, ptr, sizeof(value));
     if(result == SOCKET_ERROR) {
@@ -253,7 +262,7 @@ int w_set_reuse_addr(SOCKET socket, boolean value) {
 }
 
 // 设置TCP_NODELAY为指定值,失败返回-1,成功返回0
-int w_set_keep_alive(SOCKET socket, boolean value) {
+int w_set_keep_alive(SOCKET socket, int value) {
     void* ptr = &value;
     int result = setsockopt(socket, SOL_SOCKET, SO_KEEPALIVE, ptr, sizeof(value));
     if(result == SOCKET_ERROR) {
@@ -263,13 +272,22 @@ int w_set_keep_alive(SOCKET socket, boolean value) {
 }
 
 // 设置TCP_NODELAY为指定值,失败返回-1,成功返回0
-int w_set_tcp_no_delay(SOCKET socket, boolean value) {
+int w_set_tcp_no_delay(SOCKET socket, int value) {
     void* ptr = &value;
     int result = setsockopt(socket, IPPROTO_TCP, TCP_NODELAY, ptr, sizeof(value));
     if(result == SOCKET_ERROR) {
         return -1;
     }
     return result;
+}
+
+// 获取指定socket上的错误码，如果socket上无错误应返回0
+int w_get_err_opt(SOCKET socket) {
+    int value = -1;
+    void* ptr = &value;
+    int ptr_size = sizeof(value);
+    getsockopt(socket, SOL_SOCKET, SO_ERROR, ptr, &ptr_size);
+    return value;
 }
 
 // 设置指定socket为非阻塞,失败返回-1,成功返回0
@@ -283,8 +301,17 @@ int w_set_nonblocking(SOCKET socket) {
 }
 
 // 绑定socket到固定端口,失败则返回-1,成功则返回0
-int w_bind(struct sockaddr_in* sockAddr, SOCKET socket, int size) {
+int w_bind(SOCKET socket, struct sockaddr_in* sockAddr, int size) {
     int result = bind(socket, (SOCKADDR*) sockAddr, size);
+    if(result == SOCKET_ERROR) {
+        return -1;
+    }
+    return result;
+}
+
+// 客户端建立连接，失败则返回-1，成功则返回0
+int w_connect(SOCKET socket, struct sockaddr_in* sockAddr, int size) {
+    int result = connect(socket, (SOCKADDR*) sockAddr, size);
     if(result == SOCKET_ERROR) {
         return -1;
     }
@@ -309,6 +336,15 @@ int w_recv(SOCKET socket, char* buf, int len) {
     return result;
 }
 
+// 向socket发送数据，失败则返回-1，成功则返回已接收字节数
+int w_send(SOCKET socket, char* buf, int len) {
+    int result = send(socket, buf, len, 0);
+    if(result == SOCKET_ERROR) {
+        return -1;
+    }
+    return result;
+}
+
 // 关闭socket连接，失败则返回-1,成功则返回0
 int w_close_socket(SOCKET socket) {
     int result = closesocket(socket);
@@ -318,14 +354,13 @@ int w_close_socket(SOCKET socket) {
     return result;
 }
 
-
 // 获取上一个WSA错误码
-int wsa_get_last_error() {
+int w_get_last_error() {
     return WSAGetLastError();
 }
 
 // 清理当前wsa使用,失败则返回-1,成功则返回0
-int wsa_clean_up() {
+int w_clean_up() {
     int result = WSACleanup();
     if(result == SOCKET_ERROR) {
         return -1;

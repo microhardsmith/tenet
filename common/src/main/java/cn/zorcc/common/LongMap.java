@@ -7,15 +7,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- *   用于key值固定为int类型的Map,非线程安全，固定不进行扩容
- *   使用者需要保证key值的唯一性，map不会对已有值进行覆写
+ *   Same as IntMap, but for long
  */
-public class IntMap<T> {
+public class LongMap<T> {
     private final int mask;
     private final Entry<T>[] entries;
 
     @SuppressWarnings("unchecked")
-    public IntMap(int size) {
+    public LongMap(int size) {
         if(size < 2 || (size & (size - 1)) != 0) {
             throw new FrameworkException(ExceptionType.CONTEXT, "IntMap size must be power of 2");
         }
@@ -23,11 +22,12 @@ public class IntMap<T> {
         this.entries = new Entry[size];
     }
 
+
     /**
      *   add element to current map
      */
-    public void put(int key, T value) {
-        int index = key & mask;
+    public void put(long key, T value) {
+        int index = (int) (key & mask);
         Entry<T> current = entries[index];
         Entry<T> newEntry = new Entry<>(key, value);
         if (current == null) {
@@ -44,8 +44,8 @@ public class IntMap<T> {
     /**
      *   get element from current map
      */
-    public T get(int key) {
-        int index = key & mask;
+    public T get(long key) {
+        int index = (int) (key & mask);
         Entry<T> entry = entries[index];
         while (entry != null) {
             if (entry.key == key) {
@@ -59,8 +59,8 @@ public class IntMap<T> {
     /**
      *  remove element from current map, return null if not exist
      */
-    public T remove(int key) {
-        int index = key & mask;
+    public T remove(long key) {
+        int index = (int) (key & mask);
         Entry<T> current = entries[index];
         while (current != null) {
             if(current.key == key) {
@@ -95,12 +95,12 @@ public class IntMap<T> {
     }
 
     private static class Entry<T> {
-        private final int key;
+        private final long key;
         private final T value;
         private Entry<T> next;
         private Entry<T> prev;
 
-        private Entry(int key, T value) {
+        private Entry(long key, T value) {
             this.key = key;
             this.value = value;
         }

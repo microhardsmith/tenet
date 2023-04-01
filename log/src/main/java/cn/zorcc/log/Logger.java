@@ -2,6 +2,7 @@ package cn.zorcc.log;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.Context;
+import cn.zorcc.common.SegmentBuilder;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.event.EventPipeline;
@@ -152,7 +153,6 @@ public class Logger extends LegacyAbstractLogger {
             List<MemorySegment> list = Arrays.stream(objects).map(o -> MemorySegment.ofArray(o.toString().getBytes(StandardCharsets.UTF_8))).toList();
             logEvent.setMsg(builder.appendWithArgs(msg, list));
         }
-        // logEvent.test(); //DEBUG
         pipeline.fireEvent(logEvent);
     }
 

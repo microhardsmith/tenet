@@ -7,15 +7,17 @@ import cn.zorcc.common.wheel.Wheel;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentScope;
+import java.lang.foreign.ValueLayout;
 import java.time.Instant;
 import java.time.LocalDateTime;
 
 @Slf4j
 public class LogTest {
     public static void main(String[] args) throws Throwable {
-        testLog();
+        testOffset();
     }
 
     private static void testLog() throws InterruptedException {
@@ -50,6 +52,23 @@ public class LogTest {
         SegmentScope scope = debugSegment.scope();
         System.out.println(scope.equals(SegmentScope.global()));
         System.out.println(scope.equals(SegmentScope.auto()));
+    }
+
+    private static void testOffset() {
+        final MemoryLayout epollDataLayout = MemoryLayout.unionLayout(
+                ValueLayout.ADDRESS.withName("ptr"),
+                ValueLayout.JAVA_INT.withName("fd"),
+                ValueLayout.JAVA_INT.withName("u32"),
+                ValueLayout.JAVA_LONG.withName("u64"),
+                ValueLayout.JAVA_INT.withName("sock"),
+                ValueLayout.ADDRESS.withName("hnd")
+        );
+        final MemoryLayout epollEventLayout = MemoryLayout.structLayout(
+                ValueLayout.JAVA_INT.withName("events"),
+                MemoryLayout.paddingLayout(32),
+                epollDataLayout.withName("data")
+        );
+        System.out.println(epollEventLayout.byteOffset(MemoryLayout.PathElement.groupElement("data")));
     }
 
 }

@@ -1,3 +1,5 @@
-Benchmark               Mode  Cnt    Score    Error  Units
-PrintfTest.testNative  thrpt    5  195.148 ± 24.186  ops/s
-PrintfTest.testSystem  thrpt    5   32.158 ± 27.262  ops/s
+Benchmark               Mode  Cnt    Score     Error  Units
+NativeTest.testArray   thrpt    3   47.114 ±   6.404  ops/s
+NativeTest.testCopy    thrpt    3  210.971 ±  56.511  ops/s
+NativeTest.testMemCpy  thrpt    3  202.552 ± 177.954  ops/s
+NativeTest.testNative  thrpt    3   70.337 ±  25.691  ops/s

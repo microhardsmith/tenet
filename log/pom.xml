@@ -21,12 +21,5 @@
             <version>${project.version}</version>
         </dependency>
 
-        <!-- jctools -->
-        <dependency>
-            <groupId>org.jctools</groupId>
-            <artifactId>jctools-core</artifactId>
-            <version>${jctools.version}</version>
-        </dependency>
-
     </dependencies>
 </project>

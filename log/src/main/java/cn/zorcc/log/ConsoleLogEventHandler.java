@@ -1,18 +1,20 @@
 package cn.zorcc.log;
 
-import cn.zorcc.common.BlockingQ;
+import cn.zorcc.common.SegmentBuilder;
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.MpscBlockingQ;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
+import cn.zorcc.common.util.ThreadUtil;
 
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SymbolLookup;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedTransferQueue;
 
 /**
  * 将日志打印至控制台
@@ -50,19 +52,16 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
     /**
      *  日志消费者阻塞队列
      */
-    private final BlockingQ<LogEvent> blockingQ;
-    private final MethodHandle putsHandle;
-    private final MethodHandle flushHandle;
+    private final BlockingQueue<LogEvent> queue;
+    private final Thread thread;
+    private final MethodHandle printHandle;
     private final SegmentBuilder builder;
-    private int counter;
 
     public ConsoleLogEventHandler(LogConfig logConfig) {
-        // console builder should have a larger size than logEvent
+        // Console builder should have a larger size than logEvent
         this.builder = new SegmentBuilder(logConfig.getBufferSize() << 1);
         SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.commonLib());
-        this.putsHandle = NativeUtil.methodHandle(symbolLookup, "g_puts", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-        this.flushHandle = NativeUtil.methodHandle(symbolLookup, "g_flush", FunctionDescriptor.ofVoid());
-
+        this.printHandle = NativeUtil.methodHandle(symbolLookup, "g_print", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 
         this.levelLen = logConfig.getLevelLen();
         this.threadNameLen = logConfig.getThreadNameLen();
@@ -72,32 +71,40 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
         this.classNameColor = getColorSegment(logConfig.getClassNameColor());
         this.msgColor = getColorSegment(logConfig.getMsgColor());
 
-        this.blockingQ = new MpscBlockingQ<>(NAME, logEvent -> {
-            // Console output will ignore the flush event since it flushes every time
-            if(!logEvent.isFlush()) {
-                builder.reset();
-                MemorySegment level = logEvent.getLevel();
-                builder.append(logEvent.getTime(), timeColor)
-                        .append(Constants.b2)
-                        .append(level, getLevelColorSegment(level), levelLen)
-                        .append(Constants.b2)
-                        .append(Constants.b7)
-                        .append(logEvent.getThreadName(), threadNameColor, threadNameLen)
-                        .append(Constants.b8)
-                        .append(Constants.b2)
-                        .append(logEvent.getClassName(), classNameColor, classNameLen)
-                        .append(Constants.b2)
-                        .append(Constants.b1)
-                        .append(Constants.b2).append(logEvent.getMsg(), msgColor);
-                MemorySegment throwable = logEvent.getThrowable();
-                if(throwable != null) {
-                    builder.append(Constants.b9).append(throwable);
+        this.queue = new LinkedTransferQueue<>();
+        this.thread = ThreadUtil.virtual(NAME, () -> {
+            Thread currentThread = Thread.currentThread();
+            while (!currentThread.isInterrupted()) {
+                try{
+                    LogEvent logEvent = queue.take();
+                    // Console output will ignore the flush event since it flushes every time
+                    if(!logEvent.isFlush()) {
+                        builder.reset();
+                        MemorySegment level = logEvent.getLevel();
+                        builder.append(logEvent.getTime(), timeColor)
+                                .append(Constants.b2)
+                                .append(level, getLevelColorSegment(level), levelLen)
+                                .append(Constants.b2)
+                                .append(Constants.b7)
+                                .append(logEvent.getThreadName(), threadNameColor, threadNameLen)
+                                .append(Constants.b8)
+                                .append(Constants.b2)
+                                .append(logEvent.getClassName(), classNameColor, classNameLen)
+                                .append(Constants.b2)
+                                .append(Constants.b1)
+                                .append(Constants.b2).append(logEvent.getMsg(), msgColor);
+                        MemorySegment throwable = logEvent.getThrowable();
+                        if(throwable != null) {
+                            builder.append(Constants.b9).append(throwable);
+                        }
+                        // add '\0'
+                        builder.append(Constants.b0);
+                        // print to the console
+                        print(builder.segment());
+                    }
+                }catch (InterruptedException e) {
+                    currentThread.interrupt();
                 }
-                // add '\0'
-                builder.append(Constants.b0);
-                // print to the console
-                puts(builder.segment());
-                flush();
             }
         });
     }
@@ -105,22 +112,11 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
     /**
      *  向标准输出流打印数据
      */
-    private void puts(MemorySegment memorySegment) {
+    private void print(MemorySegment memorySegment) {
         try{
-            putsHandle.invokeExact(memorySegment);
+            printHandle.invokeExact(memorySegment);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.LOG, "Exception caught when invoking puts()", throwable);
-        }
-    }
-
-    /**
-     *  刷新当前缓冲区
-     */
-    private void flush() {
-        try{
-            flushHandle.invokeExact();
-        }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.LOG, "Exception caught when invoking flush()", throwable);
         }
     }
 
@@ -169,17 +165,20 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
 
     @Override
     public void init() {
-        blockingQ.start();
+        thread.start();
     }
 
     @Override
     public void handle(LogEvent event) {
-        blockingQ.put(event);
+        try {
+            queue.put(event);
+        } catch (InterruptedException e) {
+            thread.interrupt();
+        }
     }
 
     @Override
     public void shutdown() {
-        blockingQ.shutdown();
-        flush();
+        thread.interrupt();
     }
 }

@@ -1,11 +1,10 @@
 package cn.zorcc.log;
 
-import cn.zorcc.common.BlockingQ;
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.MpscBlockingQ;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.util.ThreadUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -18,6 +17,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedTransferQueue;
 
 public class FileLogEventHandler implements EventHandler<LogEvent> {
     private static final String NAME = "logFileHandler";
@@ -32,7 +33,8 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
     private long timestamp;
     private FileChannel fc;
     private MemorySegment segment;
-    private final BlockingQ<LogEvent> blockingQ;
+    private final BlockingQueue<LogEvent> queue;
+    private final Thread thread;
     /**
      *  已写入日志字节数
      */
@@ -60,19 +62,28 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
         }
         this.maxRecordingTime = logConfig.getMaxRecordingTime() <= 0 ? -1 : logConfig.getMaxRecordingTime();
         reAllocate();
-        this.blockingQ = new MpscBlockingQ<>(NAME, logEvent -> {
-            if(logEvent.isFlush()) {
-                flush();
-            }else {
-                if(maxRecordingTime > 0 && logEvent.getTimestamp() - timestamp > maxRecordingTime) {
-                    flush();
-                    reAllocate();
-                }
-                final SegmentBuilder builder = logEvent.getBuilder();
-                printToFile(builder.segment(), builder.index());
-                final MemorySegment throwable = logEvent.getThrowable();
-                if(throwable != null) {
-                    printToFile(throwable, throwable.byteSize());
+        this.queue = new LinkedTransferQueue<>();
+        this.thread = ThreadUtil.virtual(NAME, () -> {
+            Thread currentThread = Thread.currentThread();
+            while (!currentThread.isInterrupted()) {
+                try {
+                    LogEvent logEvent = queue.take();
+                    if(logEvent.isFlush()) {
+                        segment.force();
+                    }else {
+                        if(maxRecordingTime > 0 && logEvent.getTimestamp() - timestamp > maxRecordingTime) {
+                            segment.force();
+                            reAllocate();
+                        }
+                        MemorySegment memorySegment = logEvent.getBuilder().segment();
+                        printToFile(memorySegment, memorySegment.byteSize());
+                        MemorySegment throwable = logEvent.getThrowable();
+                        if(throwable != null) {
+                            printToFile(throwable, throwable.byteSize());
+                        }
+                    }
+                }catch (InterruptedException e) {
+                    currentThread.interrupt();
                 }
             }
         });
@@ -83,7 +94,7 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
      */
     private void printToFile(MemorySegment memorySegment, long size) {
         if(index + size + 1>= maxFileSize) {
-            flush();
+            segment.force();
             reAllocate();
         }
         final MemorySegment targetSegment = memorySegment.byteSize() == size ? memorySegment : memorySegment.asSlice(0, size);
@@ -116,32 +127,28 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
         }
     }
 
-    /**
-     *  刷新文件缓冲区
-     */
-    private void flush() {
-        this.segment.force();
-    }
-
     @Override
     public void init() {
-        this.blockingQ.start();
+        thread.start();
     }
 
     @Override
     public void shutdown() {
         try{
-            this.blockingQ.shutdown();
-            flush();
-            this.fc.close();
+            thread.interrupt();
+            segment.force();
+            fc.close();
         }catch (IOException e) {
             throw new FrameworkException(ExceptionType.LOG, "IOException caught when shutting down FileLogEventHandler");
         }
-
     }
 
     @Override
     public void handle(LogEvent event) {
-        this.blockingQ.put(event);
+        try {
+            queue.put(event);
+        } catch (InterruptedException e) {
+            thread.interrupt();
+        }
     }
 }

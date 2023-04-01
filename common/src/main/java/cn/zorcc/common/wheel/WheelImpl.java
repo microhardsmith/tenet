@@ -47,7 +47,9 @@ public final class WheelImpl implements Wheel {
         for(int i = 0; i < slots; i++) {
             wheel[i] = JobImpl.HEAD;
         }
-        this.wheelThread = ThreadUtil.virtual("Wheel", this::run);
+        // if we use virtual thread, then parkNanos() will internally use a ScheduledThreadPoolExecutor for unpark the current vthread
+        // still there is a platform thread constantly waiting for lock and go to sleep and so on. So use platform thread would be more simplified
+        this.wheelThread = ThreadUtil.platform("Wheel", this::run);
     }
     public static final Wheel instance = new WheelImpl(Wheel.slots, Wheel.tick);
 
@@ -226,8 +228,10 @@ public final class WheelImpl implements Wheel {
             this.execMilli = execMilli;
             this.period = period;
             this.mission = () -> {
-                // self calibration inside job itself
-                LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(execMilli - Clock.current()));
+                // there could be self calibration inside job itself if the tasks in your scenario, since LockSupport.parkNanos depends on a ScheduledExecutorService,
+                // using calibration would make us fallback to JDK's DelayQueue, without calibration, the error range within tick should already be acceptable for most scenarios
+
+                // LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(execMilli - Clock.current()));
                 runnable.run();
                 count.incrementAndGet();
             };

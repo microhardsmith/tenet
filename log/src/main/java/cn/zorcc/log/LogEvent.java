@@ -1,15 +1,13 @@
 package cn.zorcc.log;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.SegmentBuilder;
 import cn.zorcc.common.event.Event;
-import cn.zorcc.common.util.NativeUtil;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SegmentScope;
-import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -30,7 +28,10 @@ public class LogEvent extends Event {
      *  是否为刷新事件
      */
     private final boolean flush;
-    private final AtomicInteger counter = new AtomicInteger(0);
+    /**
+     *  日志计数器,当日志事件被完全使用后进行释放
+     */
+    private final AtomicInteger counter = new AtomicInteger(Constants.ZERO);
     /**
      *  日志行直接内存
      */

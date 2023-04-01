@@ -22,10 +22,9 @@ module tenet.common {
     exports cn.zorcc.common.event;
     exports cn.zorcc.common.exception;
     exports cn.zorcc.common.json;
-    exports cn.zorcc.common.net;
     exports cn.zorcc.common.pojo;
     exports cn.zorcc.common.serializer;
     exports cn.zorcc.common.util;
     exports cn.zorcc.common.wheel;
-    exports cn.zorcc.common.net.win;
+    exports cn.zorcc.common.network;
 }

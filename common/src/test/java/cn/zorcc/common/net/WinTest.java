@@ -1,7 +1,12 @@
 package cn.zorcc.common.net;
 
-import cn.zorcc.common.net.win.WinLooper;
+import cn.zorcc.common.Context;
+import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.network.Net;
+import cn.zorcc.common.network.NetworkConfig;
 import cn.zorcc.common.util.NativeUtil;
+import cn.zorcc.common.util.ThreadUtil;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.*;
@@ -33,7 +38,22 @@ public class WinTest {
         }
     }
 
+    private static void testWin() {
+        Context.loadContainer(new NetworkConfig(), NetworkConfig.class);
+        Net net = new Net(TestHandler::new, TestCodec::new);
+        Runtime.getRuntime().addShutdownHook(ThreadUtil.virtual("shutdown", net::shutdown));
+        net.init();
+    }
+
+    private static void testThread() {
+        System.out.println("start");
+        Thread ttt = ThreadUtil.platform("1", () -> {
+            throw new FrameworkException(ExceptionType.NETWORK, "ttt");
+        });
+        ttt.start();
+    }
+
     public static void main(String[] args) {
-        new WinLooper(new NetConfig()).init();
+        testWin();
     }
 }

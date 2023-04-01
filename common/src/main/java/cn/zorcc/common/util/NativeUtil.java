@@ -1,5 +1,6 @@
 package cn.zorcc.common.util;
 
+import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 
@@ -8,6 +9,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -19,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  *  Helper class when need to reach C native methods
  */
-public class NativeUtil {
+public final class NativeUtil {
     private static final String OS_NAME = System.getProperty("os.name").toLowerCase();
     private static final boolean LINUX = OS_NAME.contains("linux");
     private static final boolean WINDOWS = OS_NAME.contains("windows");
@@ -27,17 +29,13 @@ public class NativeUtil {
     private static final int CPU_CORES = Runtime.getRuntime().availableProcessors();
     private static final Linker linker = Linker.nativeLinker();
     /**
-     *  TODO 需要加一个shutdown hook 参考https://xie.infoq.cn/article/96202307b31fe425936f899ef
-     */
-    private static final Arena globalArena = Arena.openShared();
-    /**
-     *   临时库拷贝文件名
-     */
-    private static final String tmpLibName = "tenet-lib";
-    /**
      *   动态链接库缓存,避免重复加载
      */
     private static final Map<String, SymbolLookup> cache = new ConcurrentHashMap<>();
+    private static final VarHandle byteHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_BYTE);
+    private static final VarHandle shortHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_SHORT);
+    private static final VarHandle intHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_INT);
+    private static final VarHandle longHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_LONG);
 
     private NativeUtil() {
         throw new UnsupportedOperationException();
@@ -110,7 +108,7 @@ public class NativeUtil {
                 if(inputStream == null) {
                     throw new FrameworkException(ExceptionType.NATIVE, "ResourcePath is not valid");
                 }else {
-                    final File tmp = File.createTempFile(tmpLibName, suffix);
+                    final File tmp = File.createTempFile(Constants.TMP_LIB, suffix);
                     Path path = tmp.toPath();
                     Files.copy(inputStream, path, StandardCopyOption.REPLACE_EXISTING);
                     if(tmp.exists()) {
@@ -128,7 +126,7 @@ public class NativeUtil {
     }
 
     /**
-     *  从操作系统已加载的动态链接库中获取函数索引
+     *  从操作系统已加载的动态链接库中获取函数索引,例如strlen
      */
     public static MethodHandle getNativeMethodHandle(String methodName, FunctionDescriptor functionDescriptor) {
         return linker.downcallHandle(linker.defaultLookup()
@@ -145,49 +143,58 @@ public class NativeUtil {
     }
 
     /**
-     * 分配基本类型的对象,返回其指针
-     * @param arena 内存作用域
-     * @param memoryLayout 内存布局
-     * @param value 对象值
-     * @return 指向该对象的指针
+     *  从MemorySegment中获取指定index的byte值
      */
-    public static MemorySegment allocate(Arena arena, MemoryLayout memoryLayout, Object value) {
-        if(memoryLayout == null) {
-            throw new FrameworkException(ExceptionType.NET, "Empty memoryLayout");
-        }
-        VarHandle varHandle = memoryLayout.varHandle();
-        MemorySegment memorySegment = arena.allocate(memoryLayout);
-        if(memoryLayout.equals(ValueLayout.JAVA_INT) && value instanceof Integer i) {
-            varHandle.set(memorySegment, i);
-        } else if(memoryLayout.equals(ValueLayout.JAVA_BYTE) && value instanceof Byte b) {
-            varHandle.set(memorySegment, b);
-        }else if(memoryLayout.equals(ValueLayout.JAVA_CHAR) && value instanceof Character c) {
-            varHandle.set(memorySegment, c);
-        }else if (memoryLayout.equals(ValueLayout.JAVA_BOOLEAN) && value instanceof Boolean b) {
-            varHandle.set(memorySegment, b);
-        } else if(memoryLayout.equals(ValueLayout.JAVA_LONG) && value instanceof Long l) {
-            varHandle.set(memorySegment, l);
-        } else if(memoryLayout.equals(ValueLayout.JAVA_FLOAT) && value instanceof Float f) {
-            varHandle.set(memorySegment, f);
-        }else if(memoryLayout.equals(ValueLayout.JAVA_DOUBLE) && value instanceof Double d) {
-            varHandle.set(memorySegment, d);
-        }else if(memoryLayout.equals(ValueLayout.JAVA_SHORT) && value instanceof Short s) {
-            varHandle.set(memorySegment, s);
-        }
-        return memorySegment;
+    public static byte getByte(MemorySegment memorySegment, long index) {
+        return (byte) byteHandle.get(memorySegment, index);
     }
 
     /**
-     *   返回与jvm生命周期相同的全局堆内存
+     *  向MemorySegment中设定byte值
      */
-    public static MemorySegment globalHeapSegment(String str) {
-        return MemorySegment.ofArray(str.getBytes(StandardCharsets.UTF_8));
+    public static void setByte(MemorySegment memorySegment, long index, byte value) {
+        byteHandle.set(memorySegment, index, value);
     }
 
     /**
-     *  返回与jvm生命周期相同的全局直接内存
+     *  从MemorySegment中获取指定index的short值
      */
-    public static MemorySegment globalNativeSegment(String str) {
-        return globalArena.allocateArray(ValueLayout.JAVA_BYTE, str.getBytes(StandardCharsets.UTF_8));
+    public static short getShort(MemorySegment memorySegment, long index) {
+        return (short) shortHandle.get(memorySegment, index);
+    }
+
+    /**
+     *  向MemorySegment中设定short值
+     */
+    public static void setShort(MemorySegment memorySegment, long index, short value) {
+        shortHandle.set(memorySegment, index, value);
+    }
+
+    /**
+     *  从MemorySegment中获取指定index的int值
+     */
+    public static int getInt(MemorySegment memorySegment, long index) {
+        return (int) intHandle.get(memorySegment, index);
+    }
+
+    /**
+     *  向MemorySegment中设定int值
+     */
+    public static void setInt(MemorySegment memorySegment, long index, int value) {
+        intHandle.set(memorySegment, index, value);
+    }
+
+    /**
+     *  从MemorySegment中获取指定index的long值
+     */
+    public static long getLong(MemorySegment memorySegment, long index) {
+        return (long) longHandle.get(memorySegment, index);
+    }
+
+    /**
+     *  向MemorySegment中设定long值
+     */
+    public static void setLong(MemorySegment memorySegment, long index, long value) {
+        longHandle.set(memorySegment, index, value);
     }
 }

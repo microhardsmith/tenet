@@ -1,27 +1,16 @@
-package cn.zorcc.common.net;
+package cn.zorcc.common.network;
 
 public final class Socket {
-    private final boolean w;
     private final long l;
     private final int i;
 
     public Socket(int socket) {
-        this.l = socket;
-        this.i = socket;
-        this.w = false;
+        this.l = this.i = socket;
     }
 
     public Socket(long socket) {
         this.l = socket;
-        this.i = (int) (l % Integer.MAX_VALUE);
-        this.w = true;
-    }
-
-    /**
-     *   是否使用windows系统
-     */
-    public boolean usingWindows() {
-        return w;
+        this.i = Long.hashCode(socket); // for hashcode()
     }
 
     /**
@@ -41,5 +30,10 @@ public final class Socket {
     @Override
     public int hashCode() {
         return i;
+    }
+
+    @Override
+    public String toString() {
+        return String.valueOf(l);
     }
 }

@@ -15,6 +15,7 @@ import java.time.format.DateTimeFormatter;
  *  定义项目中使用到的所有常量
  */
 public class Constants {
+    public static final String SINGLETON_MSG = "Violating singleton";
     public static final String CONFIG_FILE = "configFile";
     public static final Thread.UncaughtExceptionHandler DEFAULT_EXCEPTION_HANDLER = (thread, throwable) -> {
         throwable.printStackTrace();
@@ -22,6 +23,7 @@ public class Constants {
             thread.interrupt();
         }
     };
+    public static final int QUEUE_SIZE = 256;
 
     public static final Clock SYSTEM_CLOCK = Clock.systemDefaultZone();
     public static final String TIME_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS";
@@ -39,6 +41,7 @@ public class Constants {
     public static final byte b8 = (byte) ']';
     public static final byte b9 = (byte) '\n';
     public static final byte b0 = (byte) '\0';
+    public static final String TMP_LIB = "tenet-lib";
 
     public static final int TRACE = 0;
     public static final int DEBUG = 10;
@@ -51,19 +54,19 @@ public class Constants {
     /**
      *  Ansi格式的带颜色的控制台字符控制
      */
-    public static final MemorySegment ANSI_PREFIX = NativeUtil.globalNativeSegment("\033["); // 2 bytes
-    public static final MemorySegment ANSI_SUFFIX = NativeUtil.globalNativeSegment("\033[0m"); // 4 bytes
-    public static final MemorySegment TRACE_SEGMENT = NativeUtil.globalNativeSegment("TRACE");
-    public static final MemorySegment DEBUG_SEGMENT = NativeUtil.globalNativeSegment("DEBUG");
-    public static final MemorySegment INFO_SEGMENT = NativeUtil.globalNativeSegment("INFO");
-    public static final MemorySegment WARN_SEGMENT = NativeUtil.globalNativeSegment("WARN");
-    public static final MemorySegment ERROR_SEGMENT = NativeUtil.globalNativeSegment("ERROR");
-    public static final MemorySegment RED_SEGMENT = NativeUtil.globalNativeSegment("31m");
-    public static final MemorySegment GREEN_SEGMENT = NativeUtil.globalNativeSegment("32m");
-    public static final MemorySegment YELLOW_SEGMENT = NativeUtil.globalNativeSegment("33m");
-    public static final MemorySegment BLUE_SEGMENT = NativeUtil.globalNativeSegment("34m");
-    public static final MemorySegment MAGENTA_SEGMENT = NativeUtil.globalNativeSegment("35m");
-    public static final MemorySegment CYAN_SEGMENT = NativeUtil.globalNativeSegment("36m");
+    public static final MemorySegment ANSI_PREFIX = MemorySegment.ofArray("\033[".getBytes(StandardCharsets.UTF_8)); // 2 bytes
+    public static final MemorySegment ANSI_SUFFIX = MemorySegment.ofArray("\033[0m".getBytes(StandardCharsets.UTF_8)); // 4 bytes
+    public static final MemorySegment TRACE_SEGMENT = MemorySegment.ofArray("TRACE".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment DEBUG_SEGMENT = MemorySegment.ofArray("DEBUG".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment INFO_SEGMENT = MemorySegment.ofArray("INFO".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment WARN_SEGMENT = MemorySegment.ofArray("WARN".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment ERROR_SEGMENT = MemorySegment.ofArray("ERROR".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment RED_SEGMENT = MemorySegment.ofArray("31m".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment GREEN_SEGMENT = MemorySegment.ofArray("32m".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment YELLOW_SEGMENT = MemorySegment.ofArray("33m".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment BLUE_SEGMENT = MemorySegment.ofArray("34m".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment MAGENTA_SEGMENT = MemorySegment.ofArray("35m".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment CYAN_SEGMENT = MemorySegment.ofArray("36m".getBytes(StandardCharsets.UTF_8));
     public static final String RED = "red";
     public static final String GREEN = "green";
     public static final String YELLOW = "yellow";
@@ -270,6 +273,7 @@ public class Constants {
     public static final int EPOLL_OUT = 1 << 2;
     public static final int EPOLL_ERR = 1 << 3;
     public static final int EPOLL_HUP = 1 << 4;
+    public static final int EPOLL_ONESHOT = 1 << 31;
     public static final short EVFILT_READ = -1;
     public static final short EVFILT_WRITE = -2;
 

@@ -18,7 +18,7 @@ public class ConfigUtil {
     }
 
     /**
-     *   检测ipv4地址字符串的合法性
+     *   检测ipv4地址字符串的合法性,合法则返回true，否则false
      */
     public static boolean checkIp(String ip) {
         if (ip.isBlank()) {

@@ -1,6 +1,5 @@
-package cn.zorcc.log;
+package cn.zorcc.common;
 
-import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 
@@ -24,30 +23,25 @@ public final class SegmentBuilder {
      */
     private final MemorySegment initialSegment;
     /**
-     *  初始分配的segment的bytesize
-     */
-    private final long initialSize;
-    /**
      *  当前segment
      */
     private MemorySegment segment;
     /**
-     *  当前segment的bytesize
+     *  当前segment的写索引值
      */
-    private long size;
+    private long writeIndex;
     /**
-     *  当前segment的索引值
+     *  当前segment的读索引值
      */
-    private long index;
+    private long readIndex;
 
     /**
      *   构建生命周期确定的SegmentBuilder
      */
     public SegmentBuilder(Arena arena, int size) {
         this.arena = arena;
-        this.initialSize = this.size = size;
         this.initialSegment = this.segment = arena.allocateArray(ValueLayout.JAVA_BYTE, size);
-        this.index = 0;
+        this.writeIndex = this.readIndex = 0L;
     }
 
     /**
@@ -55,34 +49,67 @@ public final class SegmentBuilder {
      */
     public SegmentBuilder(int size) {
         this.arena = null;
-        this.initialSize = this.size = size;
         this.initialSegment = this.segment = MemorySegment.allocateNative(size, SegmentScope.global());
-        this.index = 0;
+        this.writeIndex = this.readIndex = 0L;
+    }
+
+    /**
+     *   获取当前SegmentBuilder内存作用域
+     */
+    public Arena arena() {
+        return arena;
     }
 
     /**
      *  向当前segment中添加单个字节
      */
     public SegmentBuilder append(byte b) {
-        if(index + 1 >= size) {
-            resize();
+        long nextIndex = writeIndex + 1;
+        if(nextIndex >= segment.byteSize()) {
+            resize(nextIndex);
         }
-        segment.set(ValueLayout.JAVA_BYTE, index, b);
-        index = index + 1;
+        segment.set(ValueLayout.JAVA_BYTE, writeIndex, b);
+        writeIndex = nextIndex;
         return this;
     }
 
     /**
-     *  向当前segment中添加内容
+     *  向当前segment中添加int
+     */
+    public SegmentBuilder append(int i) {
+        long nextIndex = writeIndex + 4;
+        if(nextIndex >= segment.byteSize()) {
+            resize(nextIndex);
+        }
+        segment.set(ValueLayout.JAVA_INT, writeIndex, i);
+        writeIndex = nextIndex;
+        return this;
+    }
+
+    /**
+     *  向当前segment中添加long
+     */
+    public SegmentBuilder append(long l) {
+        long nextIndex = writeIndex + 8;
+        if(nextIndex >= segment.byteSize()) {
+            resize(nextIndex);
+        }
+        segment.set(ValueLayout.JAVA_LONG, writeIndex, l);
+        writeIndex = nextIndex;
+        return this;
+    }
+
+    /**
+     *  向当前segment中添加target中的内存内容
      */
     public SegmentBuilder append(MemorySegment target) {
         long len = target.byteSize();
-        long nextIndex = index + len;
-        if(nextIndex >= size) {
+        long nextIndex = writeIndex + len;
+        if(nextIndex >= segment.byteSize()) {
             resize(nextIndex);
         }
-        MemorySegment.copy(target, 0, segment, index, len);
-        index = nextIndex;
+        MemorySegment.copy(target, 0, segment, writeIndex, len);
+        writeIndex = nextIndex;
         return this;
     }
 
@@ -102,18 +129,18 @@ public final class SegmentBuilder {
      */
     public SegmentBuilder append(MemorySegment target, long width) {
         long len = Math.min(target.byteSize(), width);
-        long nextIndex = index + width;
-        if(nextIndex >= size) {
+        long nextIndex = writeIndex + width;
+        if(nextIndex >= segment.byteSize()) {
             resize(nextIndex);
         }
-        MemorySegment.copy(target, 0, segment, index, len);
+        MemorySegment.copy(target, 0, segment, writeIndex, len);
         if(width > len) {
             long l = width - len;
             for(long i = 0; i < l; i++) {
-                this.segment.set(ValueLayout.JAVA_BYTE, index + len + i, Constants.b2);
+                this.segment.set(ValueLayout.JAVA_BYTE, writeIndex + len + i, Constants.b2);
             }
         }
-        index = index + width;
+        writeIndex = writeIndex + width;
         return this;
     }
 
@@ -133,17 +160,17 @@ public final class SegmentBuilder {
      */
     public MemorySegment appendWithArgs(MemorySegment target, List<MemorySegment> list) {
         if(list == null || list.isEmpty()) {
-            final long currentIndex = index;
+            final long currentIndex = writeIndex;
             append(target);
-            return segment.asSlice(currentIndex, index - currentIndex);
+            return segment.asSlice(currentIndex, writeIndex - currentIndex);
         }else {
             long len = target.byteSize();
-            long roughIndex = index + len + list.stream().map(MemorySegment::byteSize).reduce(0L, Long::sum);
-            if(roughIndex >= size) {
+            long roughIndex = writeIndex + len + list.stream().map(MemorySegment::byteSize).reduce(0L, Long::sum);
+            if(roughIndex >= segment.byteSize()) {
                 resize(roughIndex);
             }
             int argIndex = 0;
-            long segmentIndex = index;
+            long segmentIndex = writeIndex;
             for(long i = 0; i < len; i++) {
                 byte b = target.get(ValueLayout.JAVA_BYTE, i);
                 if(b == Constants.b5 && i + 1 < len && target.get(ValueLayout.JAVA_BYTE, i + 1) == Constants.b6) {
@@ -157,38 +184,35 @@ public final class SegmentBuilder {
                     segment.set(ValueLayout.JAVA_BYTE, segmentIndex++, b);
                 }
             }
-            MemorySegment result = segment.asSlice(index, segmentIndex);
-            index = segmentIndex;
+            MemorySegment result = segment.asSlice(writeIndex, segmentIndex);
+            writeIndex = segmentIndex;
             return result;
         }
     }
 
     /**
-     *  获取当前索引值
+     *   手动设置当前readIndex
      */
-    public long index() {
-        return index;
+    public void setReadIndex(long readIndex) {
+        this.readIndex = readIndex;
     }
 
     /**
-     *  返回当前segment,按照index进行切片
+     *  返回当前segment,按照readIndex和writeIndex进行划分
      */
     public MemorySegment segment() {
-        return index == segment.byteSize() ? segment : segment.asSlice(0, index);
-    }
-
-    /**
-     *  默认扩容至当前长度的2倍
-     */
-    private void resize() {
-        resize(size + 1);
+        if(readIndex == 0L && writeIndex == segment.byteSize()) {
+            return segment;
+        }else {
+            return segment.asSlice(readIndex, writeIndex);
+        }
     }
 
     /**
      *  对当前memorySegment进行扩容,新分配的内存段scope为auto
      */
     private void resize(long nextIndex) {
-        long newSize = size;
+        long newSize = segment.byteSize();
         while (newSize > 0 && newSize < nextIndex) {
             // 按照每次2倍的基数进行扩容
             newSize = newSize << 1;
@@ -198,7 +222,6 @@ public final class SegmentBuilder {
         }
         MemorySegment newSegment = arena == null ? MemorySegment.allocateNative(newSize, SegmentScope.auto()) : arena.allocateArray(ValueLayout.JAVA_BYTE, newSize);
         newSegment.copyFrom(segment);
-        size = newSegment.byteSize();
         segment =  newSegment;
     }
 
@@ -208,8 +231,7 @@ public final class SegmentBuilder {
     public void reset() {
         if(!segment.equals(initialSegment)) {
             segment = initialSegment;
-            size = initialSize;
         }
-        index = 0L;
+        writeIndex = 0L;
     }
 }

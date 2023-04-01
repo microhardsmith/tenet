@@ -1,6 +1,7 @@
-package cn.zorcc.common.net.macos;
+package cn.zorcc.common.network;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
@@ -10,7 +11,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class MacNative {
+public class MacNative implements Native {
     /**
      *  corresponding to struct kevent in event.h
      */
@@ -62,9 +63,84 @@ public class MacNative {
     private final MethodHandle closeMethodHandle;
     private final MethodHandle errnoMethodHandle;
 
+    @Override
+    public int connectBlockCode() {
+        return 0;
+    }
+
+    @Override
+    public int sendBlockCode() {
+        return 0;
+    }
+
+    @Override
+    public void createMux(NetworkConfig config, NetworkState state) {
+
+    }
+
+    @Override
+    public Socket createSocket(NetworkConfig config, boolean isServer) {
+        return null;
+    }
+
+    @Override
+    public void bindAndListen(NetworkConfig config, NetworkState state) {
+
+    }
+
+    @Override
+    public void registerRead(Mux mux, Socket socket) {
+
+    }
+
+    @Override
+    public void registerWrite(Mux mux, Socket socket) {
+
+    }
+
+    @Override
+    public void unregister(Mux mux, Socket socket) {
+
+    }
+
+    @Override
+    public void waitForAccept(Net net, NetworkState state) {
+
+    }
+
+    @Override
+    public void waitForData(ReadBuffer[] buffers, NetworkState state) {
+
+    }
+
+    @Override
+    public void connect(Net net, Remote remote, Codec codec) {
+
+    }
+
+    @Override
+    public void closeSocket(Socket socket) {
+        check(close(socket.intValue()), "close socket");
+    }
+
+    @Override
+    public int send(Socket socket, MemorySegment data, int len) {
+        return 0;
+    }
+
+    @Override
+    public void exitMux(Mux mux) {
+        check(close(mux.kqFd()), "close kqueue fd");
+    }
+
+    @Override
+    public void exit() {
+        // no action
+    }
+
     public MacNative() {
         if(!instanceFlag.compareAndSet(false, true)) {
-            throw new FrameworkException(ExceptionType.NATIVE, "LinuxNative has been initialized");
+            throw new FrameworkException(ExceptionType.NATIVE, "MacNative has been initialized");
         }
         SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.commonLib());
         this.kqueueMethodHandle = NativeUtil.methodHandle(symbolLookup,
@@ -338,9 +414,9 @@ public class MacNative {
     /**
      *  corresponding to `int m_close(int fd)`
      */
-    public int close(int socket) {
+    public int close(int fd) {
         try{
-            return (int) closeMethodHandle.invokeExact(socket);
+            return (int) closeMethodHandle.invokeExact(fd);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking close()", throwable);
         }
