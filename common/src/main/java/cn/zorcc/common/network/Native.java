@@ -59,12 +59,12 @@ public interface Native {
     void unregister(Mux mux, Socket socket);
 
     /**
-     *   waiting for new connections or connections to be established
+     *   waiting for new connections, don't throw exception here cause it would exit the loop thread
      */
     void waitForAccept(Net net, NetworkState state);
 
     /**
-     *   waiting for data
+     *   waiting for data, don't throw exception here cause it would exit the loop thread
      */
     void waitForData(ReadBuffer[] buffers, NetworkState state);
 

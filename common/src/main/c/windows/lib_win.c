@@ -178,6 +178,11 @@ int w_send_block_code() {
     return WSAEWOULDBLOCK;
 }
 
+// 返回无效socket值
+SOCKET w_invalid_socket() {
+    return INVALID_SOCKET;
+}
+
 // 获取IP地址字符串长度
 int w_address_len() {
     return INET_ADDRSTRLEN;
@@ -225,21 +230,12 @@ int w_port(struct sockaddr_in* clientAddr) {
 
 // 创建socket,失败则返回-1,成功则返回socket值
 SOCKET w_socket_create() {
-    SOCKET servSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if(servSock == INVALID_SOCKET) {
-        return -1;
-    }else {
-        return servSock;
-    }
+    return socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 }
 
 // accept 连接,出现错误则返回-1,否则返回建立的fd
-int w_accept(SOCKET socket, struct sockaddr_in* clientAddr, int clientAddrSize) {
-    int result = accept(socket, (struct sockaddr *) clientAddr, &clientAddrSize);
-    if(result == INVALID_SOCKET) {
-        return -1;
-    }
-    return result;
+SOCKET w_accept(SOCKET socket, struct sockaddr_in* clientAddr, int clientAddrSize) {
+    return accept(socket, (struct sockaddr *) clientAddr, &clientAddrSize);
 }
 
 

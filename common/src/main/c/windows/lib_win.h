@@ -7,6 +7,8 @@ __declspec(dllexport) int w_connect_block_code();
 
 __declspec(dllexport) int w_send_block_code();
 
+__declspec(dllexport) SOCKET w_invalid_socket();
+
 __declspec(dllexport) int w_address_len();
 
 __declspec(dllexport) void* w_epoll_create();
@@ -25,7 +27,7 @@ __declspec(dllexport) int w_port(struct sockaddr_in* clientAddr);
 
 __declspec(dllexport) SOCKET w_socket_create();
 
-__declspec(dllexport) int w_accept(SOCKET socket, struct sockaddr_in* clientAddr, int clientAddrSize);
+__declspec(dllexport) SOCKET w_accept(SOCKET socket, struct sockaddr_in* clientAddr, int clientAddrSize);
 
 __declspec(dllexport) int w_set_sock_addr(struct sockaddr_in* sockAddr, char* address, int port);
 

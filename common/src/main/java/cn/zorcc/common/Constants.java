@@ -273,6 +273,7 @@ public class Constants {
     public static final int EPOLL_OUT = 1 << 2;
     public static final int EPOLL_ERR = 1 << 3;
     public static final int EPOLL_HUP = 1 << 4;
+    public static final int EPOLL_RDHUP = 1 << 13;
     public static final int EPOLL_ONESHOT = 1 << 31;
     public static final short EVFILT_READ = -1;
     public static final short EVFILT_WRITE = -2;

@@ -1,5 +1,6 @@
 package cn.zorcc.common.network;
 
+import cn.zorcc.common.Constants;
 import cn.zorcc.common.LifeCycle;
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
@@ -14,6 +15,7 @@ import java.lang.foreign.MemorySegment;
 import java.util.Map;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TransferQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -22,6 +24,7 @@ import java.util.concurrent.locks.LockSupport;
 public final class Channel implements LifeCycle {
     private static final Native n = Native.n;
     private static final long mask = (1 << 9) - 1;
+    private final AtomicBoolean available = new AtomicBoolean(false);
     private final ChannelHandler handler;
     private final Socket socket;
     private final Worker worker;
@@ -49,7 +52,6 @@ public final class Channel implements LifeCycle {
      *   If current writer is writable, when TCP buffer is full, we could implement backpressure by blocking the write thread
      */
     private volatile boolean writable = true;
-    private volatile boolean dead = false;
 
     private Channel(Net net, Socket socket, ChannelHandler handler, Codec codec, Remote remote, Loc loc, Worker worker) {
         this.socket = socket;
@@ -58,7 +60,7 @@ public final class Channel implements LifeCycle {
         this.remote = remote;
         this.loc = loc;
         this.worker = worker;
-        this.threadNamePrefix = "ch-" + socket.hashCode();
+        this.threadNamePrefix = "Ch@" + socket.hashCode() + "-";
         this.thread = ThreadUtil.virtual("socket-" + socket.hashCode(), () -> {
             Thread currentThread = Thread.currentThread();
             int writeBufferInitialSize = net.config().getWriteBufferSize();
@@ -95,21 +97,27 @@ public final class Channel implements LifeCycle {
      */
     @Override
     public void init() {
-        // start writer thread
-        thread.start();
-        // register current channel to worker's map
-        NetworkState workerState = worker.state();
-        if(NativeUtil.isWindows()) {
-            Map<Long, Channel> longMap = workerState.getLongMap();
-            longMap.put(socket.longValue(), this);
-        }else {
-            Map<Integer, Channel> intMap = workerState.getIntMap();
-            intMap.put(socket.intValue(), this);
+        if(available.compareAndSet(false, true)) {
+            // start writer thread
+            thread.start();
+            // register current channel to worker's map
+            NetworkState workerState = worker.state();
+            if(NativeUtil.isWindows()) {
+                Map<Long, Channel> longMap = workerState.getLongMap();
+                longMap.put(socket.longValue(), this);
+            }else {
+                Map<Integer, Channel> intMap = workerState.getIntMap();
+                intMap.put(socket.intValue(), this);
+            }
+            // register multiplexing events
+            n.registerRead(workerState.getMux(), socket);
+            // invoke handler's function
+            handler.onConnected(loc);
+            //
+            if(remote != null) {
+                remote.add(this);
+            }
         }
-        // register multiplexing events
-        n.registerRead(workerState.getMux(), socket);
-        // invoke handler's function
-        handler.onConnected(loc);
     }
 
     /**
@@ -201,48 +209,50 @@ public final class Channel implements LifeCycle {
         Object result = codec.decode(buffer);
         if(result != null) {
             // creating a new virtual thread for handing msg
-            ThreadUtil.virtual(threadNamePrefix + (counter++ & mask), () -> handler.onRecv(this, result));
+            ThreadUtil.virtual(threadNamePrefix + (counter++ & mask), () -> handler.onRecv(this, result)).start();
         }
     }
 
     /**
      *   send msg over the channel, this method could be invoked from any thread
+     *   the msg will be processed by the writer thread, there is no guarantee that the msg will delivery
+     *   the caller should provide a timeout mechanism to ensure the msg is not dropped
      */
     public void send(Object msg) {
         // send operation must be in a virtual thread because of the potential block
-        Thread currentThread = Thread.currentThread();
-        try{
-            assert currentThread.isVirtual();
-            if(dead) {
-                throw new ServiceException("Connection not found");
+        if(writable) {
+            // non-blocking put operation
+            if (!queue.offer(msg)) {
+                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
-            if(writable) {
-                // non-blocking put operation
-                queue.put(msg);
-            }else {
-                // discard current msg by throwing a exception
-                throw new ServiceException("Channel is not writable");
-            }
-        }catch (InterruptedException e) {
-            currentThread.interrupt();
+        }else {
+            // discard current msg by throwing a exception
+            throw new ServiceException("Channel is not writable");
         }
     }
 
+    /**
+     *   return if the channel is available (not shutdown)
+     */
+    public boolean isAvailable() {
+        return available.get();
+    }
+
+    /**
+     *   closing current channel, this method could be invoked from any thread
+     */
     @Override
     public void shutdown() {
-        NetworkState workerState = worker.state();
-        Channel channel = NativeUtil.isWindows() ? workerState.getLongMap().remove(socket.longValue()) : workerState.getIntMap().remove(socket.intValue());
-        // current Channel might be closed by other threads
-        if(channel != null) {
-            n.unregister(workerState.getMux(), socket);
-            thread.interrupt();
-            dead = true;
-            n.closeSocket(socket);
-            handler.onClose();
+        if(available.compareAndSet(true, false)) {
+            NetworkState workerState = worker.state();
+            Channel channel = NativeUtil.isWindows() ? workerState.getLongMap().remove(socket.longValue()) : workerState.getIntMap().remove(socket.intValue());
+            // current Channel might be closed by other threads
+            if(channel != null) {
+                n.unregister(workerState.getMux(), socket);
+                thread.interrupt();
+                n.closeSocket(socket);
+                handler.onClose();
+            }
         }
-    }
-
-    public boolean isDead() {
-        return dead;
     }
 }

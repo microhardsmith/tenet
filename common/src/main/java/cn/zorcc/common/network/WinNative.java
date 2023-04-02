@@ -77,6 +77,7 @@ public final class WinNative implements Native {
     private static final int addressLen;
     private static final int connectBlockCode;
     private static final int sendBlockCode;
+    private static final long invalidSocket;
 
     static {
         SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.commonLib());
@@ -135,6 +136,8 @@ public final class WinNative implements Native {
                     "w_connect_block_code", FunctionDescriptor.of(ValueLayout.JAVA_INT)).invokeExact();
             sendBlockCode = (int) NativeUtil.methodHandle(symbolLookup,
                     "w_send_block_code", FunctionDescriptor.of(ValueLayout.JAVA_INT)).invokeExact();
+            invalidSocket = (long) NativeUtil.methodHandle(symbolLookup,
+                    "w_invalid_socket", FunctionDescriptor.of(ValueLayout.JAVA_LONG)).invokeExact();
         }catch (Throwable throwable) {
             // should never happen
             throw new FrameworkException(ExceptionType.NATIVE, "Failed to initialize constants", throwable);
@@ -188,7 +191,7 @@ public final class WinNative implements Native {
             MemorySegment winHandle = mux.winHandle();
             long fd = socket.longValue();
             MemorySegment ev = arena.allocate(WinNative.epollEventLayout);
-            ev.set(ValueLayout.JAVA_INT, 0L, Constants.EPOLL_IN);
+            ev.set(ValueLayout.JAVA_INT, 0L, Constants.EPOLL_IN | Constants.EPOLL_RDHUP);
             ev.set(ValueLayout.JAVA_LONG, dataOffset, fd);
             check(epollCtlAdd(winHandle, fd, ev), "epoll_ctl_add");
         }
@@ -217,7 +220,17 @@ public final class WinNative implements Native {
     public void waitForAccept(Net net, NetworkState state) {
         MemorySegment events = state.getEvents();
         long serverSocket = state.getSocket().longValue();
-        int count = check(epollWait(state.getMux().winHandle(), events, net.config().getMaxEvents(), -1), "epoll_wait");
+        int count = epollWait(state.getMux().winHandle(), events, net.config().getMaxEvents(), -1);
+        if(count == -1) {
+            if(Thread.currentThread().isInterrupted()) {
+                // already shutdown
+                return ;
+            }else {
+                // epoll wait failed
+                log.error("epoll_wait failed with errno : {}", errno());
+            }
+
+        }
         for(int i = 0; i < count; i++) {
             int event = NativeUtil.getInt(events, i * eventSize);
             long socket = events.get(ValueLayout.JAVA_LONG, i * eventSize + dataOffset + sockOffset);
@@ -226,17 +239,26 @@ public final class WinNative implements Native {
                 try(Arena arena = Arena.openConfined()) {
                     MemorySegment clientAddr = arena.allocate(sockAddrLayout);
                     MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, addressLen);
-                    long clientFd = check(accept(serverSocket, clientAddr, sockAddrSize), "accept");
-                    check(setNonBlocking(clientFd), "set_non_blocking");
-                    check(address(clientAddr, address, addressLen), "address");
+                    long clientFd = accept(serverSocket, clientAddr, sockAddrSize);
+                    if(clientFd == invalidSocket) {
+                        log.error("Failed to accept client socket, errno : {}", errno());
+                    }
                     Socket clientSocket = new Socket(clientFd);
+                    if (setNonBlocking(clientFd) == -1) {
+                        log.error("Failed to set client socket as non_blocking, errno : {}", errno());
+                        closeSocket(clientSocket);
+                    }
+                    if(address(clientAddr, address, addressLen) == -1) {
+                        log.error("Failed to get client socket's remote address, errno : {}", errno());
+                        closeSocket(clientSocket);
+                    }
                     Loc loc = new Loc(address.getUtf8String(0L), port(clientAddr));
                     Worker worker = net.nextWorker();
                     Channel channel = Channel.forServer(net, clientSocket, loc, worker);
                     channel.init();
                 }
             }else if((event & Constants.EPOLL_OUT) != 0){
-                // some client connections has been established, first check if there is a socket err
+                // some client connections has been established, validate if there is a socket err
                 int errOpt = getErrOpt(socket);
                 if (errOpt == 0) {
                     Channel channel = state.getLongMap().get(socket);
@@ -257,22 +279,33 @@ public final class WinNative implements Native {
     public void waitForData(ReadBuffer[] buffers, NetworkState state) {
         MemorySegment events = state.getEvents();
         Map<Long, Channel> channelMap = state.getLongMap();
-        int eventCount = check(epollWait(state.getMux().winHandle(), events, buffers.length, -1), "epoll_wait");
-        for(int i = 0; i < eventCount; i++) {
+        int count = epollWait(state.getMux().winHandle(), events, buffers.length, -1);
+        if(count == -1) {
+            if(Thread.currentThread().isInterrupted()) {
+                // already shutdown
+                return ;
+            }else {
+                // epoll wait failed
+                log.error("epoll_wait failed with errno : {}", errno());
+            }
+        }
+        for(int i = 0; i < count; i++) {
             int event = NativeUtil.getInt(events, i * eventSize);
             long socket = NativeUtil.getLong(events, i * eventSize + dataOffset + sockOffset);
             Channel channel = channelMap.get(socket);
-            if((event & Constants.EPOLL_IN) != 0 || (event & Constants.EPOLL_ERR) != 0 || (event & Constants.EPOLL_HUP) != 0) {
+            log.debug("event : {}", event);
+            if((event & Constants.EPOLL_IN) != 0 || (event & Constants.EPOLL_RDHUP) != 0 || (event & Constants.EPOLL_ERR) != 0 || (event & Constants.EPOLL_HUP) != 0) {
                 // read event
                 ReadBuffer readBuffer = buffers[i];
-                int readableBytes = check(recv(socket, readBuffer.segment(), readBuffer.len()), "recv");
-                if(readableBytes == 0) {
-                    // remote peer disconnect
-                    channelMap.remove(socket).shutdown();
-                }else {
+                int readableBytes = recv(socket, readBuffer.segment(), readBuffer.len());
+                log.debug("read : {}", readableBytes);
+                if(readableBytes > 0) {
                     // recv data from remote peer
                     readBuffer.setWriteIndex(readableBytes);
                     channel.onReadBuffer(readBuffer);
+                }else if(channel != null){
+                    // remove current socket
+                    channel.shutdown();
                 }
             }else if((event & Constants.EPOLL_OUT) != 0) {
                 // write event

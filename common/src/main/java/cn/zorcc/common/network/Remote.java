@@ -24,11 +24,11 @@ public class Remote implements ObjPool<Channel> {
     private static final Map<Loc, Remote> remoteMap = new ConcurrentHashMap<>();
     private final Loc loc;
     private final BlockingQueue<Channel> channels;
-    private final AtomicInteger count;
+    private final AtomicInteger counter;
     private Remote(Loc loc) {
         this.loc = loc;
         this.channels = new LinkedTransferQueue<>();
-        this.count = new AtomicInteger(Constants.ZERO);
+        this.counter = new AtomicInteger(Constants.ZERO);
     }
 
     /**
@@ -49,8 +49,8 @@ public class Remote implements ObjPool<Channel> {
         Thread currentThread = Thread.currentThread();
         try{
             Channel ch = channels.take();
-            if(ch.isDead()) {
-                count.decrementAndGet();
+            if(!ch.isAvailable()) {
+                counter.decrementAndGet();
                 return get();
             }
             return ch;
@@ -76,8 +76,8 @@ public class Remote implements ObjPool<Channel> {
                 }
                 nano -= Clock.elapsed(start);
             }
-            if(ch.isDead()) {
-                count.decrementAndGet();
+            if(!ch.isAvailable()) {
+                counter.decrementAndGet();
                 return get(nano, TimeUnit.NANOSECONDS);
             }
             return ch;
@@ -89,19 +89,21 @@ public class Remote implements ObjPool<Channel> {
 
     @Override
     public void release(Channel channel) {
-        if (!channels.offer(channel)) {
-            throw new NetworkException(Constants.UNREACHED);
+        if(channel.isAvailable()) {
+            if (!channels.offer(channel)) {
+                throw new NetworkException(Constants.UNREACHED);
+            }
         }
     }
 
     @Override
     public void add(Channel channel) {
         release(channel);
-        count.getAndIncrement();
+        counter.getAndIncrement();
     }
 
     @Override
     public int count() {
-        return count.get();
+        return counter.get();
     }
 }
