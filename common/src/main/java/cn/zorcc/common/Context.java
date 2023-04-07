@@ -3,8 +3,7 @@ package cn.zorcc.common;
 import cn.zorcc.common.enums.ContextEventType;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.event.ContextEvent;
-import cn.zorcc.common.event.Event;
-import cn.zorcc.common.event.EventPipeline;
+import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Peer;
 import lombok.extern.slf4j.Slf4j;
@@ -35,7 +34,7 @@ public class Context {
     /**
      *  事件pipeline管理
      */
-    private static final Map<Class<? extends Event>, EventPipeline<? extends Event>> pipelineMap = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, EventHandler<?>> handlerMap = new ConcurrentHashMap<>();
     /**
      *  当前节点信息
      */
@@ -60,13 +59,13 @@ public class Context {
     }
 
     /**
-     * 注册指定类型的事件pipeline,如果已存在则抛出异常
+     * 注册指定类型的事件handler,如果已存在则抛出异常
      * @param clazz 事件类
-     * @param pipeline 事件对应pipeline对象
+     * @param handler 事件对应handler对象
      */
-    public static <T extends Event> void registerPipeline(Class<T> clazz, EventPipeline<T> pipeline) {
-        if (pipelineMap.putIfAbsent(clazz, pipeline) != null) {
-            throw new FrameworkException(ExceptionType.CONTEXT, "Pipeline already exist for %s".formatted(clazz.getSimpleName()));
+    public static <T> void registerPipeline(Class<T> clazz, EventHandler<T> handler) {
+        if (handlerMap.putIfAbsent(clazz, handler) != null) {
+            throw new FrameworkException(ExceptionType.CONTEXT, "handler already exist for %s".formatted(clazz.getSimpleName()));
         }
     }
 
@@ -76,8 +75,8 @@ public class Context {
      * @return 事件对应pipeline对象
      */
     @SuppressWarnings("unchecked")
-    public static <T extends Event> EventPipeline<T> pipeline(Class<T> clazz) {
-        return (EventPipeline<T>) pipelineMap.get(clazz);
+    public static <T> EventHandler<T> handler(Class<T> clazz) {
+        return (EventHandler<T>) handlerMap.get(clazz);
     }
 
     /**
@@ -95,13 +94,13 @@ public class Context {
         if(containerMap.putIfAbsent(clazz, obj) != null) {
             throw new FrameworkException(ExceptionType.CONTEXT, "Container already exist : %s".formatted(clazz.getSimpleName()));
         }
-        EventPipeline<ContextEvent> pipeline = pipeline(ContextEvent.class);
-        if(pipeline != null) {
+        EventHandler<ContextEvent> handler = handler(ContextEvent.class);
+        if(handler != null) {
             ContextEvent contextEvent = new ContextEvent();
             contextEvent.setType(ContextEventType.Load);
             contextEvent.setClazz(clazz);
             contextEvent.setContainer(obj);
-            pipeline.fireEvent(contextEvent);
+            handler.handle(contextEvent);
         }
     }
 
@@ -113,12 +112,12 @@ public class Context {
     @SuppressWarnings("unchecked")
     public static <T> T getContainer(Class<T> clazz) {
         return (T) containerMap.computeIfAbsent(clazz, k -> {
-            EventPipeline<ContextEvent> pipeline = pipeline(ContextEvent.class);
-            if(pipeline != null) {
+            EventHandler<ContextEvent> handler = handler(ContextEvent.class);
+            if(handler != null) {
                 ContextEvent contextEvent = new ContextEvent();
                 contextEvent.setType(ContextEventType.Get);
                 contextEvent.setClazz(clazz);
-                pipeline.fireEvent(contextEvent);
+                handler.handle(contextEvent);
             }
             return autoMap.get(clazz);
         });
@@ -129,7 +128,7 @@ public class Context {
      * @param obj 自动生成的容器对象
      * @param clazz 容器类
      */
-    public static <T> void create(T obj, Class<T> clazz) {
+    public static <T> void autoCreate(T obj, Class<T> clazz) {
         if(obj != null && clazz.isAssignableFrom(obj.getClass())) {
             autoMap.putIfAbsent(clazz, obj);
         }

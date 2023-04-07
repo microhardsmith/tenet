@@ -1,143 +1,104 @@
 package cn.zorcc.log;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.HeapBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.util.ThreadUtil;
 
-import java.io.File;
 import java.io.IOException;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SegmentScope;
-import java.lang.foreign.ValueLayout;
-import java.nio.channels.FileChannel;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
-import java.util.Set;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedTransferQueue;
+import java.time.format.DateTimeFormatter;
+import java.util.function.BiConsumer;
 
 public class FileLogEventHandler implements EventHandler<LogEvent> {
-    private static final String NAME = "logFileHandler";
-    private static final Set<OpenOption> option = Set.of(StandardOpenOption.CREATE,
+    private static final OpenOption[] options = new OpenOption[] {
+            StandardOpenOption.CREATE_NEW,
             StandardOpenOption.SPARSE,
-            StandardOpenOption.READ,
-            StandardOpenOption.WRITE);
+            StandardOpenOption.WRITE
+    };
     private final String logDirPath;
     private final String logFileName;
     private final int maxFileSize;
     private final int maxRecordingTime;
+    private final HeapBuffer buffer;
+    private final BiConsumer<HeapBuffer, LogEvent> consumer;
+    private boolean needsFlush;
     private long timestamp;
-    private FileChannel fc;
-    private MemorySegment segment;
-    private final BlockingQueue<LogEvent> queue;
-    private final Thread thread;
-    /**
-     *  已写入日志字节数
-     */
+    private OutputStream stream;
     private long index;
     public FileLogEventHandler(LogConfig logConfig) {
-        String logDirPath = logConfig.getLogFileDir();
-        if(logDirPath == null || logDirPath.isBlank()) {
-            File defaultDir = new File(Constants.DEFAULT_LOG_DIR);
-            if(defaultDir.exists()) {
-                if(!defaultDir.isDirectory()) {
-                    throw new FrameworkException(ExceptionType.LOG, "Target log dir has been occupied by normal file");
-                }
-            }else if(!defaultDir.mkdir()){
-                throw new FrameworkException(ExceptionType.LOG, "Unable to create log dir");
-            }
-            this.logDirPath = defaultDir.getAbsolutePath();
-        }else {
-            this.logDirPath = logDirPath;
-        }
-        // set a few things
-        this.logFileName = logConfig.getLogFileName();
-        this.maxFileSize = logConfig.getMaxFileSize() <= 0 ? Constants.GB : logConfig.getMaxFileSize();
-        if(maxFileSize <= Constants.MB) {
-            throw new FrameworkException(ExceptionType.LOG, "Max log file-size is too small, will possibly overflow");
-        }
-        this.maxRecordingTime = logConfig.getMaxRecordingTime() <= 0 ? -1 : logConfig.getMaxRecordingTime();
-        reAllocate();
-        this.queue = new LinkedTransferQueue<>();
-        this.thread = ThreadUtil.virtual(NAME, () -> {
-            Thread currentThread = Thread.currentThread();
-            while (!currentThread.isInterrupted()) {
-                try {
-                    LogEvent logEvent = queue.take();
-                    if(logEvent.isFlush()) {
-                        segment.force();
-                    }else {
-                        if(maxRecordingTime > 0 && logEvent.getTimestamp() - timestamp > maxRecordingTime) {
-                            segment.force();
-                            reAllocate();
-                        }
-                        MemorySegment memorySegment = logEvent.getBuilder().segment();
-                        printToFile(memorySegment, memorySegment.byteSize());
-                        MemorySegment throwable = logEvent.getThrowable();
-                        if(throwable != null) {
-                            printToFile(throwable, throwable.byteSize());
-                        }
-                    }
-                }catch (InterruptedException e) {
-                    currentThread.interrupt();
-                }
-            }
-        });
-    }
-
-    /**
-     *  将指定内存块的size大小的字节输入到文件
-     */
-    private void printToFile(MemorySegment memorySegment, long size) {
-        if(index + size + 1>= maxFileSize) {
-            segment.force();
-            reAllocate();
-        }
-        final MemorySegment targetSegment = memorySegment.byteSize() == size ? memorySegment : memorySegment.asSlice(0, size);
-        MemorySegment.copy(targetSegment, 0, segment, index, size);
-        segment.set(ValueLayout.JAVA_BYTE, index + size, Constants.b9);
-        index = index + size + 1;
-    }
-
-    /**
-     *   重新分配日志文件
-     */
-    private void reAllocate() {
         try{
-            this.fc.close();
+            String dir = logConfig.getLogFileDir();
+            this.logDirPath = dir == null || dir.isEmpty() ? System.getProperty("user.dir") : dir;
+            Path dirPath = Path.of(logDirPath);
+            if(!Files.exists(dirPath)) {
+                Files.createDirectory(dirPath);
+            }
+            this.logFileName = logConfig.getLogFileName();
+            this.maxFileSize = logConfig.getMaxFileSize();
+            if(maxFileSize > 0 && maxFileSize <= Constants.MB) {
+                throw new FrameworkException(ExceptionType.LOG, "Max log file-size is too small, will possibly overflow");
+            }
+            this.maxRecordingTime = logConfig.getMaxRecordingTime() <= 0 ? -1 : logConfig.getMaxRecordingTime();
+            this.buffer = new HeapBuffer(logConfig.getFileBuffer());
+            this.consumer = parseLogFormat(logConfig.getLogFormat());
+            allocateNewStream();
+        }catch (IOException e) {
+            throw new FrameworkException(ExceptionType.LOG, "Unable to create log file");
+        }
+    }
+
+    /**
+     *  将当前heap缓冲区的内容写入到文件中，如果会超过文件限额则重新指定文件流
+     */
+    private void writeAndFlush(HeapBuffer heapBuffer) {
+        try{
+            int bufferIndex = heapBuffer.index();
+            if(maxFileSize > 0 && index + bufferIndex > maxFileSize) {
+                stream.close();
+                allocateNewStream();
+            }
+            stream.write(heapBuffer.array());
+            stream.flush();
+            index = index + bufferIndex;
+        }catch (IOException e) {
+            throw new FrameworkException(ExceptionType.LOG, "Failed to write to file", e);
+        }
+    }
+
+    private static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss-SSS");
+    /**
+     *   分配新的日志文件
+     */
+    private void allocateNewStream() {
+        try{
             LocalDateTime now = LocalDateTime.now();
-            this.timestamp = now.toInstant(Constants.LOCAL_ZONE_OFFSET).toEpochMilli();
-            String path = logDirPath +
+            timestamp = now.toInstant(Constants.LOCAL_ZONE_OFFSET).toEpochMilli();
+            Path path = Path.of(logDirPath +
                     Constants.SEPARATOR +
                     logFileName + "-" +
-                    Constants.FORMATTER.format(now) +
-                    Constants.LOG_FILE_TYPE;
-            if(new File(path).exists()) {
+                    dateTimeFormatter.format(now) +
+                    Constants.LOG_FILE_TYPE);
+            if(Files.exists(path)) {
                 throw new FrameworkException(ExceptionType.LOG, "Target log file already exist");
             }
-            this.fc = FileChannel.open(Path.of(path), option);
-            this.segment = fc.map(FileChannel.MapMode.READ_WRITE, 0, maxFileSize, SegmentScope.auto());
-            this.index = 0L;
+            stream = Files.newOutputStream(path, options);
+            index = 0L;
         }catch (IOException e) {
             throw new FrameworkException(ExceptionType.LOG, "IOException caught when allocate", e);
         }
     }
 
-    @Override
-    public void init() {
-        thread.start();
-    }
-
-    @Override
-    public void shutdown() {
+    public void closeStream() {
         try{
-            thread.interrupt();
-            segment.force();
-            fc.close();
+            stream.close();
         }catch (IOException e) {
             throw new FrameworkException(ExceptionType.LOG, "IOException caught when shutting down FileLogEventHandler");
         }
@@ -145,10 +106,59 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
 
     @Override
     public void handle(LogEvent event) {
-        try {
-            queue.put(event);
-        } catch (InterruptedException e) {
-            thread.interrupt();
+        if(event.flush()) {
+            if(needsFlush) {
+                writeAndFlush(buffer);
+                needsFlush = false;
+            }
+        }else {
+            needsFlush = true;
+            if(maxRecordingTime > 0 && event.timestamp() - timestamp > maxRecordingTime) {
+                allocateNewStream();
+            }
+            consumer.accept(buffer, event);
         }
+    }
+
+    /**
+     *   解析日志格式，生成lambda处理方法
+     */
+    public static BiConsumer<HeapBuffer, LogEvent> parseLogFormat(String logFormat) {
+        BiConsumer<HeapBuffer, LogEvent> result = (writeBuffer, logEvent) -> {};
+        byte[] bytes = logFormat.getBytes(StandardCharsets.UTF_8);
+        for(int i = 0; i < bytes.length; i++) {
+            byte b = bytes[i];
+            if(b == Constants.b10) {
+                int j = i + 1;
+                for( ; ; ) {
+                    if(bytes[j] == Constants.b10) {
+                        String s = new String(bytes, i + 1, j - i - 1);
+                        switch (s) {
+                            case "time" -> result = result.andThen((heapBuffer, logEvent) -> heapBuffer.write(logEvent.time()));
+                            case "level" -> result = result.andThen((heapBuffer, logEvent) -> heapBuffer.write(logEvent.level()));
+                            case "className" -> result = result.andThen((heapBuffer, logEvent) -> heapBuffer.write(logEvent.className()));
+                            case "threadName" -> result = result.andThen((heapBuffer, logEvent) -> heapBuffer.write(logEvent.threadName()));
+                            case "msg" -> result = result.andThen((heapBuffer, logEvent) -> heapBuffer.write(logEvent.msg()));
+                            default -> throw new FrameworkException(ExceptionType.LOG, "Unresolved log format : %s".formatted(s));
+                        }
+                        break;
+                    }else if(++j == bytes.length){
+                        throw new FrameworkException(ExceptionType.LOG, "LogFormat corrupted");
+                    }
+                }
+                i = j;
+            }else {
+                result = result.andThen((heapBuffer, logEvent) -> heapBuffer.write(b));
+            }
+        }
+        // automatically add \n and throwable
+        result = result.andThen((heapBuffer, logEvent) -> {
+            heapBuffer.write(Constants.b9);
+            byte[] throwable = logEvent.throwable();
+            if(throwable != null) {
+                heapBuffer.write(throwable);
+            }
+        });
+        return result;
     }
 }

@@ -36,3 +36,6 @@ hs_err_pid*
 #jmh text
 *.text
 
+#log files
+*.log
+

@@ -31,21 +31,25 @@ public class LogConfig {
      */
     private int bufferSize = 4 * Constants.KB;
     /**
+     *  日志格式字符串
+     */
+    private String logFormat = "%time% %level% [%threadName%] %className% - %msg%";
+    /**
      * 是否将日志输出到控制台,默认为true,基于性能考虑可以考虑关闭该项(输出至文件会比输出至控制台快许多)
      */
     private boolean usingConsole = true;
     /**
      *  日志等级Console输出预留长度
      */
-    private long levelLen = 5L;
+    private int levelLen = 5;
     /**
      *  线程名Console输出预留长度
      */
-    private long threadNameLen = 15L;
+    private int threadNameLen = 10;
     /**
      *  类名Console输出预留长度
      */
-    private long classNameLen = 60L;
+    private int classNameLen = 40;
     /**
      *  打印日志时间的颜色
      */
@@ -65,7 +69,11 @@ public class LogConfig {
     /**
      * 是否将日志输出到文件,默认为false
      */
-    private boolean usingFile = false;
+    private boolean usingFile = true;
+    /**
+     *  日志文件缓冲区大小,单位byte
+     */
+    private int fileBuffer = 64 * Constants.KB;
     /**
      * 日志文件目录路径,如果未指定则使用项目目录下新建log目录存储
      */

@@ -10,7 +10,6 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 

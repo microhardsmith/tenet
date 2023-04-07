@@ -1,10 +1,9 @@
 package cn.zorcc.http;
 
-import cn.zorcc.common.event.Event;
 import io.netty.channel.Channel;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 
-public class WebSocketEvent extends Event {
+public class WebSocketEvent {
     /**
      *  WebSocket数据帧
      */

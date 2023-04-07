@@ -2,14 +2,13 @@ package cn.zorcc.common.net;
 
 import cn.zorcc.common.network.Channel;
 import cn.zorcc.common.network.ChannelHandler;
-import cn.zorcc.common.pojo.Loc;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class TestHandler implements ChannelHandler {
     @Override
-    public void onConnected(Loc loc) {
-        log.info("Connected to {}", loc);
+    public void onConnected(Channel channel) {
+        log.info("Connected to {}", channel.loc());
     }
 
     @Override
@@ -18,7 +17,7 @@ public class TestHandler implements ChannelHandler {
     }
 
     @Override
-    public void onClose() {
-        log.info("Channel close");
+    public void onClose(Channel channel) {
+        log.info("Channel close : {}", channel.loc());
     }
 }

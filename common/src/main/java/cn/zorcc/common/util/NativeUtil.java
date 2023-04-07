@@ -197,4 +197,17 @@ public final class NativeUtil {
     public static void setLong(MemorySegment memorySegment, long index, long value) {
         longHandle.set(memorySegment, index, value);
     }
+
+    /**
+     *   分配C风格的字符串
+     */
+    public static MemorySegment allocateStr(Arena arena, String str) {
+        byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
+        MemorySegment memorySegment = arena.allocateArray(ValueLayout.JAVA_BYTE, bytes.length + 1);
+        for(int i = 0; i < bytes.length; i++) {
+            setByte(memorySegment, i, bytes[i]);
+        }
+        setByte(memorySegment, bytes.length, Constants.b0);
+        return memorySegment;
+    }
 }

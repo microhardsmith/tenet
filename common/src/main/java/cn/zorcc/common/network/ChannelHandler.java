@@ -1,14 +1,12 @@
 package cn.zorcc.common.network;
 
-import cn.zorcc.common.pojo.Loc;
-
 public interface ChannelHandler {
 
     /**
      *   After channel got connected, this function would be invoked
      *   you can send some data in this function since connection is fully established
      */
-    void onConnected(Loc loc);
+    void onConnected(Channel channel);
 
     /**
      *   Data has been transferred to current worker
@@ -20,5 +18,5 @@ public interface ChannelHandler {
      *   After connection was closed, this function would be invoked
      *   Note that you can't expect sending some data in this function, since channel has already been closed
      */
-    void onClose();
+    void onClose(Channel channel);
 }

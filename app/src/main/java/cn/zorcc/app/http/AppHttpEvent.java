@@ -1,10 +1,9 @@
 package cn.zorcc.app.http;
 
-import cn.zorcc.common.event.Event;
 import cn.zorcc.http.HttpReq;
 import io.netty.channel.Channel;
 
-public class AppHttpEvent extends Event {
+public class AppHttpEvent {
     /**
      *  Http请求体
      */

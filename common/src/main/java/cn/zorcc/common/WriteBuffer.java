@@ -24,7 +24,7 @@ public final class WriteBuffer implements AutoCloseable {
 
     public void writeByte(byte b) {
         long nextIndex = writeIndex + 1;
-        if(nextIndex >= segment.byteSize()) {
+        if(nextIndex > segment.byteSize()) {
             resize(nextIndex);
         }
         NativeUtil.setByte(segment, writeIndex, b);
@@ -33,7 +33,7 @@ public final class WriteBuffer implements AutoCloseable {
 
     public void writeBytes(byte[] bytes) {
         long nextIndex = writeIndex + bytes.length;
-        if(nextIndex >= segment.byteSize()) {
+        if(nextIndex > segment.byteSize()) {
             resize(nextIndex);
         }
         for(int i = 0; i < bytes.length; i++) {
@@ -42,9 +42,28 @@ public final class WriteBuffer implements AutoCloseable {
         writeIndex = nextIndex;
     }
 
+    public void writeBytes(byte[] bytes, int minWidth) {
+        if(minWidth <= bytes.length) {
+            writeBytes(bytes);
+        }else {
+            long nextIndex = writeIndex + minWidth;
+            if(nextIndex > segment.byteSize()) {
+                resize(nextIndex);
+            }
+            for(int i = 0; i < bytes.length; i++) {
+                NativeUtil.setByte(segment, writeIndex + i, bytes[i]);
+            }
+            for(int i = bytes.length; i < minWidth; i++) {
+                NativeUtil.setByte(segment, writeIndex + i, Constants.b2);
+            }
+            writeIndex = nextIndex;
+        }
+
+    }
+
     public void writeShort(short s) {
         long nextIndex = writeIndex + 2;
-        if(nextIndex >= segment.byteSize()) {
+        if(nextIndex > segment.byteSize()) {
             resize(nextIndex);
         }
         NativeUtil.setShort(segment, writeIndex, s);
@@ -53,7 +72,7 @@ public final class WriteBuffer implements AutoCloseable {
 
     public void writeInt(int i) {
         long nextIndex = writeIndex + 4;
-        if(nextIndex >= segment.byteSize()) {
+        if(nextIndex > segment.byteSize()) {
             resize(nextIndex);
         }
         NativeUtil.setInt(segment, writeIndex, i);
@@ -62,7 +81,7 @@ public final class WriteBuffer implements AutoCloseable {
 
     public void writeLong(long l) {
         long nextIndex = writeIndex + 8;
-        if(nextIndex >= segment.byteSize()) {
+        if(nextIndex > segment.byteSize()) {
             resize(nextIndex);
         }
         NativeUtil.setLong(segment, writeIndex, l);
@@ -73,7 +92,7 @@ public final class WriteBuffer implements AutoCloseable {
         if(memorySegment != null) {
             long len = memorySegment.byteSize();
             long nextIndex = writeIndex + len;
-            if(nextIndex >= segment.byteSize()) {
+            if(nextIndex > segment.byteSize()) {
                 resize(nextIndex);
             }
             MemorySegment.copy(memorySegment, 0L, segment, writeIndex, len);
@@ -91,15 +110,22 @@ public final class WriteBuffer implements AutoCloseable {
     }
 
     /**
-     *   截断index之前的内存部分
+     *   截断最开始的count个元素
      */
-    public void truncate(long index) {
-        if(index >= writeIndex) {
+    public void truncate(long count) {
+        if(count >= writeIndex) {
             throw new FrameworkException(ExceptionType.NATIVE, "Couldn't truncate after write index");
         }
-        long newWriteIndex = writeIndex - index;
-        segment = segment.asSlice(index, newWriteIndex);
+        long newWriteIndex = writeIndex - count;
+        segment = segment.asSlice(count, newWriteIndex);
         writeIndex = newWriteIndex;
+    }
+
+    /**
+     *   重置当前writeBuffer,不清除已写入的内容
+     */
+    public void reset() {
+        writeIndex = 0L;
     }
 
     /**

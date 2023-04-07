@@ -1,13 +1,12 @@
 package cn.zorcc.http;
 
-import cn.zorcc.common.event.Event;
 import io.netty.channel.Channel;
 import io.netty.handler.codec.http.FullHttpRequest;
 
 /**
  *  Http服务器接受请求事件
  */
-public class HttpEvent extends Event {
+public class HttpEvent {
     /**
      *  Http请求体
      */

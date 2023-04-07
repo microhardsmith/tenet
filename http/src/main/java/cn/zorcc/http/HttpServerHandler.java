@@ -2,7 +2,7 @@ package cn.zorcc.http;
 
 import cn.zorcc.common.Context;
 import cn.zorcc.common.enums.ExceptionType;
-import cn.zorcc.common.event.EventPipeline;
+import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.exception.FrameworkException;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
@@ -28,16 +28,16 @@ public class HttpServerHandler extends SimpleChannelInboundHandler<Object> {
     private final boolean enableWebSocket;
     private final WebSocketServerHandshakerFactory wsFactory;
     private final Map<Channel, WebSocketServerHandshaker> shakerMap;
-    private final EventPipeline<HttpEvent> httpPipeline;
-    private final EventPipeline<WebSocketEvent> websocketPipeline;
+    private final EventHandler<HttpEvent> httpHandler;
+    private final EventHandler<WebSocketEvent> websocketPipeline;
 
     public HttpServerHandler(boolean enableWebSocket) {
         this.enableWebSocket = enableWebSocket;
-        this.httpPipeline = Context.pipeline(HttpEvent.class);
+        this.httpHandler = Context.handler(HttpEvent.class);
         if(enableWebSocket) {
             this.wsFactory = new WebSocketServerHandshakerFactory(WS + Context.self().loc(), null, false);
             this.shakerMap = new ConcurrentHashMap<>();
-            this.websocketPipeline = Context.pipeline(WebSocketEvent.class);
+            this.websocketPipeline = Context.handler(WebSocketEvent.class);
         }else {
             this.wsFactory = null;
             this.shakerMap = null;
@@ -46,7 +46,7 @@ public class HttpServerHandler extends SimpleChannelInboundHandler<Object> {
     }
 
     @Override
-    protected void channelRead0(ChannelHandlerContext ctx, Object obj) throws Exception {
+    protected void channelRead0(ChannelHandlerContext ctx, Object obj) {
         switch (obj) {
             case FullHttpRequest fullHttpRequest -> handleHttpRequest(ctx, fullHttpRequest);
             case WebSocketFrame webSocketFrame -> handleWebSocketRequest(ctx, webSocketFrame);
@@ -78,7 +78,7 @@ public class HttpServerHandler extends SimpleChannelInboundHandler<Object> {
                 HttpEvent httpEvent = new HttpEvent();
                 httpEvent.setFullHttpRequest(fullHttpRequest);
                 httpEvent.setChannel(channel);
-                httpPipeline.fireEvent(httpEvent);
+                httpHandler.handle(httpEvent);
             }
         }
     }
@@ -97,7 +97,7 @@ public class HttpServerHandler extends SimpleChannelInboundHandler<Object> {
                     WebSocketEvent webSocketEvent = new WebSocketEvent();
                     webSocketEvent.setTextWebSocketFrame(textWebSocketFrame);
                     webSocketEvent.setChannel(channel);
-                    websocketPipeline.fireEvent(webSocketEvent);
+                    websocketPipeline.handle(webSocketEvent);
                 }
                 case null, default -> throw new FrameworkException(ExceptionType.HTTP, "Unsupported frame type");
             }

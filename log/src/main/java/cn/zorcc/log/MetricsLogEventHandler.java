@@ -11,17 +11,7 @@ public class MetricsLogEventHandler implements EventHandler<LogEvent> {
     }
 
     @Override
-    public void init() {
-
-    }
-
-    @Override
     public void handle(LogEvent event) {
-
-    }
-
-    @Override
-    public void shutdown() {
 
     }
 }

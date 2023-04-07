@@ -1,56 +1,46 @@
 package cn.zorcc.log;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.Context;
-import cn.zorcc.common.SegmentBuilder;
 import cn.zorcc.common.enums.ExceptionType;
-import cn.zorcc.common.event.EventHandler;
-import cn.zorcc.common.event.EventPipeline;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.ConfigUtil;
 import cn.zorcc.common.util.ThreadUtil;
-import cn.zorcc.common.wheel.Wheel;
 import org.slf4j.Marker;
 import org.slf4j.event.Level;
 import org.slf4j.helpers.LegacyAbstractLogger;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.LinkedTransferQueue;
+import java.util.concurrent.TransferQueue;
 
 /**
  * 负责打印tenet项目中使用的日志
  */
 public class Logger extends LegacyAbstractLogger {
-    private static final Map<Level, MemorySegment> levelMap = Map.of(
-            Level.DEBUG, Constants.DEBUG_SEGMENT,
-            Level.TRACE, Constants.TRACE_SEGMENT,
-            Level.INFO, Constants.INFO_SEGMENT,
-            Level.WARN, Constants.WARN_SEGMENT,
-            Level.ERROR, Constants.ERROR_SEGMENT
+    private static final Map<Level, byte[]> levelMap = Map.of(
+            Level.DEBUG, Constants.DEBUG_BYTES,
+            Level.TRACE, Constants.TRACE_BYTES,
+            Level.INFO, Constants.INFO_BYTES,
+            Level.WARN, Constants.WARN_BYTES,
+            Level.ERROR, Constants.ERROR_BYTES
     );
+    private static final LogConfig config;
     private static final int level;
-    private static final int bufferSize;
     private static final DateTimeFormatter formatter;
     private static final TimeResolver timeResolver;
-    private static final EventPipeline<LogEvent> pipeline;
-    public static final int pipelineSize;
+    private static final TransferQueue<LogEvent> queue = new LinkedTransferQueue<>();
 
 
     static {
-        LogConfig logConfig = ConfigUtil.loadJsonConfig(Constants.DEFAULT_LOG_CONFIG_NAME, LogConfig.class);
-        bufferSize = Math.max(logConfig.getBufferSize(), Constants.KB);
-        String timeFormat = logConfig.getTimeFormat();
-        formatter = DateTimeFormatter.ofPattern(timeFormat, Locale.getDefault());
-        String resolver = logConfig.getTimeResolver();
+        config = ConfigUtil.loadJsonConfig(Constants.DEFAULT_LOG_CONFIG_NAME, LogConfig.class);
+        formatter = DateTimeFormatter.ofPattern(config.getTimeFormat(), Locale.getDefault());
+        String resolver = config.getTimeResolver();
         if(resolver != null && !resolver.isEmpty()) {
             try {
                 Class<?> timeResolverClass = Class.forName(resolver);
@@ -64,33 +54,22 @@ public class Logger extends LegacyAbstractLogger {
         }else {
             timeResolver = null;
         }
-        switch (logConfig.getLevel()) {
-            case Constants.TRACE -> level = Constants.TRACE;
-            case Constants.INFO -> level = Constants.INFO;
-            case Constants.WARN -> level = Constants.WARN;
-            case Constants.ERROR -> level = Constants.ERROR;
-            case Constants.DEBUG -> level = Constants.DEBUG;
+        level = switch (config.getLevel()) {
+            case Constants.TRACE -> Constants.TRACE;
+            case Constants.INFO -> Constants.INFO;
+            case Constants.WARN -> Constants.WARN;
+            case Constants.ERROR -> Constants.ERROR;
+            case Constants.DEBUG -> Constants.DEBUG;
             default -> throw new FrameworkException(ExceptionType.LOG, "Unsupported Log default level");
-        }
-        List<EventHandler<LogEvent>> eventHandlers = new ArrayList<>();
-        if(logConfig.isUsingConsole()) {
-            eventHandlers.add(new ConsoleLogEventHandler(logConfig));
-        }
-        if(logConfig.isUsingFile()) {
-            eventHandlers.add(new FileLogEventHandler(logConfig));
-        }
-        if(logConfig.isUsingMetrics()) {
-            eventHandlers.add(new MetricsLogEventHandler(logConfig));
-        }
-        pipeline = new EventPipeline<>(eventHandlers);
-        pipelineSize = eventHandlers.size();
-        Context.registerPipeline(LogEvent.class, pipeline);
+        };
+    }
 
-        // add periodic flush job
-        if(logConfig.isUsingFile() || logConfig.isUsingMetrics()) {
-            Wheel.wheel().addPeriodicJob(() -> pipeline.fireEvent(LogEvent.flushEvent), 0L, logConfig.getFlushInterval(), TimeUnit.MILLISECONDS);
-        }
+    public static LogConfig config() {
+        return config;
+    }
 
+    public static TransferQueue<LogEvent> queue() {
+        return queue;
     }
 
     public Logger(String name) {
@@ -107,53 +86,59 @@ public class Logger extends LegacyAbstractLogger {
      */
     @Override
     protected void handleNormalizedLoggingCall(Level level, Marker marker, String s, Object[] objects, Throwable throwable) {
-        LogEvent logEvent = new LogEvent(bufferSize);
-        Arena arena = logEvent.getArena();
+        Instant instant = Constants.SYSTEM_CLOCK.instant();
+        LocalDateTime now = LocalDateTime.ofEpochSecond(instant.getEpochSecond(), instant.getNano(), Constants.LOCAL_ZONE_OFFSET);
+        long timestamp = instant.toEpochMilli();
 
-        final Instant instant = Constants.SYSTEM_CLOCK.instant();
-        final LocalDateTime now = LocalDateTime.ofEpochSecond(instant.getEpochSecond(), instant.getNano(), Constants.LOCAL_ZONE_OFFSET);
-        logEvent.setTimestamp(instant.toEpochMilli());
-
-        if(timeResolver == null) {
-            logEvent.setTime(arena.allocateArray(ValueLayout.JAVA_BYTE, formatter.format(now).getBytes(StandardCharsets.UTF_8)));
-        }else {
-            logEvent.setTime(arena.allocateArray(ValueLayout.JAVA_BYTE, timeResolver.format(now)));
-        }
-
-        logEvent.setLevel(levelMap.get(level));
-        logEvent.setThreadName(arena.allocateArray(ValueLayout.JAVA_BYTE, ThreadUtil.threadName().getBytes(StandardCharsets.UTF_8)));
-        logEvent.setClassName(arena.allocateArray(ValueLayout.JAVA_BYTE, getName().getBytes(StandardCharsets.UTF_8)));
-
+        byte[] time = timeResolver == null ? formatter.format(now).getBytes(StandardCharsets.UTF_8) : timeResolver.format(now);
+        byte[] lv = levelMap.get(level);
+        byte[] threadName = ThreadUtil.threadName().getBytes(StandardCharsets.UTF_8);
+        byte[] className = getName().getBytes(StandardCharsets.UTF_8);
+        byte[] th = null;
         if(throwable != null) {
             // set log's throwable
             StringWriter stringWriter = new StringWriter();
             throwable.printStackTrace(new PrintWriter(stringWriter));
-            logEvent.setThrowable(arena.allocateArray(ValueLayout.JAVA_BYTE, stringWriter.toString().getBytes(StandardCharsets.UTF_8)));
+            th = stringWriter.toString().getBytes(StandardCharsets.UTF_8);
         }
+        byte[] msg = processMsg(s, objects);
+        LogEvent logEvent = new LogEvent(false, timestamp, time, lv, threadName, className, th, msg);
+        if (!queue.offer(logEvent)) {
+            throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED);
+        }
+    }
 
-        final SegmentBuilder builder = logEvent.getBuilder();
-        builder.reset();
-        builder.append(logEvent.getTime())
-                .append(Constants.b2)
-                .append(logEvent.getLevel())
-                .append(Constants.b2)
-                .append(Constants.b7)
-                .append(logEvent.getThreadName())
-                .append(Constants.b8)
-                .append(Constants.b2)
-                .append(logEvent.getClassName())
-                .append(Constants.b2)
-                .append(Constants.b1)
-                .append(Constants.b2);
-        MemorySegment msg = MemorySegment.ofArray(s.getBytes(StandardCharsets.UTF_8));
-        if(objects == null || objects.length == 0) {
-            builder.append(msg);
-            logEvent.setMsg(msg);
-        }else {
-            List<MemorySegment> list = Arrays.stream(objects).map(o -> MemorySegment.ofArray(o.toString().getBytes(StandardCharsets.UTF_8))).toList();
-            logEvent.setMsg(builder.appendWithArgs(msg, list));
+    /**
+     *   process msg, replacing the {} with target args
+     */
+    public static byte[] processMsg(String msg, Object[] args) {
+        byte[] msgBytes = msg.getBytes(StandardCharsets.UTF_8);
+        if(args == null || args.length == 0) {
+            return msgBytes;
+        } else {
+            List<byte[]> list = new ArrayList<>(args.length);
+            int reserved = 0;
+            for (Object arg : args) {
+                byte[] b = arg.toString().getBytes(StandardCharsets.UTF_8);
+                list.add(b);
+                reserved += b.length;
+            }
+            byte[] result = new byte[reserved + msgBytes.length];
+            int len = 0;
+            for(int i = 0, index = 0; i < msgBytes.length; i++) {
+                byte b = msgBytes[i];
+                if(b == Constants.b5 && i + 1 < msgBytes.length && msgBytes[i + 1] == Constants.b6) {
+                    // reaching {}, need to parse the arg
+                    byte[] argBytes = list.get(index++);
+                    System.arraycopy(argBytes, 0, result, len, argBytes.length);
+                    len += argBytes.length;
+                    i++; // escape "{}"
+                }else {
+                    result[len++] = b;
+                }
+            }
+            return Arrays.copyOf(result, len);
         }
-        pipeline.fireEvent(logEvent);
     }
 
     @Override

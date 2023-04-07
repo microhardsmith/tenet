@@ -112,7 +112,7 @@ public final class Channel implements LifeCycle {
             // register multiplexing events
             n.registerRead(workerState.getMux(), socket);
             // invoke handler's function
-            handler.onConnected(loc);
+            handler.onConnected(this);
             //
             if(remote != null) {
                 remote.add(this);
@@ -251,7 +251,7 @@ public final class Channel implements LifeCycle {
                 n.unregister(workerState.getMux(), socket);
                 thread.interrupt();
                 n.closeSocket(socket);
-                handler.onClose();
+                handler.onClose(this);
             }
         }
     }

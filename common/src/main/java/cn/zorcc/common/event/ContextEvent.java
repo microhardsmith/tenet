@@ -9,7 +9,7 @@ import lombok.Setter;
  */
 @Getter
 @Setter
-public class ContextEvent extends Event {
+public class ContextEvent {
     /**
      *  上下文事件类型
      */

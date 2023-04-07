@@ -3,7 +3,6 @@ package cn.zorcc.common;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
 
-import java.lang.foreign.MemorySegment;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -40,6 +39,7 @@ public class Constants {
     public static final byte b7 = (byte) '[';
     public static final byte b8 = (byte) ']';
     public static final byte b9 = (byte) '\n';
+    public static final byte b10 = (byte) '%';
     public static final byte b0 = (byte) '\0';
     public static final String TMP_LIB = "tenet-lib";
 
@@ -54,19 +54,19 @@ public class Constants {
     /**
      *  Ansi格式的带颜色的控制台字符控制
      */
-    public static final MemorySegment ANSI_PREFIX = MemorySegment.ofArray("\033[".getBytes(StandardCharsets.UTF_8)); // 2 bytes
-    public static final MemorySegment ANSI_SUFFIX = MemorySegment.ofArray("\033[0m".getBytes(StandardCharsets.UTF_8)); // 4 bytes
-    public static final MemorySegment TRACE_SEGMENT = MemorySegment.ofArray("TRACE".getBytes(StandardCharsets.UTF_8));
-    public static final MemorySegment DEBUG_SEGMENT = MemorySegment.ofArray("DEBUG".getBytes(StandardCharsets.UTF_8));
-    public static final MemorySegment INFO_SEGMENT = MemorySegment.ofArray("INFO".getBytes(StandardCharsets.UTF_8));
-    public static final MemorySegment WARN_SEGMENT = MemorySegment.ofArray("WARN".getBytes(StandardCharsets.UTF_8));
-    public static final MemorySegment ERROR_SEGMENT = MemorySegment.ofArray("ERROR".getBytes(StandardCharsets.UTF_8));
-    public static final MemorySegment RED_SEGMENT = MemorySegment.ofArray("31m".getBytes(StandardCharsets.UTF_8));
-    public static final MemorySegment GREEN_SEGMENT = MemorySegment.ofArray("32m".getBytes(StandardCharsets.UTF_8));
-    public static final MemorySegment YELLOW_SEGMENT = MemorySegment.ofArray("33m".getBytes(StandardCharsets.UTF_8));
-    public static final MemorySegment BLUE_SEGMENT = MemorySegment.ofArray("34m".getBytes(StandardCharsets.UTF_8));
-    public static final MemorySegment MAGENTA_SEGMENT = MemorySegment.ofArray("35m".getBytes(StandardCharsets.UTF_8));
-    public static final MemorySegment CYAN_SEGMENT = MemorySegment.ofArray("36m".getBytes(StandardCharsets.UTF_8));
+    public static final byte[] ANSI_PREFIX = "\033[".getBytes(StandardCharsets.UTF_8); // 2 bytes
+    public static final byte[] ANSI_SUFFIX = "\033[0m".getBytes(StandardCharsets.UTF_8); // 4 bytes
+    public static final byte[] TRACE_BYTES = "TRACE".getBytes(StandardCharsets.UTF_8);
+    public static final byte[] DEBUG_BYTES = "DEBUG".getBytes(StandardCharsets.UTF_8);
+    public static final byte[] INFO_BYTES = "INFO".getBytes(StandardCharsets.UTF_8);
+    public static final byte[] WARN_BYTES = "WARN".getBytes(StandardCharsets.UTF_8);
+    public static final byte[] ERROR_BYTES = "ERROR".getBytes(StandardCharsets.UTF_8);
+    public static final byte[] RED_BYTES = "31m".getBytes(StandardCharsets.UTF_8);
+    public static final byte[] GREEN_BYTES = "32m".getBytes(StandardCharsets.UTF_8);
+    public static final byte[] YELLOW_BYTES = "33m".getBytes(StandardCharsets.UTF_8);
+    public static final byte[] BLUE_BYTES = "34m".getBytes(StandardCharsets.UTF_8);
+    public static final byte[] MAGENTA_BYTES = "35m".getBytes(StandardCharsets.UTF_8);
+    public static final byte[] CYAN_BYTES = "36m".getBytes(StandardCharsets.UTF_8);
     public static final String RED = "red";
     public static final String GREEN = "green";
     public static final String YELLOW = "yellow";

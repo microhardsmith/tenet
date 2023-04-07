@@ -3,9 +3,6 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
 
-import java.lang.foreign.MemorySegment;
-import java.util.Optional;
-
 /**
  *   Network codec interface
  *   Net should always provide server-side channel with a default codec

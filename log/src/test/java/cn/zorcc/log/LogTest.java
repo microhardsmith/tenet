@@ -1,30 +1,32 @@
 package cn.zorcc.log;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.Context;
-import cn.zorcc.common.event.EventPipeline;
+import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.common.wheel.Wheel;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
-import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentScope;
-import java.lang.foreign.ValueLayout;
+import java.nio.channels.FileChannel;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.Set;
 
 @Slf4j
 public class LogTest {
     public static void main(String[] args) throws Throwable {
-        testOffset();
+        testLog();
     }
 
     private static void testLog() throws InterruptedException {
         Wheel.wheel().init();
-        EventPipeline<LogEvent> pipeline = Context.pipeline(LogEvent.class);
-        pipeline.init();
-        for(int i = 0;i < 1000; i++) {
+        LoggerConsumer loggerConsumer = new LoggerConsumer();
+        loggerConsumer.init();
+        Runtime.getRuntime().addShutdownHook(Thread.ofVirtual().unstarted(loggerConsumer::shutdown));
+        for(int i = 0;i < 10; i++) {
             log.info("hello " + i);
         }
         Thread.sleep(Long.MAX_VALUE);
@@ -38,37 +40,17 @@ public class LogTest {
         System.out.println(System.currentTimeMillis());
     }
 
-    private static void testConsole() throws InterruptedException {
-        System.out.println("\033[31mhello\033[0m");
-    }
-
-    private static void testNative() {
-        MemorySegment memorySegment = MemorySegment.allocateNative(100, SegmentScope.auto());
-        MemorySegment.copy(Constants.BLUE_SEGMENT, 0, memorySegment, 0, 3);
-    }
-
     private static void testFile() throws IOException {
-        MemorySegment debugSegment = Constants.DEBUG_SEGMENT;
-        SegmentScope scope = debugSegment.scope();
-        System.out.println(scope.equals(SegmentScope.global()));
-        System.out.println(scope.equals(SegmentScope.auto()));
-    }
-
-    private static void testOffset() {
-        final MemoryLayout epollDataLayout = MemoryLayout.unionLayout(
-                ValueLayout.ADDRESS.withName("ptr"),
-                ValueLayout.JAVA_INT.withName("fd"),
-                ValueLayout.JAVA_INT.withName("u32"),
-                ValueLayout.JAVA_LONG.withName("u64"),
-                ValueLayout.JAVA_INT.withName("sock"),
-                ValueLayout.ADDRESS.withName("hnd")
-        );
-        final MemoryLayout epollEventLayout = MemoryLayout.structLayout(
-                ValueLayout.JAVA_INT.withName("events"),
-                MemoryLayout.paddingLayout(32),
-                epollDataLayout.withName("data")
-        );
-        System.out.println(epollEventLayout.byteOffset(MemoryLayout.PathElement.groupElement("data")));
+        Set<StandardOpenOption> set = Set.of(StandardOpenOption.CREATE_NEW,
+                StandardOpenOption.SPARSE,
+                StandardOpenOption.READ,
+                StandardOpenOption.WRITE);
+        try(FileChannel fc = FileChannel.open(Path.of("C:/workspace/hello.txt"), set)) {
+            MemorySegment segment = fc.map(FileChannel.MapMode.READ_WRITE, 0, Constants.MB, SegmentScope.auto());
+            NativeUtil.setByte(segment, 0L, Constants.b2);
+            MemorySegment segment2 = fc.map(FileChannel.MapMode.READ_WRITE, Constants.MB, 2 * Constants.MB, SegmentScope.auto());
+            NativeUtil.setByte(segment2, 0L, Constants.b2);
+        }
     }
 
 }

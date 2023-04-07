@@ -50,8 +50,7 @@ public class AppHttpEventHandler implements EventHandler<AppHttpEvent>, AppHttpM
     public AppHttpEventHandler() {
         Context.loadContainer(this, AppHttpMapping.class);
     }
-
-    @Override
+    // TODO refactoring
     public void init() {
         if(!initFlag.compareAndSet(false, true)) {
             throw new FrameworkException(ExceptionType.HTTP, "HttpEventHandler already started initialization");
@@ -69,11 +68,6 @@ public class AppHttpEventHandler implements EventHandler<AppHttpEvent>, AppHttpM
             Object invokeResult = methodInvoker.invoke(event.methodIndex(), event.args());
 
         }
-    }
-
-    @Override
-    public void shutdown() {
-
     }
 
     /**
