@@ -27,4 +27,5 @@ module tenet.common {
     exports cn.zorcc.common.util;
     exports cn.zorcc.common.wheel;
     exports cn.zorcc.common.network;
+    exports cn.zorcc.common.network.http;
 }

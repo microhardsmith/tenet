@@ -30,9 +30,9 @@ public class NetworkConfig {
      */
     private Boolean tcpNoDelay = Boolean.TRUE;
     /**
-     *  服务器ip地址
+     *  服务器ip地址, note: 目前只支持ipv4版本协议栈，使用localhost访问时可能会定向到ipv6，尽量使用0.0.0.0或127.0.0.1访问
      */
-    private String ip = "127.0.0.1";
+    private String ip = "0.0.0.0";
     /**
      *  服务器端口号
      */

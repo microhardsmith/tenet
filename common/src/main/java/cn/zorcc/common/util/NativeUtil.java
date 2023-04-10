@@ -207,7 +207,20 @@ public final class NativeUtil {
         for(int i = 0; i < bytes.length; i++) {
             setByte(memorySegment, i, bytes[i]);
         }
-        setByte(memorySegment, bytes.length, Constants.b0);
+        setByte(memorySegment, bytes.length, Constants.NUT);
+        return memorySegment;
+    }
+
+    public static MemorySegment allocateStr(Arena arena, String str, int len) {
+        byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
+        if(len < bytes.length + 1) {
+            throw new FrameworkException(ExceptionType.NATIVE, "String out of range");
+        }
+        MemorySegment memorySegment = arena.allocateArray(ValueLayout.JAVA_BYTE, len);
+        for(int i = 0; i < bytes.length; i++) {
+            setByte(memorySegment, i, bytes[i]);
+        }
+        setByte(memorySegment, bytes.length, Constants.NUT);
         return memorySegment;
     }
 }

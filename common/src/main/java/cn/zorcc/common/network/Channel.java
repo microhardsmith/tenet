@@ -200,6 +200,8 @@ public final class Channel implements LifeCycle {
                 writeBuffer.write(buffer.remaining());
             }
         }
+        // reset read buffer for reuse
+        buffer.reset();
     }
 
     /**

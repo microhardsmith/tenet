@@ -14,8 +14,8 @@ public class DefaultTimeResolver implements TimeResolver {
 
     public DefaultTimeResolver() {
         bytes[4] = bytes[7] = Constants.b1;
-        bytes[10] = Constants.b2;
-        bytes[13] = bytes[16] = Constants.b3;
+        bytes[10] = Constants.SPACE;
+        bytes[13] = bytes[16] = Constants.COLON;
         bytes[19] = Constants.b4;
     }
 

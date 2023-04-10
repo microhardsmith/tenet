@@ -32,10 +32,11 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
     }
 
     /**
-     *  向标准输出流打印数据
+     *  向标准输出流打印数据,因为C风格的字符串以'\0'结尾，覆写内存后需要手动添加'\0'
      */
     private void print(WriteBuffer buffer) {
         try{
+            buffer.writeByte(Constants.NUT);
             MemorySegment segment = buffer.segment();
             printHandle.invokeExact(segment);
             buffer.reset();
@@ -125,7 +126,7 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
                                 byte[] level = logEvent.level();
                                 writeBuffer.writeBytes(Constants.ANSI_PREFIX);
                                 writeBuffer.writeBytes(levelBytes(level));
-                                writeBuffer.writeBytes(level);
+                                writeBuffer.writeBytes(level, logConfig.getLevelLen());
                                 writeBuffer.writeBytes(Constants.ANSI_SUFFIX);
                             });
                             case "className" -> {

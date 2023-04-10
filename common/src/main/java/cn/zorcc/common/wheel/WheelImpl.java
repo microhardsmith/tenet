@@ -1,6 +1,7 @@
 package cn.zorcc.common.wheel;
 
 import cn.zorcc.common.Clock;
+import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.ThreadUtil;
@@ -45,7 +46,8 @@ public final class WheelImpl implements Wheel {
         this.queue = new MpscUnboundedAtomicArrayQueue<>(slots);
         this.wheel = new JobImpl[slots];
         for(int i = 0; i < slots; i++) {
-            wheel[i] = JobImpl.HEAD;
+            // create head node
+            wheel[i] = new JobImpl(Long.MIN_VALUE, Long.MIN_VALUE, null);
         }
         // if we use virtual thread, then parkNanos() will internally use a ScheduledThreadPoolExecutor for unpark the current vthread
         // still there is a platform thread constantly waiting for lock and go to sleep and so on. So use platform thread would be more simplified
@@ -66,8 +68,7 @@ public final class WheelImpl implements Wheel {
         long delayMillis = timeUnit.toMillis(delay);
         JobImpl result = new JobImpl(Clock.current() + delayMillis, JobImpl.ONCE, job);
         if (!queue.offer(result)) {
-            // should never reach
-            throw new FrameworkException(ExceptionType.WHEEL, "Unable to offer");
+            throw new FrameworkException(ExceptionType.WHEEL, Constants.UNREACHED);
         }
         return result;
     }
@@ -81,8 +82,7 @@ public final class WheelImpl implements Wheel {
         long delayMillis = timeUnit.toMillis(delay);
         JobImpl result = new JobImpl(Clock.current() + delayMillis, periodDelayMillis, job);
         if (!queue.offer(result)) {
-            // should never reach
-            throw new FrameworkException(ExceptionType.WHEEL, "Unable to offer");
+            throw new FrameworkException(ExceptionType.WHEEL, Constants.UNREACHED);
         }
         return result;
     }
@@ -118,34 +118,46 @@ public final class WheelImpl implements Wheel {
                     insert(job);
                 }
             }
-            
-            // processing wheel's current mission
-            final JobImpl head = wheel[slot];
-            JobImpl current = head.next;
-            while (current != null) {
-                remove(current);
-                if(!current.cancel.get()) {
-                    ThreadUtil.virtual(NAME, current.mission).start();
-                    final long period = current.period;
-                    if(period != JobImpl.ONCE) {
-                        current.execMilli = current.execMilli + period;
-                    }
-                }
-                current = current.next;
-            }
 
             // check if we need to scan the waiting queue
             if((slot & cMask) == 0) {
                 Iterator<JobImpl> iter = waitSet.iterator();
                 while (iter.hasNext()) {
                     JobImpl job = iter.next();
-                    if(job.execMilli - milli < bound) {
+                    final long delayMillis = job.execMilli - milli;
+                    if(delayMillis < bound) {
                         iter.remove();
+                        job.pos = (int) ((slot + (delayMillis / tick)) & mask);
+                        insert(job);
                     }else {
                         // if current task is not for scheduling, then the following tasks won't be available
                         break;
                     }
                 }
+            }
+            
+            // processing wheel's current mission
+            final JobImpl head = wheel[slot];
+            JobImpl current = head.next;
+            while (current != null) {
+                JobImpl next = remove(current);
+                if(!current.cancel.get()) {
+                    ThreadUtil.virtual(NAME, current.mission).start();
+                    final long period = current.period;
+                    if(period != JobImpl.ONCE) {
+                        // reset current node's status
+                        current.execMilli = current.execMilli + period;
+                        current.prev = null;
+                        current.next = null;
+                        if(period >= bound) {
+                            waitSet.add(current);
+                        }else {
+                            current.pos = (int) ((slot + (period / tick)) & mask);
+                            insert(current);
+                        }
+                    }
+                }
+                current = next;
             }
             
             // park until next slot
@@ -168,15 +180,16 @@ public final class WheelImpl implements Wheel {
     }
 
     /**
-     *   remove the target node from current linked-list
+     *   remove the target node from current linked-list, return next node
      */
-    private void remove(final JobImpl target) {
+    private JobImpl remove(final JobImpl target) {
         JobImpl prev = target.prev;
         JobImpl next = target.next;
         prev.next = next;
         if(next != null) {
             next.prev = prev;
         }
+        return next;
     }
 
     /**
@@ -213,7 +226,6 @@ public final class WheelImpl implements Wheel {
     }
 
     private static final class JobImpl implements Job, Comparable<JobImpl> {
-        private static final JobImpl HEAD = new JobImpl(Long.MIN_VALUE, Long.MIN_VALUE, null);
         public static final long ONCE = -1L;
         private long execMilli;
         private int pos;

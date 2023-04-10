@@ -31,7 +31,7 @@ public final class WriteBuffer implements AutoCloseable {
         writeIndex = nextIndex;
     }
 
-    public void writeBytes(byte[] bytes) {
+    public void writeBytes(byte... bytes) {
         long nextIndex = writeIndex + bytes.length;
         if(nextIndex > segment.byteSize()) {
             resize(nextIndex);
@@ -54,7 +54,7 @@ public final class WriteBuffer implements AutoCloseable {
                 NativeUtil.setByte(segment, writeIndex + i, bytes[i]);
             }
             for(int i = bytes.length; i < minWidth; i++) {
-                NativeUtil.setByte(segment, writeIndex + i, Constants.b2);
+                NativeUtil.setByte(segment, writeIndex + i, Constants.SPACE);
             }
             writeIndex = nextIndex;
         }

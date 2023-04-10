@@ -7,7 +7,7 @@ import java.lang.foreign.MemorySegment;
  */
 public record Mux (
         MemorySegment winHandle,
-        int epFd,
+        int epfd,
         int kqFd
 ){
     public static Mux win(MemorySegment winHandle) {

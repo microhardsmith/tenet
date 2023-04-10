@@ -15,9 +15,18 @@ public final class ReadBuffer implements AutoCloseable {
     private final Arena arena;
     private final MemorySegment segment;
     private final int len;
+    /**
+     *   当前已读取的index
+     */
     private long readIndex;
+    /**
+     *   当前已写入的index
+     */
     private long writeIndex;
 
+    /**
+     *   用于构建新的空白的readBuffer
+     */
     public ReadBuffer(int size) {
         this.arena = Arena.openConfined();
         this.segment = arena.allocateArray(ValueLayout.JAVA_BYTE, size);
@@ -26,6 +35,9 @@ public final class ReadBuffer implements AutoCloseable {
         this.writeIndex = 0L;
     }
 
+    /**
+     *   用于从WriteBuffer中转化
+     */
     public ReadBuffer(Arena arena, MemorySegment segment) {
         this.arena = arena;
         this.segment = segment;
@@ -38,8 +50,11 @@ public final class ReadBuffer implements AutoCloseable {
         return writeIndex - readIndex;
     }
 
-    public void setWriteIndex(long writeIndex) {
-        this.writeIndex = writeIndex;
+    public void setWriteIndex(long index) {
+        if(index > segment.byteSize()) {
+            throw new FrameworkException(ExceptionType.NATIVE, "ReadBuffer write index overflow");
+        }
+        writeIndex = index;
     }
 
     public long readIndex() {
@@ -52,7 +67,7 @@ public final class ReadBuffer implements AutoCloseable {
 
     public byte readByte() {
         long nextIndex = readIndex + 1;
-        if(nextIndex > segment.byteSize()) {
+        if(nextIndex > writeIndex) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
         byte b = NativeUtil.getByte(segment, readIndex);
@@ -60,9 +75,19 @@ public final class ReadBuffer implements AutoCloseable {
         return b;
     }
 
+    public byte[] readBytes(int len) {
+        long nextIndex = readIndex + len;
+        if(nextIndex > writeIndex) {
+            throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
+        }
+        byte[] result = segment.asSlice(readIndex, len).toArray(ValueLayout.JAVA_BYTE);
+        readIndex = nextIndex;
+        return result;
+    }
+
     public short readShort() {
         long nextIndex = readIndex + 2;
-        if(nextIndex > segment.byteSize()) {
+        if(nextIndex > writeIndex) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
         short s = NativeUtil.getShort(segment, readIndex);
@@ -72,7 +97,7 @@ public final class ReadBuffer implements AutoCloseable {
 
     public int readInt() {
         long nextIndex = readIndex + 4;
-        if(nextIndex > segment.byteSize()) {
+        if(nextIndex > writeIndex) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
         int i = NativeUtil.getInt(segment, readIndex);
@@ -82,12 +107,45 @@ public final class ReadBuffer implements AutoCloseable {
 
     public long readLong() {
         long nextIndex = readIndex + 8;
-        if(nextIndex > segment.byteSize()) {
+        if(nextIndex > writeIndex) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
         long l = NativeUtil.getByte(segment, readIndex);
         readIndex = nextIndex;
         return l;
+    }
+
+    /**
+     *   读取当前内存块直到读取到指定分隔符，返回已读取的内容（不包含分隔符），如果未获取到则返回null
+     */
+    public byte[] readUntil(byte sep) {
+        long currentIndex = readIndex;
+        while (currentIndex < writeIndex) {
+            byte b = NativeUtil.getByte(segment, currentIndex);
+            if(b == sep) {
+                byte[] result = currentIndex == readIndex ? Constants.EMPTY_BYTES : segment.asSlice(readIndex, currentIndex - readIndex).toArray(ValueLayout.JAVA_BYTE);
+                readIndex = currentIndex + 1;
+                return result;
+            }else {
+                currentIndex += 1;
+            }
+        }
+        return null;
+    }
+
+    public byte[] readUntil(byte sep1, byte sep2) {
+        long currentIndex = readIndex;
+        while (currentIndex < writeIndex) {
+            byte b = NativeUtil.getByte(segment, currentIndex);
+            if(b == sep1 && currentIndex + 1 < writeIndex && NativeUtil.getByte(segment, currentIndex + 1) == sep2) {
+                byte[] result = currentIndex == readIndex ? Constants.EMPTY_BYTES : segment.asSlice(readIndex, currentIndex - readIndex).toArray(ValueLayout.JAVA_BYTE);
+                readIndex = currentIndex + 2;
+                return result;
+            }else {
+                currentIndex += 1;
+            }
+        }
+        return null;
     }
 
     public int len() {

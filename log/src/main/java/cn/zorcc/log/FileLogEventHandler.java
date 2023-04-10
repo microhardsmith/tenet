@@ -30,6 +30,9 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
     private final HeapBuffer buffer;
     private final BiConsumer<HeapBuffer, LogEvent> consumer;
     private boolean needsFlush;
+    /**
+     *   timestamp milli when last stream was allocated
+     */
     private long timestamp;
     private OutputStream stream;
     private long index;
@@ -65,9 +68,10 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
                 stream.close();
                 allocateNewStream();
             }
-            stream.write(heapBuffer.array());
+            stream.write(heapBuffer.array(), 0, bufferIndex);
             stream.flush();
             index = index + bufferIndex;
+            heapBuffer.reset();
         }catch (IOException e) {
             throw new FrameworkException(ExceptionType.LOG, "Failed to write to file", e);
         }
@@ -153,7 +157,7 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
         }
         // automatically add \n and throwable
         result = result.andThen((heapBuffer, logEvent) -> {
-            heapBuffer.write(Constants.b9);
+            heapBuffer.write(Constants.LF);
             byte[] throwable = logEvent.throwable();
             if(throwable != null) {
                 heapBuffer.write(throwable);

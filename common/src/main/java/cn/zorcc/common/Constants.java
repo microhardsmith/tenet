@@ -31,16 +31,19 @@ public class Constants {
     public static final ZoneOffset LOCAL_ZONE_OFFSET = OffsetTime.now().getOffset();
 
     public static final byte b1 = (byte) '-';
-    public static final byte b2 = (byte) ' ';
-    public static final byte b3 = (byte) ':';
+    public static final byte SPACE = (byte) ' ';
+    public static final byte COLON = (byte) ':';
     public static final byte b4 = (byte) '.';
     public static final byte b5 = (byte) '{';
     public static final byte b6 = (byte) '}';
     public static final byte b7 = (byte) '[';
     public static final byte b8 = (byte) ']';
-    public static final byte b9 = (byte) '\n';
+    public static final byte CR = (byte) '\r';
+    public static final byte LF = (byte) '\n';
     public static final byte b10 = (byte) '%';
-    public static final byte b0 = (byte) '\0';
+    public static final byte NUT = (byte) '\0';
+    public static final String DEFAULT_HTTP_VERSION = "HTTP/1.1";
+
     public static final String TMP_LIB = "tenet-lib";
 
     public static final int TRACE = 0;
@@ -201,6 +204,7 @@ public class Constants {
     public static final String WEB_SOCKET = "websocket";
     public static final String UPGRADE = "Upgrade";
     public static final String OK = "200";
+    public static final String OK_STR = "OK";
     public static final String ERR = "500";
     public static final String SUCCESS = "success";
     public static final String FAIL = "fail";
@@ -274,7 +278,12 @@ public class Constants {
     public static final int EPOLL_ERR = 1 << 3;
     public static final int EPOLL_HUP = 1 << 4;
     public static final int EPOLL_RDHUP = 1 << 13;
-    public static final int EPOLL_ONESHOT = 1 << 31;
+
+    /**
+     *   here wepoll and epoll have different values for ONESHOT, pretty weird, don't know why
+     */
+    public static final int WEPOLL_ONESHOT = 1 << 31;
+    public static final int EPOLL_ONESHOT = 1 << 30;
     public static final short EVFILT_READ = -1;
     public static final short EVFILT_WRITE = -2;
 

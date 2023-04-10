@@ -34,10 +34,11 @@ public final class WinNative implements Native {
      */
     private static final MemoryLayout epollEventLayout = MemoryLayout.structLayout(
             ValueLayout.JAVA_INT.withName("events"),
-            MemoryLayout.paddingLayout(32),
+            MemoryLayout.paddingLayout(4 * Constants.BYTE_SIZE),
             epollDataLayout.withName("data")
     );
     private static final long eventSize = epollEventLayout.byteSize();
+    private static final long eventsOffset = epollEventLayout.byteOffset(MemoryLayout.PathElement.groupElement("events"));
     private static final long dataOffset = epollEventLayout.byteOffset(MemoryLayout.PathElement.groupElement("data"));
     private static final long sockOffset = epollDataLayout.byteOffset(MemoryLayout.PathElement.groupElement("sock"));
 
@@ -190,9 +191,9 @@ public final class WinNative implements Native {
         try(Arena arena = Arena.openConfined()) {
             MemorySegment winHandle = mux.winHandle();
             long fd = socket.longValue();
-            MemorySegment ev = arena.allocate(WinNative.epollEventLayout);
-            ev.set(ValueLayout.JAVA_INT, 0L, Constants.EPOLL_IN | Constants.EPOLL_RDHUP);
-            ev.set(ValueLayout.JAVA_LONG, dataOffset, fd);
+            MemorySegment ev = arena.allocate(epollEventLayout);
+            ev.set(ValueLayout.JAVA_INT, eventsOffset, Constants.EPOLL_IN | Constants.EPOLL_RDHUP);
+            ev.set(ValueLayout.JAVA_LONG, dataOffset + sockOffset, fd);
             check(epollCtlAdd(winHandle, fd, ev), "epoll_ctl_add");
         }
     }
@@ -202,9 +203,9 @@ public final class WinNative implements Native {
         try(Arena arena = Arena.openConfined()) {
             MemorySegment winHandle = mux.winHandle();
             long fd = socket.longValue();
-            MemorySegment ev = arena.allocate(WinNative.epollEventLayout);
-            ev.set(ValueLayout.JAVA_INT, 0L, Constants.EPOLL_OUT | Constants.EPOLL_ONESHOT);
-            ev.set(ValueLayout.JAVA_LONG, dataOffset, fd);
+            MemorySegment ev = arena.allocate(epollEventLayout);
+            ev.set(ValueLayout.JAVA_INT, eventsOffset, Constants.EPOLL_OUT | Constants.WEPOLL_ONESHOT);
+            ev.set(ValueLayout.JAVA_LONG, dataOffset + sockOffset, fd);
             check(epollCtlAdd(winHandle, fd, ev), "epoll_ctl_add");
         }
     }
@@ -229,11 +230,10 @@ public final class WinNative implements Native {
                 // epoll wait failed
                 log.error("epoll_wait failed with errno : {}", errno());
             }
-
         }
         for(int i = 0; i < count; i++) {
-            int event = NativeUtil.getInt(events, i * eventSize);
-            long socket = events.get(ValueLayout.JAVA_LONG, i * eventSize + dataOffset + sockOffset);
+            int event = NativeUtil.getInt(events, i * eventSize + eventsOffset);
+            long socket = NativeUtil.getLong(events, i * eventSize + dataOffset + sockOffset);
             if((event & Constants.EPOLL_IN) != 0 && socket == serverSocket) {
                 // accept connection
                 try(Arena arena = Arena.openConfined()) {
@@ -290,15 +290,13 @@ public final class WinNative implements Native {
             }
         }
         for(int i = 0; i < count; i++) {
-            int event = NativeUtil.getInt(events, i * eventSize);
+            int event = NativeUtil.getInt(events, i * eventSize + eventsOffset);
             long socket = NativeUtil.getLong(events, i * eventSize + dataOffset + sockOffset);
             Channel channel = channelMap.get(socket);
-            log.debug("event : {}", event);
             if((event & Constants.EPOLL_IN) != 0 || (event & Constants.EPOLL_RDHUP) != 0 || (event & Constants.EPOLL_ERR) != 0 || (event & Constants.EPOLL_HUP) != 0) {
                 // read event
                 ReadBuffer readBuffer = buffers[i];
                 int readableBytes = recv(socket, readBuffer.segment(), readBuffer.len());
-                log.debug("read : {}", readableBytes);
                 if(readableBytes > 0) {
                     // recv data from remote peer
                     readBuffer.setWriteIndex(readableBytes);
@@ -323,8 +321,7 @@ public final class WinNative implements Native {
         try(Arena arena = Arena.openConfined()) {
             Socket socket = createSocket(net.config(), false);
             MemorySegment addr = arena.allocate(sockAddrLayout);
-            MemorySegment ip = arena.allocateArray(ValueLayout.JAVA_BYTE, addressLen);
-            ip.setUtf8String(0L, loc.ip());
+            MemorySegment ip = NativeUtil.allocateStr(arena, loc.ip(), addressLen);
             int setSockAddr = check(setSockAddr(addr, ip, loc.port()), "set SockAddr");
             if(setSockAddr == 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Network address is not valid");
@@ -339,6 +336,8 @@ public final class WinNative implements Native {
                     NetworkState masterState = net.master().state();
                     masterState.getLongMap().put(socket.longValue(), channel);
                     registerWrite(masterState.getMux(), socket);
+                }else {
+                    throw new FrameworkException(ExceptionType.NETWORK, "Unable to connect, err : %d".formatted(errno));
                 }
             }
         }
