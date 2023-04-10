@@ -12,7 +12,7 @@ import java.lang.foreign.MemorySegment;
 public record Mux (
         MemorySegment winHandle,
         int epfd,
-        int kqFd
+        int kqfd
 ){
     public static Mux win(MemorySegment winHandle) {
         return new Mux(winHandle, -1, -1);
@@ -32,8 +32,8 @@ public record Mux (
             return String.valueOf(winHandle.address());
         }else if(epfd != -1) {
             return String.valueOf(epfd);
-        }else if(kqFd != -1) {
-            return String.valueOf(kqFd);
+        }else if(kqfd != -1) {
+            return String.valueOf(kqfd);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }

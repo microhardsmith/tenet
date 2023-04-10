@@ -5,17 +5,17 @@ import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
+import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.VarHandle;
-import java.util.concurrent.atomic.AtomicBoolean;
 
+@Slf4j
 public class MacNative implements Native {
     /**
      *  corresponding to struct kevent in event.h
      */
-    public static final MemoryLayout keventLayout = MemoryLayout.structLayout(
+    private static final MemoryLayout keventLayout = MemoryLayout.structLayout(
             ValueLayout.JAVA_LONG.withName("ident"),
             ValueLayout.JAVA_SHORT.withName("filter"),
             ValueLayout.JAVA_SHORT.withName("flags"),
@@ -23,54 +23,52 @@ public class MacNative implements Native {
             ValueLayout.JAVA_LONG.withName("data"),
             ValueLayout.ADDRESS.withName("udata")
     );
-    public static final VarHandle identHandle = keventLayout.varHandle(MemoryLayout.PathElement.groupElement("ident"));
-    public static final VarHandle flagsHandle = keventLayout.varHandle(MemoryLayout.PathElement.groupElement("flags"));
-    public static final VarHandle filterHandle = keventLayout.varHandle(MemoryLayout.PathElement.groupElement("filter"));
-    public static final VarHandle dataHandle = keventLayout.varHandle(MemoryLayout.PathElement.groupElement("data"));
 
     /**
      *  corresponding to struct sockaddr_in in in.h
      */
-    public static final MemoryLayout sockAddrLayout = MemoryLayout.structLayout(
+    private static final MemoryLayout sockAddrLayout = MemoryLayout.structLayout(
             ValueLayout.JAVA_BYTE.withName("sin_len"),
             ValueLayout.JAVA_BYTE.withName("sin_family"),
             ValueLayout.JAVA_SHORT.withName("sin_port"),
             ValueLayout.JAVA_INT.withName("sin_addr"),
             MemoryLayout.paddingLayout(8 * Constants.BYTE_SIZE)
     );
-    public static final int sockAddrSize = (int) sockAddrLayout.byteSize();
-    private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
-    private final MethodHandle kqueueMethodHandle;
-    private final MethodHandle keventErrMethodHandle;
-    private final MethodHandle keventEofMethodHandle;
-    private final MethodHandle ewouldblockMethodHandle;
-    private final MethodHandle einprogressMethodHandle;
-    private final MethodHandle keventAddMethodHandle;
-    private final MethodHandle keventWaitMethodHandle;
-    private final MethodHandle addressLenMethodHandle;
-    private final MethodHandle addressMethodHandle;
-    private final MethodHandle portMethodHandle;
-    private final MethodHandle socketCreateMethodHandle;
-    private final MethodHandle acceptMethodHandle;
-    private final MethodHandle setSockAddrMethodHandle;
-    private final MethodHandle setReuseAddrMethodHandle;
-    private final MethodHandle setKeepAliveMethodHandle;
-    private final MethodHandle setTcpNoDelayMethodHandle;
-    private final MethodHandle setNonBlockingMethodHandle;
-    private final MethodHandle bindMethodHandle;
-    private final MethodHandle listenMethodHandle;
-    private final MethodHandle recvMethodHandle;
-    private final MethodHandle closeMethodHandle;
-    private final MethodHandle errnoMethodHandle;
+    private static final int sockAddrSize = (int) sockAddrLayout.byteSize();
+    private static final MethodHandle kqueueMethodHandle;
+    private static final MethodHandle keventErrMethodHandle;
+    private static final MethodHandle keventEofMethodHandle;
+    private static final MethodHandle ewouldblockMethodHandle;
+    private static final MethodHandle einprogressMethodHandle;
+    private static final MethodHandle keventAddMethodHandle;
+    private static final MethodHandle keventWaitMethodHandle;
+    private static final MethodHandle addressLenMethodHandle;
+    private static final MethodHandle addressMethodHandle;
+    private static final MethodHandle portMethodHandle;
+    private static final MethodHandle socketCreateMethodHandle;
+    private static final MethodHandle acceptMethodHandle;
+    private static final MethodHandle setSockAddrMethodHandle;
+    private static final MethodHandle setReuseAddrMethodHandle;
+    private static final MethodHandle setKeepAliveMethodHandle;
+    private static final MethodHandle setTcpNoDelayMethodHandle;
+    private static final MethodHandle setNonBlockingMethodHandle;
+    private static final MethodHandle bindMethodHandle;
+    private static final MethodHandle listenMethodHandle;
+    private static final MethodHandle recvMethodHandle;
+    private static final MethodHandle closeMethodHandle;
+    private static final MethodHandle errnoMethodHandle;
+    private static final int addressLen;
+    private static final int connectBlockCode;
+    private static final int sendBlockCode;
 
     @Override
     public int connectBlockCode() {
-        return 0;
+        return connectBlockCode;
     }
 
     @Override
     public int sendBlockCode() {
-        return 0;
+        return sendBlockCode;
     }
 
     @Override
@@ -135,63 +133,72 @@ public class MacNative implements Native {
 
     @Override
     public void exitMux(Mux mux) {
-        check(close(mux.kqFd()), "close kqueue fd");
+        check(close(mux.kqfd()), "close kqueue fd");
     }
 
     @Override
     public void exit() {
-        // no action
+        // no action, kqueue doesn't need external operations for clean up
     }
 
-    public MacNative() {
-        if(!instanceFlag.compareAndSet(false, true)) {
-            throw new FrameworkException(ExceptionType.NATIVE, "MacNative has been initialized");
-        }
+    static {
         SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.commonLib());
-        this.kqueueMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        kqueueMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_kqueue", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        this.keventErrMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        keventErrMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_kevent_err", FunctionDescriptor.of(ValueLayout.JAVA_SHORT));
-        this.keventEofMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        keventEofMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_kevent_eof", FunctionDescriptor.of(ValueLayout.JAVA_SHORT));
-        this.ewouldblockMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        ewouldblockMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_ewouldblock", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        this.einprogressMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        einprogressMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_einprogress", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        this.keventAddMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        keventAddMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_kevent_add", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_SHORT));
-        this.keventWaitMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        keventWaitMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_kevent_wait", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        this.addressLenMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        addressLenMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_address_len", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        this.addressMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        addressMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_address", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        this.portMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        portMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_port", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        this.socketCreateMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        socketCreateMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_socket_create", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        this.acceptMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        acceptMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_accept", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        this.setSockAddrMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        setSockAddrMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_set_sock_addr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        this.setReuseAddrMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        setReuseAddrMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_set_reuse_addr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
-        this.setKeepAliveMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        setKeepAliveMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_set_keep_alive", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
-        this.setTcpNoDelayMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        setTcpNoDelayMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_set_tcp_no_delay", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
-        this.setNonBlockingMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        setNonBlockingMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_set_nonblocking", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
-        this.bindMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        bindMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_bind", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
-        this.listenMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        listenMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_listen", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
-        this.recvMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        recvMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_recv", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        this.closeMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        closeMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_close", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
-        this.errnoMethodHandle = NativeUtil.methodHandle(symbolLookup,
+        errnoMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_errno", FunctionDescriptor.of(ValueLayout.JAVA_INT));
+        // initialize constants
+        try{
+            addressLen = (int) NativeUtil.methodHandle(symbolLookup,
+                    "m_address_len", FunctionDescriptor.of(ValueLayout.JAVA_INT)).invokeExact();
+            connectBlockCode = (int) NativeUtil.methodHandle(symbolLookup,
+                    "m_connect_block_code", FunctionDescriptor.of(ValueLayout.JAVA_INT)).invokeExact();
+            sendBlockCode = (int) NativeUtil.methodHandle(symbolLookup,
+                    "m_send_block_code", FunctionDescriptor.of(ValueLayout.JAVA_INT)).invokeExact();
+        }catch (Throwable throwable) {
+            // should never happen
+            throw new FrameworkException(ExceptionType.NATIVE, "Failed to initialize constants", throwable);
+        }
     }
 
     /**
