@@ -65,10 +65,10 @@ public class LinuxNative implements Native {
     private static final MethodHandle getErrOptMethodHandle;
     private static final MethodHandle setNonBlockingMethodHandle;
     private static final MethodHandle bindMethodHandle;
+    private static final MethodHandle connectMethodHandle;
     private static final MethodHandle listenMethodHandle;
     private static final MethodHandle recvMethodHandle;
     private static final MethodHandle sendMethodHandle;
-    private static final MethodHandle connectMethodHandle;
     private static final MethodHandle closeMethodHandle;
     private static final MethodHandle errnoMethodHandle;
     private static final int addressLen;
@@ -131,7 +131,6 @@ public class LinuxNative implements Native {
         try(Arena arena = Arena.openConfined()) {
             int epfd = mux.epfd();
             int fd = socket.intValue();
-            log.info("Registering read for epfd : {}, fd : {}", epfd, fd);
             MemorySegment ev = arena.allocate(epollEventLayout);
             NativeUtil.setInt(ev, eventsOffset, Constants.EPOLL_IN | Constants.EPOLL_RDHUP);
             NativeUtil.setInt(ev, dataOffset + fdOffset, fd);
@@ -144,7 +143,6 @@ public class LinuxNative implements Native {
         try(Arena arena = Arena.openConfined()) {
             int epfd = mux.epfd();
             int fd = socket.intValue();
-            log.info("Registering write for epfd : {}, fd : {}", epfd, fd);
             MemorySegment ev = arena.allocate(epollEventLayout);
             NativeUtil.setInt(ev, eventsOffset, Constants.EPOLL_OUT | Constants.EPOLL_ONESHOT);
             NativeUtil.setInt(ev, dataOffset + fdOffset, fd);
@@ -231,29 +229,29 @@ public class LinuxNative implements Native {
             }
         }
         for(int i = 0; i < count; i++) {
-            VarHandle.fullFence();
             int event = NativeUtil.getInt(events, i * eventSize + eventsOffset);
             int socket = NativeUtil.getInt(events, i * eventSize + dataOffset + fdOffset);
-            log.info("event : {}, socket : {}, i : {}, count : {}", event, socket, i, count);
             Channel channel = channelMap.get(socket);
-            if((event & Constants.EPOLL_IN) != 0 || (event & Constants.EPOLL_RDHUP) != 0 || (event & Constants.EPOLL_ERR) != 0 || (event & Constants.EPOLL_HUP) != 0) {
-                // read event
-                ReadBuffer readBuffer = buffers[i];
-                int readableBytes = recv(socket, readBuffer.segment(), readBuffer.len());
-                if(readableBytes > 0) {
-                    // recv data from remote peer
-                    readBuffer.setWriteIndex(readableBytes);
-                    channel.onReadBuffer(readBuffer);
-                }else if(channel != null){
-                    // remove current socket
-                    channel.shutdown();
+            if(channel != null) {
+                if((event & Constants.EPOLL_IN) != 0 || (event & Constants.EPOLL_RDHUP) != 0 || (event & Constants.EPOLL_ERR) != 0 || (event & Constants.EPOLL_HUP) != 0) {
+                    // read event
+                    ReadBuffer readBuffer = buffers[i];
+                    int readableBytes = recv(socket, readBuffer.segment(), readBuffer.len());
+                    if(readableBytes > 0) {
+                        // recv data from remote peer
+                        readBuffer.setWriteIndex(readableBytes);
+                        channel.onReadBuffer(readBuffer);
+                    }else {
+                        // remove current socket
+                        channel.shutdown();
+                    }
+                }else if((event & Constants.EPOLL_OUT) != 0) {
+                    // write event
+                    channel.becomeWritable();
+                }else {
+                    // should never happen
+                    throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
                 }
-            }else if((event & Constants.EPOLL_OUT) != 0) {
-                // write event
-                channel.becomeWritable();
-            }else {
-                // should never happen TODO unfixed why event = 0, socket = 0 or 1??
-                // throw new FrameworkException(ExceptionType.NETWORK, "Unexpected event : %d".formatted(event));
             }
         }
     }
@@ -504,7 +502,7 @@ public class LinuxNative implements Native {
         try{
             return (int) getErrOptMethodHandle.invokeExact(socket);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking setTcpNoDelay()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking getErrOpt()", throwable);
         }
     }
 

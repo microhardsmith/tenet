@@ -286,6 +286,10 @@ public class Constants {
     public static final int EPOLL_ONESHOT = 1 << 30;
     public static final short EVFILT_READ = -1;
     public static final short EVFILT_WRITE = -2;
+    public static final short EV_ADD = 1;
+    public static final short EV_ONESHOT = 1 << 4;
+    public static final int EV_EOF = 1 << 15;
+    public static final int EV_ERROR = 1 << 14;
 
 
 

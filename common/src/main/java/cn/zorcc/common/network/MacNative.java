@@ -4,11 +4,13 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.NativeUtil;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
+import java.util.Map;
 
 @Slf4j
 public class MacNative implements Native {
@@ -23,6 +25,11 @@ public class MacNative implements Native {
             ValueLayout.JAVA_LONG.withName("data"),
             ValueLayout.ADDRESS.withName("udata")
     );
+    private static final long keventSize = keventLayout.byteSize();
+    private static final long identOffset = keventLayout.byteOffset(MemoryLayout.PathElement.groupElement("ident"));
+    private static final long filterOffset = keventLayout.byteOffset(MemoryLayout.PathElement.groupElement("filter"));
+    private static final long flagsOffset = keventLayout.byteOffset(MemoryLayout.PathElement.groupElement("flags"));
+
 
     /**
      *  corresponding to struct sockaddr_in in in.h
@@ -36,13 +43,8 @@ public class MacNative implements Native {
     );
     private static final int sockAddrSize = (int) sockAddrLayout.byteSize();
     private static final MethodHandle kqueueMethodHandle;
-    private static final MethodHandle keventErrMethodHandle;
-    private static final MethodHandle keventEofMethodHandle;
-    private static final MethodHandle ewouldblockMethodHandle;
-    private static final MethodHandle einprogressMethodHandle;
-    private static final MethodHandle keventAddMethodHandle;
+    private static final MethodHandle keventCtlMethodHandle;
     private static final MethodHandle keventWaitMethodHandle;
-    private static final MethodHandle addressLenMethodHandle;
     private static final MethodHandle addressMethodHandle;
     private static final MethodHandle portMethodHandle;
     private static final MethodHandle socketCreateMethodHandle;
@@ -51,10 +53,13 @@ public class MacNative implements Native {
     private static final MethodHandle setReuseAddrMethodHandle;
     private static final MethodHandle setKeepAliveMethodHandle;
     private static final MethodHandle setTcpNoDelayMethodHandle;
+    private static final MethodHandle getErrOptMethodHandle;
     private static final MethodHandle setNonBlockingMethodHandle;
     private static final MethodHandle bindMethodHandle;
+    private static final MethodHandle connectMethodHandle;
     private static final MethodHandle listenMethodHandle;
     private static final MethodHandle recvMethodHandle;
+    private static final MethodHandle sendMethodHandle;
     private static final MethodHandle closeMethodHandle;
     private static final MethodHandle errnoMethodHandle;
     private static final int addressLen;
@@ -73,52 +78,194 @@ public class MacNative implements Native {
 
     @Override
     public Mux createMux() {
-        return null;
+        int kqfd = check(kqueue(), "kqueue create");
+        return Mux.mac(kqfd);
     }
 
     @Override
     public MemorySegment createEventsArray(NetworkConfig config) {
-        return null;
+        MemoryLayout eventsArrayLayout = MemoryLayout.sequenceLayout(config.getMaxEvents(), keventLayout);
+        return MemorySegment.allocateNative(eventsArrayLayout, SegmentScope.global());
     }
 
     @Override
     public Socket createSocket(NetworkConfig config, boolean isServer) {
-        return null;
+        int socketFd = check(socketCreate(), "create socket");
+        Socket socket = new Socket(socketFd);
+        // if it's a client socket, this is no need to set the SO_REUSE_ADDR opt
+        if(isServer) {
+            check(setReuseAddr(socketFd, config.getReuseAddr() ? 1 : 0), "set SO_REUSE_ADDR");
+        }
+        check(setKeepAlive(socketFd, config.getKeepAlive() ? 1 : 0), "set SO_KEEPALIVE");
+        check(setTcpNoDelay(socketFd, config.getTcpNoDelay() ? 1 : 0), "set TCP_NODELAY");
+        // socket must be non_blocking
+        check(setNonBlocking(socketFd), "set NON_BLOCKING");
+        return socket;
     }
 
     @Override
     public void bindAndListen(NetworkConfig config, Socket socket) {
-
+        try(Arena arena = Arena.openConfined()) {
+            MemorySegment addr = arena.allocate(sockAddrLayout);
+            MemorySegment ip = NativeUtil.allocateStr(arena, config.getIp(), addressLen);
+            int setSockAddr = check(setSockAddr(addr, ip, config.getPort()), "set SockAddr");
+            if(setSockAddr == 0) {
+                throw new FrameworkException(ExceptionType.NETWORK, "Network address is not valid");
+            }
+            check(bind(socket.intValue(), addr, sockAddrSize), "bind");
+            check(listen(socket.intValue(), config.getBacklog()), "listen");
+        }
     }
 
     @Override
     public void registerRead(Mux mux, Socket socket) {
-
+        int kqfd = mux.kqfd();
+        int fd = socket.intValue();
+        check(keventCtl(kqfd, fd, Constants.EVFILT_READ, Constants.EV_ADD), "kevent register read");
     }
 
     @Override
     public void registerWrite(Mux mux, Socket socket) {
-
+        int kqfd = mux.kqfd();
+        int fd = socket.intValue();
+        check(keventCtl(kqfd, fd, Constants.EVFILT_WRITE, (short) (Constants.EV_ADD | Constants.EV_ONESHOT)), "kevent register write");
     }
 
     @Override
     public void unregister(Mux mux, Socket socket) {
-
+        // when socket is closed, the events will be automatically deleted from the mux
     }
 
     @Override
     public void waitForAccept(Net net, NetworkState state) {
-
+        MemorySegment events = state.events();
+        int serverSocket = state.socket().intValue();
+        int count = keventWait(state.mux().kqfd(), events, net.config().getMaxEvents());
+        if(count == -1) {
+            if(Thread.currentThread().isInterrupted()) {
+                // already shutdown
+                return ;
+            }else {
+                // kqueue wait failed
+                log.error("kevent failed with errno : {}", errno());
+            }
+        }
+        for(int i = 0; i < count; i++) {
+            int ident = (int) NativeUtil.getLong(events, i * keventSize + identOffset);
+            short filter = NativeUtil.getShort(events, i * keventSize + filterOffset);
+            if((filter & Constants.EVFILT_READ) != 0 && ident == serverSocket) {
+                // accept connection
+                try(Arena arena = Arena.openConfined()) {
+                    MemorySegment clientAddr = arena.allocate(sockAddrLayout);
+                    MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, addressLen);
+                    int clientFd = accept(serverSocket, clientAddr, sockAddrSize);
+                    if(clientFd == -1) {
+                        log.error("Failed to accept client socket, errno : {}", errno());
+                    }
+                    Socket clientSocket = new Socket(clientFd);
+                    if (setNonBlocking(clientFd) == -1) {
+                        log.error("Failed to set client socket as non_blocking, errno : {}", errno());
+                        closeSocket(clientSocket);
+                    }
+                    if(address(clientAddr, address, addressLen) == -1) {
+                        log.error("Failed to get client socket's remote address, errno : {}", errno());
+                        closeSocket(clientSocket);
+                    }
+                    Loc loc = new Loc(NativeUtil.getStr(address), port(clientAddr));
+                    Worker worker = net.nextWorker();
+                    Channel channel = Channel.forServer(net, clientSocket, loc, worker);
+                    channel.init();
+                }
+            }else if((filter & Constants.EVFILT_WRITE) != 0) {
+                // some client connections has been established, validate if there is a socket err
+                int errOpt = getErrOpt(ident);
+                if (errOpt == 0) {
+                    Channel channel = state.intMap().get(ident);
+                    channel.init();
+                }else {
+                    log.error("Establishing connection failed with socket err : {}", errOpt);
+                    state.intMap().remove(ident);
+                }
+            }else {
+                // should never happen
+                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+            }
+        }
     }
 
     @Override
     public void waitForData(ReadBuffer[] buffers, NetworkState state) {
-
+        MemorySegment events = state.events();
+        Map<Integer, Channel> channelMap = state.intMap();
+        int count = keventWait(state.mux().kqfd(), events, buffers.length);
+        if(count == -1) {
+            if(Thread.currentThread().isInterrupted()) {
+                // already shutdown
+                return ;
+            }else {
+                // kqueue wait failed
+                log.error("kevent failed with errno : {}", errno());
+            }
+        }
+        for(int i = 0; i < count; i++) {
+            long baseOffset = i * keventSize;
+            int ident = (int) NativeUtil.getLong(events, baseOffset + identOffset);
+            short filter = NativeUtil.getShort(events, baseOffset + filterOffset);
+            short flags = NativeUtil.getShort(events, baseOffset + flagsOffset);
+            Channel channel = channelMap.get(ident);
+            if(channel != null) {
+                if((flags & Constants.EV_EOF) != 0) {
+                    // remote current socket
+                    channel.shutdown();
+                }else if((filter & Constants.EVFILT_READ) != 0) {
+                    // read event
+                    ReadBuffer readBuffer = buffers[i];
+                    int readableBytes = recv(ident, readBuffer.segment(), readBuffer.len());
+                    if(readableBytes > 0) {
+                        // recv data from remote peer
+                        readBuffer.setWriteIndex(readableBytes);
+                        channel.onReadBuffer(readBuffer);
+                    }else {
+                        // shouldn't happen in kqueue implementation, we already checked whether channel was closed
+                        throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+                    }
+                }else if((filter & Constants.EVFILT_WRITE) != 0) {
+                    // write event
+                    channel.becomeWritable();
+                }else {
+                    // should never happen
+                    throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+                }
+            }
+        }
     }
 
     @Override
     public void connect(Net net, Remote remote, Codec codec) {
-
+        Loc loc = remote.loc();
+        try(Arena arena = Arena.openConfined()) {
+            Socket socket = createSocket(net.config(), false);
+            MemorySegment addr = arena.allocate(sockAddrLayout);
+            MemorySegment ip = NativeUtil.allocateStr(arena, loc.ip(), addressLen);
+            int setSockAddr = check(setSockAddr(addr, ip, loc.port()), "set SockAddr");
+            if(setSockAddr == 0) {
+                throw new FrameworkException(ExceptionType.NETWORK, "Network address is not valid");
+            }
+            int connect = connect(socket.intValue(), addr, addressLen);
+            Channel channel = Channel.forClient(net, socket, codec, remote, net.nextWorker());
+            if(connect == -1) {
+                // we need to check if the connection is currently establishing
+                int errno = errno();
+                if(errno == connectBlockCode) {
+                    // add it to current master's interest list
+                    NetworkState masterState = net.master().state();
+                    masterState.intMap().put(socket.intValue(), channel);
+                    registerWrite(masterState.mux(), socket);
+                }else {
+                    throw new FrameworkException(ExceptionType.NETWORK, "Unable to connect, err : %d".formatted(errno));
+                }
+            }
+        }
     }
 
     @Override
@@ -128,7 +275,7 @@ public class MacNative implements Native {
 
     @Override
     public int send(Socket socket, MemorySegment data, int len) {
-        return 0;
+        return send(socket.intValue(), data, len);
     }
 
     @Override
@@ -145,20 +292,10 @@ public class MacNative implements Native {
         SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.commonLib());
         kqueueMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_kqueue", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        keventErrMethodHandle = NativeUtil.methodHandle(symbolLookup,
-                "m_kevent_err", FunctionDescriptor.of(ValueLayout.JAVA_SHORT));
-        keventEofMethodHandle = NativeUtil.methodHandle(symbolLookup,
-                "m_kevent_eof", FunctionDescriptor.of(ValueLayout.JAVA_SHORT));
-        ewouldblockMethodHandle = NativeUtil.methodHandle(symbolLookup,
-                "m_ewouldblock", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        einprogressMethodHandle = NativeUtil.methodHandle(symbolLookup,
-                "m_einprogress", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        keventAddMethodHandle = NativeUtil.methodHandle(symbolLookup,
-                "m_kevent_add", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_SHORT));
+        keventCtlMethodHandle = NativeUtil.methodHandle(symbolLookup,
+                "m_kevent_ctl", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_SHORT, ValueLayout.JAVA_SHORT));
         keventWaitMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_kevent_wait", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        addressLenMethodHandle = NativeUtil.methodHandle(symbolLookup,
-                "m_address_len", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         addressMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_address", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         portMethodHandle = NativeUtil.methodHandle(symbolLookup,
@@ -175,14 +312,20 @@ public class MacNative implements Native {
                 "m_set_keep_alive", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         setTcpNoDelayMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_set_tcp_no_delay", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
+        getErrOptMethodHandle = NativeUtil.methodHandle(symbolLookup,
+                "m_get_err_opt", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         setNonBlockingMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_set_nonblocking", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         bindMethodHandle = NativeUtil.methodHandle(symbolLookup,
-                "m_bind", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
+                "m_bind", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        connectMethodHandle = NativeUtil.methodHandle(symbolLookup,
+                "m_connect", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         listenMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_listen", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         recvMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_recv", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        sendMethodHandle = NativeUtil.methodHandle(symbolLookup,
+                "m_send", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         closeMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_close", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         errnoMethodHandle = NativeUtil.methodHandle(symbolLookup,
@@ -213,57 +356,11 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `u_int16_t m_kevent_err()`
+     *  corresponding to `int m_kevent_ctl(int kq, int fd, int16_t filter, uint16_t flags)`
      */
-    public short keventErr() {
+    public int keventCtl(int kq, int fd, short filter, short flags) {
         try{
-            return (short) keventErrMethodHandle.invokeExact();
-        }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking keventErr()", throwable);
-        }
-    }
-
-    /**
-     *  corresponding to `u_int16_t m_kevent_eof()`
-     */
-    public short keventEof() {
-        try{
-            return (short) keventEofMethodHandle.invokeExact();
-        }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking keventEof()", throwable);
-        }
-    }
-
-
-
-    /**
-     *  corresponding to `u_int16_t m_kevent_err()`
-     */
-    public int ewouldblock() {
-        try{
-            return (int) ewouldblockMethodHandle.invokeExact();
-        }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking ewouldblock()", throwable);
-        }
-    }
-
-    /**
-     *  corresponding to `u_int16_t m_kevent_err()`
-     */
-    public int einprogress() {
-        try{
-            return (int) einprogressMethodHandle.invokeExact();
-        }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking einprogress()", throwable);
-        }
-    }
-
-    /**
-     *  corresponding to `int m_kevent_add(int kq, struct kevent* changelist, int fd, uint16_t flag)`
-     */
-    public int keventAdd(int kq, MemorySegment changelist, int fd, short flag) {
-        try{
-            return (int) keventAddMethodHandle.invokeExact(kq, changelist, fd, flag);
+            return (int) keventCtlMethodHandle.invokeExact(kq, fd, filter, flags);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking keventAdd()", throwable);
         }
@@ -277,17 +374,6 @@ public class MacNative implements Native {
             return (int) keventWaitMethodHandle.invokeExact(kq, eventlist, nevents);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking keventWait()", throwable);
-        }
-    }
-
-    /**
-     *  corresponding to `socklen_t m_address_len()`
-     */
-    public int addressLen() {
-        try{
-            return (int) addressLenMethodHandle.invokeExact();
-        }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking addressLen()", throwable);
         }
     }
 
@@ -380,6 +466,17 @@ public class MacNative implements Native {
     }
 
     /**
+     *  corresponding to `int m_get_err_opt(int socket)`
+     */
+    public int getErrOpt(int socket) {
+        try{
+            return (int) getErrOptMethodHandle.invokeExact(socket);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking getErrOpt()", throwable);
+        }
+    }
+
+    /**
      *  corresponding to `int m_set_nonblocking(int socket)`
      */
     public int setNonBlocking(int socket) {
@@ -391,13 +488,24 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_bind(struct sockaddr_in* sockAddr, int socket, socklen_t size)`
+     *  corresponding to `int m_bind(int socket, struct sockaddr_in* sockAddr, socklen_t size)`
      */
-    public int bind(MemorySegment sockAddr, int socket, int size) {
+    public int bind(int socket, MemorySegment sockAddr, int size) {
         try{
-            return (int) bindMethodHandle.invokeExact(sockAddr, socket, size);
+            return (int) bindMethodHandle.invokeExact(socket, sockAddr, size);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking bind()", throwable);
+        }
+    }
+
+    /**
+     *  corresponding to `int m_connect(int socket, struct sockaddr_in* sockAddr, socklen_t size)`
+     */
+    public int connect(int socket, MemorySegment sockAddr, int size) {
+        try{
+            return (int) connectMethodHandle.invokeExact(sockAddr, socket, size);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking connect()", throwable);
         }
     }
 
@@ -413,11 +521,22 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `ssize_t m_recv(int socket, void* buf, socklen_t len)`
+     *  corresponding to `ssize_t m_recv(int socket, void* buf, size_t len)`
      */
     public int recv(int socket, MemorySegment buf, int len) {
         try{
             return (int) recvMethodHandle.invokeExact(socket, buf, len);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking recv()", throwable);
+        }
+    }
+
+    /**
+     *  corresponding to `ssize_t m_send(int socket, void* buf, size_t len)`
+     */
+    public int send(int socket, MemorySegment buf, int len) {
+        try{
+            return (int) sendMethodHandle.invokeExact(socket, buf, len);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking recv()", throwable);
         }

@@ -16,7 +16,7 @@ public class NetworkConfig {
     /**
      *  worker线程数量，默认为4
      */
-    private Integer workerCount = 1;
+    private Integer workerCount = 4;
     /**
      *  是否可复用端口,默认为true
      */
