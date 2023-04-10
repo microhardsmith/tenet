@@ -25,7 +25,9 @@ public interface Native {
     /**
      *   prepare multiplexing resources (wepoll, epoll or kqueue)
      */
-    void createMux(NetworkConfig config, NetworkState state);
+    Mux createMux();
+
+    MemorySegment createEventsArray(NetworkConfig config);
 
     /**
      *   create socket, could be server socket or client socket
@@ -35,7 +37,7 @@ public interface Native {
     /**
      *   bind and listen target port
      */
-    void bindAndListen(NetworkConfig config, NetworkState state);
+    void bindAndListen(NetworkConfig config, Socket socket);
 
     /**
      *   register read event

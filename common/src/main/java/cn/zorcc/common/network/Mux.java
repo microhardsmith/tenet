@@ -1,5 +1,9 @@
 package cn.zorcc.common.network;
 
+import cn.zorcc.common.Constants;
+import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.exception.FrameworkException;
+
 import java.lang.foreign.MemorySegment;
 
 /**
@@ -20,5 +24,18 @@ public record Mux (
 
     public static Mux mac(int kq) {
         return new Mux(null, -1, kq);
+    }
+
+    @Override
+    public String toString() {
+        if(winHandle != null) {
+            return String.valueOf(winHandle.address());
+        }else if(epfd != -1) {
+            return String.valueOf(epfd);
+        }else if(kqFd != -1) {
+            return String.valueOf(kqFd);
+        }else {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        }
     }
 }

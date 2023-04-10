@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
+import java.lang.invoke.VarHandle;
 import java.util.Map;
 
 /**
@@ -28,10 +29,11 @@ public class LinuxNative implements Native {
     );
     /**
      *  corresponding to struct epoll_event in epoll.h
+     *  Note that epoll_event struct is defined as __attribute__ ((__packed__))
+     *  so there is no need for a padding layout
      */
     private static final MemoryLayout epollEventLayout = MemoryLayout.structLayout(
             ValueLayout.JAVA_INT.withName("events"),
-            MemoryLayout.paddingLayout(4 * Constants.BYTE_SIZE),
             epollDataLayout.withName("data")
     );
     private static final long eventSize = epollEventLayout.byteSize();
@@ -84,11 +86,15 @@ public class LinuxNative implements Native {
     }
 
     @Override
-    public void createMux(NetworkConfig config, NetworkState state) {
+    public Mux createMux() {
         int epfd = check(epollCreate(), "epoll create");
-        state.setMux(Mux.linux(epfd));
-        SequenceLayout eventsArrayLayout = MemoryLayout.sequenceLayout(config.getMaxEvents(), epollEventLayout);
-        state.setEvents(MemorySegment.allocateNative(eventsArrayLayout, SegmentScope.global()));
+        return Mux.linux(epfd);
+    }
+
+    @Override
+    public MemorySegment createEventsArray(NetworkConfig config) {
+        MemoryLayout eventsArrayLayout = MemoryLayout.sequenceLayout(config.getMaxEvents(), epollEventLayout);
+        return MemorySegment.allocateNative(eventsArrayLayout, SegmentScope.global());
     }
 
     @Override
@@ -107,17 +113,16 @@ public class LinuxNative implements Native {
     }
 
     @Override
-    public void bindAndListen(NetworkConfig config, NetworkState state) {
+    public void bindAndListen(NetworkConfig config, Socket socket) {
         try(Arena arena = Arena.openConfined()) {
             MemorySegment addr = arena.allocate(sockAddrLayout);
-            MemorySegment ip = arena.allocateArray(ValueLayout.JAVA_BYTE, addressLen);
-            ip.setUtf8String(0L, config.getIp());
+            MemorySegment ip = NativeUtil.allocateStr(arena, config.getIp(), addressLen);
             int setSockAddr = check(setSockAddr(addr, ip, config.getPort()), "set SockAddr");
             if(setSockAddr == 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Network address is not valid");
             }
-            check(bind(state.getSocket().intValue(), addr, sockAddrSize), "bind");
-            check(listen(state.getSocket().intValue(), config.getBacklog()), "listen");
+            check(bind(socket.intValue(), addr, sockAddrSize), "bind");
+            check(listen(socket.intValue(), config.getBacklog()), "listen");
         }
     }
 
@@ -128,9 +133,9 @@ public class LinuxNative implements Native {
             int fd = socket.intValue();
             log.info("Registering read for epfd : {}, fd : {}", epfd, fd);
             MemorySegment ev = arena.allocate(epollEventLayout);
-            ev.set(ValueLayout.JAVA_INT, eventsOffset, Constants.EPOLL_IN | Constants.EPOLL_RDHUP);
-            ev.set(ValueLayout.JAVA_INT, dataOffset + fdOffset, fd);
-            check(epollCtlAdd(epfd, fd, ev), "epoll_ctl_add");
+            NativeUtil.setInt(ev, eventsOffset, Constants.EPOLL_IN | Constants.EPOLL_RDHUP);
+            NativeUtil.setInt(ev, dataOffset + fdOffset, fd);
+            check(epollCtlAdd(epfd, fd, ev), "epoll_ctl_add read");
         }
     }
 
@@ -141,9 +146,9 @@ public class LinuxNative implements Native {
             int fd = socket.intValue();
             log.info("Registering write for epfd : {}, fd : {}", epfd, fd);
             MemorySegment ev = arena.allocate(epollEventLayout);
-            ev.set(ValueLayout.JAVA_INT, eventsOffset, Constants.EPOLL_OUT | Constants.EPOLL_ONESHOT);
-            ev.set(ValueLayout.JAVA_INT, dataOffset + fdOffset, fd);
-            check(epollCtlAdd(epfd, fd, ev), "epoll_ctl_add");
+            NativeUtil.setInt(ev, eventsOffset, Constants.EPOLL_OUT | Constants.EPOLL_ONESHOT);
+            NativeUtil.setInt(ev, dataOffset + fdOffset, fd);
+            check(epollCtlAdd(epfd, fd, ev), "epoll_ctl_add write");
         }
     }
 
@@ -156,9 +161,9 @@ public class LinuxNative implements Native {
 
     @Override
     public void waitForAccept(Net net, NetworkState state) {
-        MemorySegment events = state.getEvents();
-        int serverSocket = state.getSocket().intValue();
-        int count = epollWait(state.getMux().epfd(), events, net.config().getMaxEvents(), -1);
+        MemorySegment events = state.events();
+        int serverSocket = state.socket().intValue();
+        int count = epollWait(state.mux().epfd(), events, net.config().getMaxEvents(), -1);
         if(count == -1) {
             if(Thread.currentThread().isInterrupted()) {
                 // already shutdown
@@ -189,7 +194,7 @@ public class LinuxNative implements Native {
                         log.error("Failed to get client socket's remote address, errno : {}", errno());
                         closeSocket(clientSocket);
                     }
-                    Loc loc = new Loc(address.getUtf8String(0L), port(clientAddr));
+                    Loc loc = new Loc(NativeUtil.getStr(address), port(clientAddr));
                     Worker worker = net.nextWorker();
                     Channel channel = Channel.forServer(net, clientSocket, loc, worker);
                     channel.init();
@@ -198,11 +203,11 @@ public class LinuxNative implements Native {
                 // some client connections has been established, validate if there is a socket err
                 int errOpt = getErrOpt(socket);
                 if (errOpt == 0) {
-                    Channel channel = state.getIntMap().get(socket);
+                    Channel channel = state.intMap().get(socket);
                     channel.init();
                 }else {
                     log.error("Establishing connection failed with socket err : {}", errOpt);
-                    state.getIntMap().remove(socket);
+                    state.intMap().remove(socket);
                 }
             }else {
                 // should never happen
@@ -213,9 +218,9 @@ public class LinuxNative implements Native {
 
     @Override
     public void waitForData(ReadBuffer[] buffers, NetworkState state) {
-        MemorySegment events = state.getEvents();
-        Map<Integer, Channel> channelMap = state.getIntMap();
-        int count = epollWait(state.getMux().epfd(), events, buffers.length, -1);
+        MemorySegment events = state.events();
+        Map<Integer, Channel> channelMap = state.intMap();
+        int count = epollWait(state.mux().epfd(), events, buffers.length, -1);
         if(count == -1) {
             if(Thread.currentThread().isInterrupted()) {
                 // already shutdown
@@ -226,8 +231,10 @@ public class LinuxNative implements Native {
             }
         }
         for(int i = 0; i < count; i++) {
+            VarHandle.fullFence();
             int event = NativeUtil.getInt(events, i * eventSize + eventsOffset);
             int socket = NativeUtil.getInt(events, i * eventSize + dataOffset + fdOffset);
+            log.info("event : {}, socket : {}, i : {}, count : {}", event, socket, i, count);
             Channel channel = channelMap.get(socket);
             if((event & Constants.EPOLL_IN) != 0 || (event & Constants.EPOLL_RDHUP) != 0 || (event & Constants.EPOLL_ERR) != 0 || (event & Constants.EPOLL_HUP) != 0) {
                 // read event
@@ -247,7 +254,6 @@ public class LinuxNative implements Native {
             }else {
                 // should never happen TODO unfixed why event = 0, socket = 0 or 1??
                 // throw new FrameworkException(ExceptionType.NETWORK, "Unexpected event : %d".formatted(event));
-                log.info("event : {}, socket : {}, i : {}, count : {}", event, socket, i, count);
             }
         }
     }
@@ -271,8 +277,8 @@ public class LinuxNative implements Native {
                 if(errno == connectBlockCode) {
                     // add it to current master's interest list
                     NetworkState masterState = net.master().state();
-                    masterState.getLongMap().put(socket.longValue(), channel);
-                    registerWrite(masterState.getMux(), socket);
+                    masterState.intMap().put(socket.intValue(), channel);
+                    registerWrite(masterState.mux(), socket);
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, "Unable to connect, err : %d".formatted(errno));
                 }

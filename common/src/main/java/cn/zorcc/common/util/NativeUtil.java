@@ -223,4 +223,21 @@ public final class NativeUtil {
         setByte(memorySegment, bytes.length, Constants.NUT);
         return memorySegment;
     }
+
+    /**
+     *   获取C风格的字符串
+     */
+    public static String getStr(MemorySegment memorySegment) {
+        int size = (int) memorySegment.byteSize();
+        byte[] bytes = new byte[size];
+        for(int i = 0; i < size; i++) {
+            byte b = getByte(memorySegment, i);
+            if(b == Constants.NUT) {
+                return new String(bytes, 0, i);
+            }else {
+                bytes[i] = b;
+            }
+        }
+        throw new FrameworkException(ExceptionType.NATIVE, "Not a valid C style string");
+    }
 }

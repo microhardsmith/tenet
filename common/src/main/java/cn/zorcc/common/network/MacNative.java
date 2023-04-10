@@ -74,8 +74,13 @@ public class MacNative implements Native {
     }
 
     @Override
-    public void createMux(NetworkConfig config, NetworkState state) {
+    public Mux createMux() {
+        return null;
+    }
 
+    @Override
+    public MemorySegment createEventsArray(NetworkConfig config) {
+        return null;
     }
 
     @Override
@@ -84,7 +89,7 @@ public class MacNative implements Native {
     }
 
     @Override
-    public void bindAndListen(NetworkConfig config, NetworkState state) {
+    public void bindAndListen(NetworkConfig config, Socket socket) {
 
     }
 

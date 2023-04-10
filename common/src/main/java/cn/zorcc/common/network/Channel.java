@@ -94,26 +94,28 @@ public final class Channel implements LifeCycle {
 
     /**
      *   Channel initialization, now channel could read and write
+     *   should only be accessed in Master's thread
      */
     @Override
     public void init() {
+        assert Master.inMasterThread();
         if(available.compareAndSet(false, true)) {
             // start writer thread
             thread.start();
             // register current channel to worker's map
             NetworkState workerState = worker.state();
             if(NativeUtil.isWindows()) {
-                Map<Long, Channel> longMap = workerState.getLongMap();
+                Map<Long, Channel> longMap = workerState.longMap();
                 longMap.put(socket.longValue(), this);
             }else {
-                Map<Integer, Channel> intMap = workerState.getIntMap();
+                Map<Integer, Channel> intMap = workerState.intMap();
                 intMap.put(socket.intValue(), this);
             }
             // register multiplexing events
-            n.registerRead(workerState.getMux(), socket);
+            n.registerRead(workerState.mux(), socket);
             // invoke handler's function
             handler.onConnected(this);
-            //
+            // add current channel to remote
             if(remote != null) {
                 remote.add(this);
             }
@@ -148,7 +150,7 @@ public final class Channel implements LifeCycle {
                 // current TCP write buffer is full, wait until writable again
                 writable = false;
                 NetworkState workerState = worker.state();
-                n.registerWrite(workerState.getMux(), socket);
+                n.registerWrite(workerState.mux(), socket);
                 LockSupport.park();
                 doWrite(writeBuffer);
             }else {
@@ -247,10 +249,10 @@ public final class Channel implements LifeCycle {
     public void shutdown() {
         if(available.compareAndSet(true, false)) {
             NetworkState workerState = worker.state();
-            Channel channel = NativeUtil.isWindows() ? workerState.getLongMap().remove(socket.longValue()) : workerState.getIntMap().remove(socket.intValue());
+            Channel channel = NativeUtil.isWindows() ? workerState.longMap().remove(socket.longValue()) : workerState.intMap().remove(socket.intValue());
             // current Channel might be closed by other threads
             if(channel != null) {
-                n.unregister(workerState.getMux(), socket);
+                n.unregister(workerState.mux(), socket);
                 thread.interrupt();
                 n.closeSocket(socket);
                 handler.onClose(this);

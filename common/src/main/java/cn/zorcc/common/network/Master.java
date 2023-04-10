@@ -22,13 +22,25 @@ public class Master implements LifeCycle {
 
     public Master(Net net) {
         this.config = net.config();
-        this.state = new NetworkState();
+        this.state = NetworkState.forMaster(config);
         this.thread = ThreadUtil.platform("Master", () -> {
-            final Thread currentThread = Thread.currentThread();
-            while (!currentThread.isInterrupted()) {
-                n.waitForAccept(net, state);
+            log.debug("Initializing network master, mux : {}, socket : {}", state.mux(), state.socket());
+            Thread currentThread = Thread.currentThread();
+            try{
+                n.bindAndListen(config, state.socket());
+                n.registerRead(state.mux(), state.socket());
+                while (!currentThread.isInterrupted()) {
+                    n.waitForAccept(net, state);
+                }
+            } finally {
+                log.debug("Exiting network master");
+                n.exitMux(state.mux());
             }
         });
+    }
+
+    public static boolean inMasterThread() {
+        return Thread.currentThread().getName().equals("Master");
     }
 
     public NetworkState state() {
@@ -38,12 +50,6 @@ public class Master implements LifeCycle {
     @Override
     public void init() {
         if(running.compareAndSet(false, true)) {
-            log.debug("Initializing network dispatcher");
-            n.createMux(config, state);
-            Socket serverSocket = n.createSocket(config, true);
-            state.setSocket(serverSocket);
-            n.bindAndListen(config, state);
-            n.registerRead(state.getMux(), state.getSocket());
             thread.start();
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -53,10 +59,7 @@ public class Master implements LifeCycle {
     @Override
     public void shutdown() {
         if(running.compareAndSet(true, false)) {
-            log.debug("Shutting down network dispatcher");
             thread.interrupt();
-            // close mux fd
-            n.exitMux(state.getMux());
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }

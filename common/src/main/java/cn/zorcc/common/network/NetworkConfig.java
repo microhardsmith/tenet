@@ -16,7 +16,7 @@ public class NetworkConfig {
     /**
      *  worker线程数量，默认为4
      */
-    private Integer workerCount = 4;
+    private Integer workerCount = 1;
     /**
      *  是否可复用端口,默认为true
      */
@@ -40,11 +40,11 @@ public class NetworkConfig {
     /**
      *  等待接受全连接socket队列长度
      */
-    private Integer backlog = 128;
+    private Integer backlog = 64;
     /**
      *  单次epoll获取事件数组长度
      */
-    private Integer maxEvents = 256;
+    private Integer maxEvents = 64;
     /**
      *  单次分配读内存块大小,每次轮询到事件后都会读取至多该值的内存数据
      */

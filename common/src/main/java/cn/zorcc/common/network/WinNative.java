@@ -146,14 +146,18 @@ public final class WinNative implements Native {
     }
 
     @Override
-    public void createMux(NetworkConfig config, NetworkState state) {
+    public Mux createMux() {
         MemorySegment winHandle = epollCreate();
         if(NativeUtil.checkNullPointer(winHandle)) {
             throw new FrameworkException(ExceptionType.NETWORK, "Failed to create wepoll with NULL pointer exception");
         }
-        state.setMux(Mux.win(winHandle));
+        return Mux.win(winHandle);
+    }
+
+    @Override
+    public MemorySegment createEventsArray(NetworkConfig config) {
         MemoryLayout eventsArrayLayout = MemoryLayout.sequenceLayout(config.getMaxEvents(), epollEventLayout);
-        state.setEvents(MemorySegment.allocateNative(eventsArrayLayout, SegmentScope.global()));
+        return MemorySegment.allocateNative(eventsArrayLayout, SegmentScope.global());
     }
 
     @Override
@@ -172,17 +176,16 @@ public final class WinNative implements Native {
     }
 
     @Override
-    public void bindAndListen(NetworkConfig config, NetworkState state) {
+    public void bindAndListen(NetworkConfig config, Socket socket) {
         try(Arena arena = Arena.openConfined()) {
             MemorySegment addr = arena.allocate(sockAddrLayout);
-            MemorySegment ip = arena.allocateArray(ValueLayout.JAVA_BYTE, addressLen);
-            ip.setUtf8String(0L, config.getIp());
+            MemorySegment ip = NativeUtil.allocateStr(arena, config.getIp(), addressLen);
             int setSockAddr = check(setSockAddr(addr, ip, config.getPort()), "set SockAddr");
             if(setSockAddr == 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Network address is not valid");
             }
-            check(bind(state.getSocket().longValue(), addr, sockAddrSize), "bind");
-            check(listen(state.getSocket().longValue(), config.getBacklog()), "listen");
+            check(bind(socket.longValue(), addr, sockAddrSize), "bind");
+            check(listen(socket.longValue(), config.getBacklog()), "listen");
         }
     }
 
@@ -192,9 +195,9 @@ public final class WinNative implements Native {
             MemorySegment winHandle = mux.winHandle();
             long fd = socket.longValue();
             MemorySegment ev = arena.allocate(epollEventLayout);
-            ev.set(ValueLayout.JAVA_INT, eventsOffset, Constants.EPOLL_IN | Constants.EPOLL_RDHUP);
-            ev.set(ValueLayout.JAVA_LONG, dataOffset + sockOffset, fd);
-            check(epollCtlAdd(winHandle, fd, ev), "epoll_ctl_add");
+            NativeUtil.setInt(ev, eventsOffset, Constants.EPOLL_IN | Constants.EPOLL_RDHUP);
+            NativeUtil.setLong(ev, dataOffset + sockOffset, fd);
+            check(epollCtlAdd(winHandle, fd, ev), "epoll_ctl_add read");
         }
     }
 
@@ -204,9 +207,9 @@ public final class WinNative implements Native {
             MemorySegment winHandle = mux.winHandle();
             long fd = socket.longValue();
             MemorySegment ev = arena.allocate(epollEventLayout);
-            ev.set(ValueLayout.JAVA_INT, eventsOffset, Constants.EPOLL_OUT | Constants.WEPOLL_ONESHOT);
-            ev.set(ValueLayout.JAVA_LONG, dataOffset + sockOffset, fd);
-            check(epollCtlAdd(winHandle, fd, ev), "epoll_ctl_add");
+            NativeUtil.setInt(ev, eventsOffset, Constants.EPOLL_OUT | Constants.WEPOLL_ONESHOT);
+            NativeUtil.setLong(ev, dataOffset + sockOffset, fd);
+            check(epollCtlAdd(winHandle, fd, ev), "epoll_ctl_add write");
         }
     }
 
@@ -219,9 +222,9 @@ public final class WinNative implements Native {
 
     @Override
     public void waitForAccept(Net net, NetworkState state) {
-        MemorySegment events = state.getEvents();
-        long serverSocket = state.getSocket().longValue();
-        int count = epollWait(state.getMux().winHandle(), events, net.config().getMaxEvents(), -1);
+        MemorySegment events = state.events();
+        long serverSocket = state.socket().longValue();
+        int count = epollWait(state.mux().winHandle(), events, net.config().getMaxEvents(), -1);
         if(count == -1) {
             if(Thread.currentThread().isInterrupted()) {
                 // already shutdown
@@ -252,7 +255,7 @@ public final class WinNative implements Native {
                         log.error("Failed to get client socket's remote address, errno : {}", errno());
                         closeSocket(clientSocket);
                     }
-                    Loc loc = new Loc(address.getUtf8String(0L), port(clientAddr));
+                    Loc loc = new Loc(NativeUtil.getStr(address), port(clientAddr));
                     Worker worker = net.nextWorker();
                     Channel channel = Channel.forServer(net, clientSocket, loc, worker);
                     channel.init();
@@ -261,11 +264,11 @@ public final class WinNative implements Native {
                 // some client connections has been established, validate if there is a socket err
                 int errOpt = getErrOpt(socket);
                 if (errOpt == 0) {
-                    Channel channel = state.getLongMap().get(socket);
+                    Channel channel = state.longMap().get(socket);
                     channel.init();
                 }else {
                     log.error("Establishing connection failed with socket err : {}", errOpt);
-                    state.getLongMap().remove(socket);
+                    state.longMap().remove(socket);
                 }
             }else {
                 // should never happen
@@ -277,9 +280,9 @@ public final class WinNative implements Native {
 
     @Override
     public void waitForData(ReadBuffer[] buffers, NetworkState state) {
-        MemorySegment events = state.getEvents();
-        Map<Long, Channel> channelMap = state.getLongMap();
-        int count = epollWait(state.getMux().winHandle(), events, buffers.length, -1);
+        MemorySegment events = state.events();
+        Map<Long, Channel> channelMap = state.longMap();
+        int count = epollWait(state.mux().winHandle(), events, buffers.length, -1);
         if(count == -1) {
             if(Thread.currentThread().isInterrupted()) {
                 // already shutdown
@@ -292,6 +295,7 @@ public final class WinNative implements Native {
         for(int i = 0; i < count; i++) {
             int event = NativeUtil.getInt(events, i * eventSize + eventsOffset);
             long socket = NativeUtil.getLong(events, i * eventSize + dataOffset + sockOffset);
+            log.info("event : {}, socket : {}, i : {}, count : {}", event, socket, i, count);
             Channel channel = channelMap.get(socket);
             if((event & Constants.EPOLL_IN) != 0 || (event & Constants.EPOLL_RDHUP) != 0 || (event & Constants.EPOLL_ERR) != 0 || (event & Constants.EPOLL_HUP) != 0) {
                 // read event
@@ -334,8 +338,8 @@ public final class WinNative implements Native {
                 if(errno == connectBlockCode) {
                     // add it to current master's interest list
                     NetworkState masterState = net.master().state();
-                    masterState.getLongMap().put(socket.longValue(), channel);
-                    registerWrite(masterState.getMux(), socket);
+                    masterState.longMap().put(socket.longValue(), channel);
+                    registerWrite(masterState.mux(), socket);
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, "Unable to connect, err : %d".formatted(errno));
                 }

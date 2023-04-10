@@ -1,7 +1,10 @@
 package cn.zorcc.common.network;
 
+import cn.zorcc.common.Constants;
 import cn.zorcc.common.LifeCycle;
 import cn.zorcc.common.ReadBuffer;
+import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.common.util.ThreadUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -25,11 +28,12 @@ public final class Worker implements LifeCycle {
     public Worker(Net net, int sequence) {
         this.config = net.config();
         this.sequence = sequence;
-        this.state = new NetworkState();
+        this.state = NetworkState.forWorker(config);
         this.readBuffers = new ReadBuffer[config.getMaxEvents()];
         this.thread = ThreadUtil.platform("Worker-" + sequence, () -> {
+            log.info("Initializing network worker, mux : {}, sequence : {}", state.mux(), sequence);
+            Thread currentThread = Thread.currentThread();
             try{
-                Thread currentThread = Thread.currentThread();
                 for(int i = 0; i < readBuffers.length; i++) {
                     readBuffers[i] = new ReadBuffer(config.getReadBufferSize());
                 }
@@ -37,10 +41,11 @@ public final class Worker implements LifeCycle {
                     n.waitForData(readBuffers, state);
                 }
             } finally {
-                // close current read buffers
+                log.debug("Exiting network worker, sequence : {}", sequence);
                 for (ReadBuffer readBuffer : readBuffers) {
                     readBuffer.close();
                 }
+                n.exitMux(state.mux());
             }
         });
     }
@@ -59,34 +64,16 @@ public final class Worker implements LifeCycle {
     @Override
     public void init() {
         if(running.compareAndSet(false, true)) {
-            log.info("Initializing network worker, sequence : {}", sequence);
-            n.createMux(config, state);
-            int mapSize = config.getMapSize();
-            if(NativeUtil.isWindows()) {
-                state.setLongMap(new ConcurrentHashMap<>(mapSize));
-            }else {
-                state.setIntMap(new ConcurrentHashMap<>(mapSize));
-            }
             thread.start();
+        }else {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
     @Override
     public void shutdown() {
         if(running.compareAndSet(true, false)) {
-            log.debug("Shutting down network worker, sequence : {}", sequence);
             thread.interrupt();
-            // close all existing channels
-            if(NativeUtil.isWindows()) {
-                Map<Long, Channel> longMap = state.getLongMap();
-                longMap.values().forEach(Channel::shutdown);
-            }else {
-                Map<Integer, Channel> intMap = state.getIntMap();
-                intMap.values().forEach(Channel::shutdown);
-            }
-            // close mux fd
-            n.exitMux(state.getMux());
         }
-
     }
 }
