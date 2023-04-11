@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 import java.util.concurrent.TimeUnit;
 
 /**
- *   默认为Constants.TIME_FORMAT提供的时间转化类
+ *   默认为Constants.TIME_FORMAT提供的时间转化类,通过反射加载
  */
 @SuppressWarnings("unused")
 public class DefaultTimeResolver implements TimeResolver {
@@ -40,6 +40,5 @@ public class DefaultTimeResolver implements TimeResolver {
             i--;
         }
     }
-
 
 }

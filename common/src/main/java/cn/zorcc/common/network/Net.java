@@ -54,8 +54,17 @@ public class Net implements LifeCycle {
      *   validate global network config
      */
     private void validateNetworkConfig() {
-        if(!ConfigUtil.checkIp(config.getIp())) {
-            throw new FrameworkException(ExceptionType.NETWORK, "IpAddress is not valid");
+        String ip = config.getIp();
+        if(!ConfigUtil.checkIp(ip)) {
+            throw new FrameworkException(ExceptionType.NETWORK, "IpAddress is not valid : %s".formatted(ip));
+        }
+        Integer port = config.getPort();
+        if(!ConfigUtil.checkPort(port)) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Port is not valid : %d".formatted(port));
+        }
+        Integer workerCount = config.getWorkerCount();
+        if(workerCount < 1) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Worker count must be at least 1");
         }
     }
 
@@ -63,6 +72,9 @@ public class Net implements LifeCycle {
         return config;
     }
 
+    /**
+     *   return current net master
+     */
     public Master master() {
         return master;
     }

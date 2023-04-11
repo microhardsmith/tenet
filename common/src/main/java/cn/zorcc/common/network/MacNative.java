@@ -12,6 +12,11 @@ import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.util.Map;
 
+/**
+ *   Native implementation under MacOS, using kqueue
+ *   Note that the .dylib library is only suitable for ARM-based chips since I only tested on M1 MacBook
+ *   If developer needs to run it on X86 processors, recompile a new .dylib would be fine
+ */
 @Slf4j
 public class MacNative implements Native {
     /**

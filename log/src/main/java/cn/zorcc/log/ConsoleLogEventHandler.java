@@ -16,7 +16,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.function.BiConsumer;
 
 /**
- * 将日志打印至控制台
+ *   print log to the console
+ *   Using fputs and fflush from C to replace Java's PrintStream regarding to benchmark, could be several times faster that normal System.out.println():
+ *      PrintTest.testNative  avgt   25   759.945 ±  28.064  ns/op
+ *      PrintTest.testSout    avgt   25  2758.746 ± 108.389  ns/op
  */
 public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
     private final MethodHandle printHandle;
@@ -32,7 +35,7 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
     }
 
     /**
-     *  向标准输出流打印数据,因为C风格的字符串以'\0'结尾，覆写内存后需要手动添加'\0'
+     *  向标准输出流打印数据,因为C风格的字符串以'\0'结尾,覆写内存后需要手动添加'\0'
      */
     private void print(WriteBuffer buffer) {
         try{
@@ -45,7 +48,10 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
         }
     }
 
-    private static byte[] levelBytes(byte[] level) {
+    /**
+     *   get the color byte array that belong to the level bytes
+     */
+    private static byte[] levelColorBytes(byte[] level) {
         if(level == Constants.ERROR_BYTES) {
             return Constants.RED_BYTES;
         }else if(level == Constants.WARN_BYTES) {
@@ -55,6 +61,9 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
         }
     }
 
+    /**
+     *   get the color byte array that belong to the color string
+     */
     private static byte[] colorBytes(String color) {
         switch (color) {
             case Constants.RED -> {
@@ -96,7 +105,7 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
     }
 
     /**
-     *   解析日志格式，生成lambda处理方法
+     *   parsing log-format to lambda consumer
      */
     private static BiConsumer<WriteBuffer, LogEvent> parseLogFormat(LogConfig logConfig) {
         BiConsumer<WriteBuffer, LogEvent> result = (writeBuffer, logEvent) -> {};
@@ -125,7 +134,7 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
                             case "level" -> result = result.andThen((writeBuffer, logEvent) -> {
                                 byte[] level = logEvent.level();
                                 writeBuffer.writeBytes(Constants.ANSI_PREFIX);
-                                writeBuffer.writeBytes(levelBytes(level));
+                                writeBuffer.writeBytes(levelColorBytes(level));
                                 writeBuffer.writeBytes(level, logConfig.getLevelLen());
                                 writeBuffer.writeBytes(Constants.ANSI_SUFFIX);
                             });

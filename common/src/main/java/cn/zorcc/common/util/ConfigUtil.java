@@ -18,7 +18,7 @@ public class ConfigUtil {
     }
 
     /**
-     *   检测ipv4地址字符串的合法性,合法则返回true，否则false
+     *   检测ipv4地址字符串的合法性,合法则返回true,否则false
      */
     public static boolean checkIp(String ip) {
         if (ip.isBlank()) {
@@ -36,6 +36,13 @@ public class ConfigUtil {
             }
         }
         return true;
+    }
+
+    /**
+     *   validate port number
+     */
+    public static boolean checkPort(Integer port) {
+        return port >= 1024 && port <= 65535;
     }
 
     /**

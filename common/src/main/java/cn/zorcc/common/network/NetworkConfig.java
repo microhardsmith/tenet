@@ -9,12 +9,8 @@ import lombok.Data;
 @Data
 public class NetworkConfig {
     /**
-     *  是否启用Server,如果不启用Server则为纯客户端应用
-     *  Note: 无论如何Dispatcher都会被启用，在客户端应用下Dispatcher只负责监听connect成功，在服务端应用下还负责监听accept连接
-     */
-    private Boolean launchServer = Boolean.TRUE;
-    /**
-     *  worker线程数量，默认为4
+     *  worker线程数量,默认为4,可以根据CPU核数进行适当调整
+     *  Net的性能并不完全依赖于worker数量的提升,实际读写任务都会在虚拟线程中进行
      */
     private Integer workerCount = 4;
     /**
@@ -22,15 +18,15 @@ public class NetworkConfig {
      */
     private Boolean reuseAddr = Boolean.TRUE;
     /**
-     *  是否周期性发送保活报文以维持连接
+     *  是否周期性发送保活报文以维持连接,推荐关闭,应在应用层手动实现心跳
      */
     private Boolean keepAlive = Boolean.FALSE;
     /**
-     *  是否关闭Nagle算法
+     *  是否关闭Nagle算法,推荐关闭,这样每个小包都能得到及时发送
      */
     private Boolean tcpNoDelay = Boolean.TRUE;
     /**
-     *  服务器ip地址, note: 目前只支持ipv4版本协议栈，使用localhost访问时可能会定向到ipv6，尽量使用0.0.0.0或127.0.0.1访问
+     *  服务器ip地址, note: 目前只支持ipv4版本协议栈,使用localhost访问时可能会定向到ipv6,尽量使用0.0.0.0或127.0.0.1访问
      */
     private String ip = "0.0.0.0";
     /**
@@ -54,11 +50,7 @@ public class NetworkConfig {
      */
     private Integer writeBufferSize = 4 * Constants.KB;
     /**
-     *  socket map 初始大小
+     *  socket map初始大小,后续会自动扩容
      */
     private Integer mapSize = 1024;
-    /**
-     *  worker buf queue size
-     */
-    private Integer queueSize = 256;
 }

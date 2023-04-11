@@ -9,10 +9,10 @@ import cn.zorcc.common.wheel.Job;
 import cn.zorcc.common.wheel.Wheel;
 
 import java.util.Map;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TransferQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -22,13 +22,21 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class Remote implements ObjPool<Channel> {
     private static final Wheel wheel = Wheel.wheel();
     private static final Map<Loc, Remote> remoteMap = new ConcurrentHashMap<>();
+
+    /**
+     *   Remote's location
+     */
     private final Loc loc;
-    private final BlockingQueue<Channel> channels;
-    private final AtomicInteger counter;
+    /**
+     *   current available channels
+     */
+    private final TransferQueue<Channel> channels = new LinkedTransferQueue<>();
+    /**
+     *   available channel count
+     */
+    private final AtomicInteger counter = new AtomicInteger(Constants.ZERO);
     private Remote(Loc loc) {
         this.loc = loc;
-        this.channels = new LinkedTransferQueue<>();
-        this.counter = new AtomicInteger(Constants.ZERO);
     }
 
     /**
@@ -59,6 +67,7 @@ public class Remote implements ObjPool<Channel> {
             throw new NetworkException(NetworkException.CONNECTION_TIME_OUT);
         }
     }
+
     @Override
     public Channel get(long timeout, TimeUnit timeUnit) {
         long nano = timeUnit.toNanos(timeout);

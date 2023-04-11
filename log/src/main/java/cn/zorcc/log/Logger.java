@@ -20,7 +20,7 @@ import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TransferQueue;
 
 /**
- * 负责打印tenet项目中使用的日志
+ *  tenet logger
  */
 public class Logger extends LegacyAbstractLogger {
     private static final Map<Level, byte[]> levelMap = Map.of(
@@ -35,7 +35,6 @@ public class Logger extends LegacyAbstractLogger {
     private static final DateTimeFormatter formatter;
     private static final TimeResolver timeResolver;
     private static final TransferQueue<LogEvent> queue = new LinkedTransferQueue<>();
-
 
     static {
         config = ConfigUtil.loadJsonConfig(Constants.DEFAULT_LOG_CONFIG_NAME, LogConfig.class);

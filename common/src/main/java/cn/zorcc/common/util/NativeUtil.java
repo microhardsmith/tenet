@@ -84,7 +84,7 @@ public final class NativeUtil {
      */
     public static MethodHandle methodHandle(SymbolLookup lookup, String methodName, FunctionDescriptor functionDescriptor) {
         MemorySegment methodPointer = lookup.find(methodName)
-                .orElseThrow(() -> new FrameworkException(ExceptionType.NATIVE, "Unable to load target native method : %s", methodName));
+                .orElseThrow(() -> new FrameworkException(ExceptionType.NATIVE, "Unable to load target native method : %s".formatted(methodName)));
         return linker.downcallHandle(methodPointer, functionDescriptor);
     }
 

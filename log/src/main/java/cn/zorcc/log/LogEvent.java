@@ -1,7 +1,7 @@
 package cn.zorcc.log;
 
 /**
- *
+ * log event entity
  * @param flush 是否为刷新事件
  * @param timestamp 日志时间戳
  * @param time 日志时间

@@ -24,7 +24,7 @@ public class HttpTestHandler implements ChannelHandler {
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss z", Locale.ENGLISH).withZone(gmt);
     @Override
     public void onConnected(Channel channel) {
-
+        log.info("Http connection established");
     }
 
     @Override
@@ -42,6 +42,6 @@ public class HttpTestHandler implements ChannelHandler {
 
     @Override
     public void onClose(Channel channel) {
-
+        log.info("Http connection closed");
     }
 }

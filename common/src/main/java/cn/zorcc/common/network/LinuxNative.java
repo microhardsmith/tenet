@@ -10,11 +10,10 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.VarHandle;
 import java.util.Map;
 
 /**
- *   linux epoll implementation
+ *   Native implementation under Linux, using epoll
  */
 @Slf4j
 public class LinuxNative implements Native {

@@ -13,7 +13,7 @@ import java.lang.invoke.MethodHandle;
 import java.util.Map;
 
 /**
- *  windows wepoll implementation
+ *  Native implementation under Windows, using wepoll
  */
 @Slf4j
 public final class WinNative implements Native {

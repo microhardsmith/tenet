@@ -23,22 +23,36 @@ import java.util.concurrent.locks.LockSupport;
  */
 public final class Channel implements LifeCycle {
     private static final Native n = Native.n;
+    /**
+     *   Read mask for creating virtual thread names
+     *   For each read operation, a new virtual thread would be created to handle the process
+     *   And the sequence number would be refreshed since it reach mask
+     */
     private static final long mask = (1 << 9) - 1;
     private final AtomicBoolean available = new AtomicBoolean(false);
     private final ChannelHandler handler;
+    private final Codec codec;
     private final Socket socket;
     private final Worker worker;
-    private final Thread thread;
     /**
-     *   only exist for client-side channel
+     *   writer virtual thread
+     */
+    private final Thread writerThread;
+    /**
+     *   only exist for client-side channel, for server-side channel would be null
      */
     private final Remote remote;
     /**
      *   representing remote server address
      */
     private final Loc loc;
-    private final Codec codec;
-    private final String threadNamePrefix;
+    /**
+     *   read virtual thread name prefix
+     */
+    private final String readThreadPrefix;
+    /**
+     *   virtual thread name counter, only the assigned Worker thread would visit this, so there is no need for a AtomicLong
+     */
     private long counter = 0L;
     /**
      *   Visible only for its worker
@@ -60,8 +74,8 @@ public final class Channel implements LifeCycle {
         this.remote = remote;
         this.loc = loc;
         this.worker = worker;
-        this.threadNamePrefix = "Ch@" + socket.hashCode() + "-";
-        this.thread = ThreadUtil.virtual("socket-" + socket.hashCode(), () -> {
+        this.readThreadPrefix = "Ch@" + socket.hashCode() + "-";
+        this.writerThread = ThreadUtil.virtual("Ch@" + socket.hashCode(), () -> {
             Thread currentThread = Thread.currentThread();
             int writeBufferInitialSize = net.config().getWriteBufferSize();
             try{
@@ -101,7 +115,7 @@ public final class Channel implements LifeCycle {
         assert Master.inMasterThread();
         if(available.compareAndSet(false, true)) {
             // start writer thread
-            thread.start();
+            writerThread.start();
             // register current channel to worker's map
             NetworkState workerState = worker.state();
             if(NativeUtil.isWindows()) {
@@ -169,7 +183,7 @@ public final class Channel implements LifeCycle {
     public void becomeWritable() {
         assert Worker.inWorkerThread();
         writable = true;
-        LockSupport.unpark(thread);
+        LockSupport.unpark(writerThread);
     }
 
     public ChannelHandler handler() {
@@ -213,7 +227,7 @@ public final class Channel implements LifeCycle {
         Object result = codec.decode(buffer);
         if(result != null) {
             // creating a new virtual thread for handing msg
-            ThreadUtil.virtual(threadNamePrefix + (counter++ & mask), () -> handler.onRecv(this, result)).start();
+            ThreadUtil.virtual(readThreadPrefix + (counter++ & mask), () -> handler.onRecv(this, result)).start();
         }
     }
 
@@ -250,10 +264,10 @@ public final class Channel implements LifeCycle {
         if(available.compareAndSet(true, false)) {
             NetworkState workerState = worker.state();
             Channel channel = NativeUtil.isWindows() ? workerState.longMap().remove(socket.longValue()) : workerState.intMap().remove(socket.intValue());
-            // current Channel might be closed by other threads
+            // current Channel might be closed by other threads, but only one could succeed
             if(channel != null) {
                 n.unregister(workerState.mux(), socket);
-                thread.interrupt();
+                writerThread.interrupt();
                 n.closeSocket(socket);
                 handler.onClose(this);
             }

@@ -19,7 +19,7 @@ public class LogConfig {
      */
     private String timeFormat = Constants.TIME_FORMAT;
     /**
-     * 日志时间格式解析类名，可自定义时间字段的解析方式
+     * 日志时间格式解析类名,可自定义时间字段的解析方式
      */
     private String timeResolver = Constants.TIME_RESOLVER;
     /**

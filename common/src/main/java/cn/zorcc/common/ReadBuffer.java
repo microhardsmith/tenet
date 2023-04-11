@@ -116,7 +116,7 @@ public final class ReadBuffer implements AutoCloseable {
     }
 
     /**
-     *   读取当前内存块直到读取到指定分隔符，返回已读取的内容（不包含分隔符），如果未获取到则返回null
+     *   读取当前内存块直到读取到指定分隔符,返回已读取的内容（不包含分隔符）,如果未获取到则返回null
      */
     public byte[] readUntil(byte sep) {
         long currentIndex = readIndex;

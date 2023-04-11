@@ -6,28 +6,28 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- *   用于封装Http请求体
+ *   Http request abstraction
  */
 @Data
 public class HttpReq {
     /**
-     *   Http访问方法
+     *   Http request method
      */
     private HttpMethod method;
     /**
-     *   访问Uri
+     *   Http request rri
      */
     private String uri;
     /**
-     *   Http版本号
+     *   Http version, default would be HTTP1.1
      */
     private String version;
     /**
-     *   Http header信息
+     *   Http headers
      */
     private Map<String, String> headers = new HashMap<>();
     /**
-     *   Http 数据体
+     *   Http content data, normally would be json UTF-8 bytes
      */
     private byte[] data;
 }

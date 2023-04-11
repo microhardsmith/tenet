@@ -59,7 +59,7 @@ public class HttpCodec implements Codec {
     }
 
     /**
-     *   decode http buffer
+     *   decode http buffer, using state machine mechanism
      *   if content is not complete, return -1
      *   if needs to decode again, return 0
      *   if current request if fully decoded, return 1

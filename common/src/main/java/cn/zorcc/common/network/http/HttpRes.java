@@ -9,19 +9,19 @@ import java.util.Map;
 @Data
 public class HttpRes {
     /**
-     *   Http版本号
+     *   Http version, default would be HTTP1.1
      */
     private String version = Constants.DEFAULT_HTTP_VERSION;
     /**
-     *   Http状态码
+     *   Http status code, default would be 200
      */
     private HttpStatus status = HttpStatus.OK;
     /**
-     *   Http header信息
+     *   Http headers
      */
     private Map<String, String> headers = new HashMap<>();
     /**
-     *   返回体数据
+     *   Http content data, normally would be json UTF-8 bytes
      */
     private byte[] data;
 }

@@ -1,7 +1,6 @@
 package cn.zorcc.common.network;
 
 import cn.zorcc.common.util.NativeUtil;
-import lombok.Data;
 
 import java.lang.foreign.MemorySegment;
 import java.util.Map;

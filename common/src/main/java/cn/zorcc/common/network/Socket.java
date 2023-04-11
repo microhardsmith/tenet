@@ -1,39 +1,28 @@
 package cn.zorcc.common.network;
 
-public final class Socket {
-    private final long l;
-    private final int i;
+/**
+ *  Socket abstraction, using long in windows, using int in Linux and MacOS
+ */
+public record Socket (
+        long longValue,
+        int intValue
+){
 
     public Socket(int socket) {
-        this.l = this.i = socket;
+        this(socket, socket);
     }
 
     public Socket(long socket) {
-        this.l = socket;
-        this.i = Long.hashCode(socket); // for hashcode()
-    }
-
-    /**
-     *   返回socket的int值
-     */
-    public int intValue() {
-        return i;
-    }
-
-    /**
-     *   返回socket的long值
-     */
-    public long longValue() {
-        return l;
+        this(socket, Long.hashCode(socket));
     }
 
     @Override
     public int hashCode() {
-        return i;
+        return intValue;
     }
 
     @Override
     public String toString() {
-        return String.valueOf(l);
+        return String.valueOf(longValue);
     }
 }

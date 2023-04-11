@@ -39,6 +39,10 @@ public class Master implements LifeCycle {
         });
     }
 
+    /**
+     *   Examine if current operation runs in the worker thread
+     *   TODO Could be removed after validation
+     */
     public static boolean inMasterThread() {
         return Thread.currentThread().getName().equals("Master");
     }

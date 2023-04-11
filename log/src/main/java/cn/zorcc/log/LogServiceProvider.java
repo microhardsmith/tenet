@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class LogServiceProvider implements SLF4JServiceProvider {
     /**
-     * Slf4j大版本号2.0
+     * Slf4j major version 2.0
      */
     private static final String API_VERSION = "2.0.99";
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);

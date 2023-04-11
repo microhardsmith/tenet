@@ -1,8 +1,8 @@
 package cn.zorcc.common.network.http;
 
 /**
- *   Http状态码及其描述，只列举了部分常用的返回状态
- *   在前后端分离的架构中，只返回json数据，应该尽可能避免返回除OK以外的其他状态
+ *   Http status codes
+ *   Should avoid using other status codes except HttpStatus.OK, other information could be contained in json
  */
 public enum HttpStatus {
     OK("200", "OK"),

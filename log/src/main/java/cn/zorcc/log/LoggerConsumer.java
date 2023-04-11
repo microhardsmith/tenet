@@ -67,7 +67,6 @@ public final class LoggerConsumer implements LifeCycle {
 
     @Override
     public void init() {
-        // start consumer thread
         consumerThread.start();
     }
 
@@ -75,6 +74,8 @@ public final class LoggerConsumer implements LifeCycle {
     public void shutdown() {
         consumerThread.interrupt();
         for (EventHandler<LogEvent> handler : handlers) {
+            // handle a flush event for the last time
+            handler.handle(LogEvent.flushEvent);
             if(handler instanceof FileLogEventHandler fileLogEventHandler) {
                 fileLogEventHandler.closeStream();
             }

@@ -6,11 +6,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * logger工厂类
+ *  tenet logger factory
  */
 public class LoggerFactory implements ILoggerFactory {
     /**
-     *   Logger类缓存,每个类应该只使用一个固定的Logger
+     *   Logger cache
      */
     private static final Map<String, org.slf4j.Logger> cache = new ConcurrentHashMap<>(1 << 10);
     @Override

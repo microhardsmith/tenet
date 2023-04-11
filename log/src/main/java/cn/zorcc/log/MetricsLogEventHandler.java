@@ -3,7 +3,7 @@ package cn.zorcc.log;
 import cn.zorcc.common.event.EventHandler;
 
 /**
- * 用于将日志采集后发送至Metrics进行保存
+ *   print log to the metrics server
  */
 public class MetricsLogEventHandler implements EventHandler<LogEvent> {
     public MetricsLogEventHandler(LogConfig logConfig) {

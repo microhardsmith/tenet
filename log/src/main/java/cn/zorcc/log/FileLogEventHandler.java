@@ -17,6 +17,13 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.function.BiConsumer;
 
+/**
+ *   print log to the file
+ *   There is no need for replacing Java's File API with C style regarding to benchmark:
+ *      FileTest.testCStyle                 avgt   15  1447.719 ±  32.488  ns/op
+ *      FileTest.testFileOutputStream       avgt   15  1587.517 ±  33.149  ns/op
+ *      FileTest.testFiles.newOutputStream  avgt   15  1138.292 ± 290.841  ns/op
+ */
 public class FileLogEventHandler implements EventHandler<LogEvent> {
     private static final OpenOption[] options = new OpenOption[] {
             StandardOpenOption.CREATE_NEW,
@@ -29,12 +36,25 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
     private final int maxRecordingTime;
     private final HeapBuffer buffer;
     private final BiConsumer<HeapBuffer, LogEvent> consumer;
+    /**
+     *   if no data has been written to stream then flush could be avoidable
+     */
     private boolean needsFlush;
     /**
      *   timestamp milli when last stream was allocated
      */
-    private long timestamp;
+    private long allocMilli;
+    /**
+     *   timestamp milli when last log event occur
+     */
+    private long eventMilli;
+    /**
+     *   current file output stream
+     */
     private OutputStream stream;
+    /**
+     *   file write index
+     */
     private long index;
     public FileLogEventHandler(LogConfig logConfig) {
         try{
@@ -59,12 +79,13 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
     }
 
     /**
-     *  将当前heap缓冲区的内容写入到文件中，如果会超过文件限额则重新指定文件流
+     *  write and flush current heap-buffer into the file
+     *  if timestamp or filesize exceed the limit, reallocate the stream
      */
     private void writeAndFlush(HeapBuffer heapBuffer) {
         try{
             int bufferIndex = heapBuffer.index();
-            if(maxFileSize > 0 && index + bufferIndex > maxFileSize) {
+            if((maxFileSize > 0 && index + bufferIndex > maxFileSize) || (maxRecordingTime > 0 && eventMilli - allocMilli > maxRecordingTime)) {
                 stream.close();
                 allocateNewStream();
             }
@@ -79,12 +100,12 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
 
     private static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss-SSS");
     /**
-     *   分配新的日志文件
+     *   allocate a new file stream
      */
     private void allocateNewStream() {
         try{
             LocalDateTime now = LocalDateTime.now();
-            timestamp = now.toInstant(Constants.LOCAL_ZONE_OFFSET).toEpochMilli();
+            allocMilli = now.toInstant(Constants.LOCAL_ZONE_OFFSET).toEpochMilli();
             Path path = Path.of(logDirPath +
                     Constants.SEPARATOR +
                     logFileName + "-" +
@@ -100,6 +121,9 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
         }
     }
 
+    /**
+     *   close current file output-stream
+     */
     public void closeStream() {
         try{
             stream.close();
@@ -117,15 +141,13 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
             }
         }else {
             needsFlush = true;
-            if(maxRecordingTime > 0 && event.timestamp() - timestamp > maxRecordingTime) {
-                allocateNewStream();
-            }
+            eventMilli = event.timestamp();
             consumer.accept(buffer, event);
         }
     }
 
     /**
-     *   解析日志格式，生成lambda处理方法
+     *   parsing log-format to lambda consumer
      */
     public static BiConsumer<HeapBuffer, LogEvent> parseLogFormat(String logFormat) {
         BiConsumer<HeapBuffer, LogEvent> result = (writeBuffer, logEvent) -> {};
