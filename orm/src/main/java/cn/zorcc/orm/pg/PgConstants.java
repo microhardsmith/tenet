@@ -68,7 +68,7 @@ public class PgConstants {
     public static final String ISO = "ISO";
     public static final String SEARCH_PATH = "search_path";
     public static final String FLOAT_PRECISION = "extra_float_digits";
-    public static final String DEFAULT_FLOAT_PRECISION = "2"; // 浮点数精度控制,https://www.postgresql.org/docs/current/datatype-numeric.html#DATATYPE-FLOAT
+    public static final String DEFAULT_FLOAT_PRECISION = "2"; // float precision control, see https://www.postgresql.org/docs/current/datatype-numeric.html#DATATYPE-FLOAT
 
     public static final String BEGIN = "begin";
     public static final ByteBuf BEGIN_BYTEBUF = PgUtil.createQueryByteBuf(BEGIN);

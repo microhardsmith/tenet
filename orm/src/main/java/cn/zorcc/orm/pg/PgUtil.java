@@ -1,6 +1,7 @@
 package cn.zorcc.orm.pg;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import io.netty.buffer.ByteBuf;
@@ -419,6 +420,14 @@ public class PgUtil {
             }
         }
         return Integer.parseInt(commandCompleteMsg.substring(index));
+    }
+
+    /**
+     *   encode require ssl msg
+     */
+    public static void encodeSslMsg(WriteBuffer writeBuffer) {
+        writeBuffer.writeInt(8);
+        writeBuffer.writeInt(PgConstants.SSL_CODE);
     }
 
 }

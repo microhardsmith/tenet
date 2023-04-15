@@ -81,7 +81,7 @@ int main() {
         printf("Error at listening socket : %d \n", w_get_last_error());
         clean(handle);
     }
-
+    
     struct epoll_event ev, events[20];
     ev.events = EPOLLIN;
     ev.data.fd = socket;
@@ -118,7 +118,7 @@ int main() {
                 if(w_epoll_ctl_add(handle, client, &ev) == -1) {
                     printf("Err epoll ctl \n");
                 }
-
+            
             }else {
                 printf("handle event : %d \n", event.events);
                 if(ev.events == EPOLLIN) {
@@ -277,12 +277,14 @@ int w_set_tcp_no_delay(SOCKET socket, int value) {
     return result;
 }
 
-// 获取指定socket上的错误码，如果socket上无错误应返回0
+// 获取指定socket上的错误码,如果socket上无错误应返回0
 int w_get_err_opt(SOCKET socket) {
     int value = -1;
     void* ptr = &value;
     int ptr_size = sizeof(value);
-    getsockopt(socket, SOL_SOCKET, SO_ERROR, ptr, &ptr_size);
+    if(getsockopt(socket, SOL_SOCKET, SO_ERROR, ptr, &ptr_size) == SOCKET_ERROR) {
+        return -1;
+    }
     return value;
 }
 
@@ -305,7 +307,7 @@ int w_bind(SOCKET socket, struct sockaddr_in* sockAddr, int size) {
     return result;
 }
 
-// 客户端建立连接，失败则返回-1，成功则返回0
+// 客户端建立连接,失败则返回-1,成功则返回0
 int w_connect(SOCKET socket, struct sockaddr_in* sockAddr, int size) {
     int result = connect(socket, (SOCKADDR*) sockAddr, size);
     if(result == SOCKET_ERROR) {
@@ -332,7 +334,7 @@ int w_recv(SOCKET socket, char* buf, int len) {
     return result;
 }
 
-// 向socket发送数据，失败则返回-1，成功则返回已接收字节数
+// 向socket发送数据,失败则返回-1,成功则返回已接收字节数
 int w_send(SOCKET socket, char* buf, int len) {
     int result = send(socket, buf, len, 0);
     if(result == SOCKET_ERROR) {
@@ -341,9 +343,18 @@ int w_send(SOCKET socket, char* buf, int len) {
     return result;
 }
 
-// 关闭socket连接，失败则返回-1,成功则返回0
+// 关闭socket连接,失败则返回-1,成功则返回0
 int w_close_socket(SOCKET socket) {
     int result = closesocket(socket);
+    if(result == SOCKET_ERROR) {
+        return -1;
+    }
+    return result;
+}
+
+// 关闭socket写端,失败则返回-1,成功则返回0
+int w_shutdown_write(SOCKET socket) {
+    int result = shutdown(socket, SD_SEND);
     if(result == SOCKET_ERROR) {
         return -1;
     }

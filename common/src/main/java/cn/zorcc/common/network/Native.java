@@ -76,9 +76,14 @@ public interface Native {
     void connect(Net net, Remote remote, Codec codec);
 
     /**
-     *   Close a socket(read 0 or manually disconnect)
+     *   Close a socket
      */
     void closeSocket(Socket socket);
+
+    /**
+     *   Shutdown the write side of the socket
+     */
+    void shutdownWrite(Socket socket);
 
     /**
      *   send data to remote socket

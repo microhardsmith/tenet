@@ -49,6 +49,8 @@ ssize_t l_send(int socket, void* buf, size_t len);
 
 int l_close(int fd);
 
+int l_shutdown_write(int fd);
+
 int l_errno();
 
 #endif

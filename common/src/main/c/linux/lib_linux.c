@@ -3,7 +3,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <netinet/tcp.h>
-#include <arpa/inet.h>
+#include <arpa/inet.h> 
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -106,7 +106,7 @@ int l_epoll_ctl_del(int epfd, int socket) {
     return epoll_ctl(epfd, EPOLL_CTL_DEL, socket, NULL);
 }
 
-// 等待epoll事件,失败则返回-1,成功则返回获取事件的数量，可能为0
+// 等待epoll事件,失败则返回-1,成功则返回获取事件的数量,可能为0
 int l_epoll_wait(int epfd, struct epoll_event* events, int maxEvents, int timeout) {
     return epoll_wait(epfd, events, maxEvents, timeout);
 }
@@ -130,17 +130,17 @@ int l_port(struct sockaddr_in* sockAddr) {
     return ntohs(sockAddr -> sin_port);
 }
 
-// 创建socket，失败则返回-1,成功则返回socket fd
+// 创建socket,失败则返回-1,成功则返回socket fd
 int l_socket_create() {
     return socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 }
 
-// 接受socket连接，失败则返回-1，成功则返回socket fd，在非阻塞情况下，未立刻建立的连接错误码为EAGAIN或EWOULDBLOCK
+// 接受socket连接,失败则返回-1,成功则返回socket fd,在非阻塞情况下,未立刻建立的连接错误码为EAGAIN或EWOULDBLOCK
 int l_accept(int socket, struct sockaddr_in* clientAddr, socklen_t clientAddrSize) {
     return accept(socket, (struct sockaddr *) clientAddr, &clientAddrSize);
 }
 
-// 设置sock地址，失败则返回-1，成功则返回1，地址为非法字符串则返回0
+// 设置sock地址,失败则返回-1,成功则返回1,地址为非法字符串则返回0
 int l_set_sock_addr(struct sockaddr_in* sockAddr, char* address, int port) {
     memset(sockAddr, 0, sizeof(struct sockaddr_in));
     sockAddr -> sin_family = AF_INET;
@@ -166,7 +166,7 @@ int l_set_tcp_no_delay(int socket, int value) {
     return setsockopt(socket, IPPROTO_TCP, TCP_NODELAY, ptr, sizeof(value));
 }
 
-// 获取指定socket上的错误码，如果socket上无错误应返回0
+// 获取指定socket上的错误码,如果socket上无错误应返回0
 int l_get_err_opt(int socket) {
     int value = -1;
     void* ptr = &value;
@@ -183,34 +183,39 @@ int l_set_nonblocking(int socket) {
     return fcntl(socket, F_SETFL, flag | O_NONBLOCK);
 }
 
-// bind端口地址，失败则返回-1，成功则返回0
+// bind端口地址,失败则返回-1,成功则返回0
 int l_bind(int socket, struct sockaddr_in* sockAddr, socklen_t size) {
     return bind(socket, (struct sockaddr*) sockAddr, size);
 }
 
-// 客户端建立连接，失败则返回-1，成功则返回0
+// 客户端建立连接,失败则返回-1,成功则返回0
 int l_connect(int socket, struct sockaddr_in* sockAddr, socklen_t size) {
     return connect(socket, (struct sockaddr*) sockAddr, size);
 }
 
-// listen端口地址，失败则返回-1，成功则返回0
+// listen端口地址,失败则返回-1,成功则返回0
 int l_listen(int socket, int backlog) {
     return listen(socket, backlog);
 }
 
-// 从socket接受数据，失败则返回-1，成功则返回接受的字节数
+// 从socket接受数据,失败则返回-1,成功则返回接受的字节数
 ssize_t l_recv(int socket, void* buf, size_t len) {
     return recv(socket, buf, len, 0);
 }
 
-// 向socket发送数据，失败则返回-1，成功则返回已接收字节数
+// 向socket发送数据,失败则返回-1,成功则返回已接收字节数
 ssize_t l_send(int socket, void* buf, size_t len) {
     return send(socket, buf, len, 0);
 }
 
-// 关闭fd,失败则返回-1，成功则返回0
+// 关闭fd,失败则返回-1,成功则返回0
 int l_close(int fd) {
     return close(fd);
+}
+
+// 关闭fd写端,失败则返回-1,成功则返回0
+int l_shutdown_write(int fd) {
+    return shutdown(fd, SHUT_WR);
 }
 
 // 返回当前错误码

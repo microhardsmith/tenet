@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.util.Map;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  *  Native implementation under Windows, using wepoll
@@ -73,6 +74,7 @@ public final class WinNative implements Native {
     private static final MethodHandle sendMethodHandle;
     private static final MethodHandle connectMethodHandle;
     private static final MethodHandle closeSocketMethodHandle;
+    private static final MethodHandle shutdownWriteMethodHandle;
     private static final MethodHandle wsaGetLastErrorMethodHandle;
     private static final MethodHandle wsaCleanUpMethodHandle;
     private static final int addressLen;
@@ -124,6 +126,8 @@ public final class WinNative implements Native {
                 "w_send", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         closeSocketMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_close_socket", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG));
+        shutdownWriteMethodHandle = NativeUtil.methodHandle(symbolLookup,
+                "w_shutdown_write", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG));
         wsaGetLastErrorMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_get_last_error", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         wsaCleanUpMethodHandle = NativeUtil.methodHandle(symbolLookup,
@@ -306,12 +310,12 @@ public final class WinNative implements Native {
                     readBuffer.setWriteIndex(readableBytes);
                     channel.onReadBuffer(readBuffer);
                 }else if(channel != null){
-                    // remove current socket
-                    channel.shutdown();
+                    // close current socket
+                    channel.close();
                 }
             }else if((event & Constants.EPOLL_OUT) != 0) {
                 // write event
-                channel.becomeWritable();
+                LockSupport.unpark(channel.writerThread());
             }else {
                 // should never happen
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -350,6 +354,11 @@ public final class WinNative implements Native {
     @Override
     public void closeSocket(Socket socket) {
         check(closeSocket(socket.longValue()), "close socket");
+    }
+
+    @Override
+    public void shutdownWrite(Socket socket) {
+        check(shutdownWrite(socket.longValue()), "shutdown write");
     }
 
     @Override
@@ -611,6 +620,17 @@ public final class WinNative implements Native {
             return (int) closeSocketMethodHandle.invokeExact(socket);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking closeSocket()", throwable);
+        }
+    }
+
+    /**
+     *  corresponding to `int w_shutdown_write(SOCKET socket)`
+     */
+    public int shutdownWrite(long socket) {
+        try{
+            return (int) shutdownWriteMethodHandle.invokeExact(socket);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking shutdownWrite()", throwable);
         }
     }
 

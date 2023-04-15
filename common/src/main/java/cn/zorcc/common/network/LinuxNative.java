@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.util.Map;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  *   Native implementation under Linux, using epoll
@@ -69,6 +70,7 @@ public class LinuxNative implements Native {
     private static final MethodHandle recvMethodHandle;
     private static final MethodHandle sendMethodHandle;
     private static final MethodHandle closeMethodHandle;
+    private static final MethodHandle shutdownWriteMethodHandle;
     private static final MethodHandle errnoMethodHandle;
     private static final int addressLen;
     private static final int connectBlockCode;
@@ -241,12 +243,12 @@ public class LinuxNative implements Native {
                         readBuffer.setWriteIndex(readableBytes);
                         channel.onReadBuffer(readBuffer);
                     }else {
-                        // remove current socket
-                        channel.shutdown();
+                        // close current socket
+                        channel.close();
                     }
                 }else if((event & Constants.EPOLL_OUT) != 0) {
                     // write event
-                    channel.becomeWritable();
+                    LockSupport.unpark(channel.writerThread());
                 }else {
                     // should never happen
                     throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -286,6 +288,11 @@ public class LinuxNative implements Native {
     @Override
     public void closeSocket(Socket socket) {
         check(close(socket.intValue()), "close socket");
+    }
+
+    @Override
+    public void shutdownWrite(Socket socket) {
+        check(shutdownWrite(socket.intValue()), "shutdown write");
     }
 
     @Override
@@ -345,6 +352,8 @@ public class LinuxNative implements Native {
                 "l_send", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         closeMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "l_close", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
+        shutdownWriteMethodHandle = NativeUtil.methodHandle(symbolLookup,
+                "l_shutdown_write", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         errnoMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "l_errno", FunctionDescriptor.of(ValueLayout.JAVA_INT));
 
@@ -579,6 +588,17 @@ public class LinuxNative implements Native {
             return (int) closeMethodHandle.invokeExact(fd);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking close()", throwable);
+        }
+    }
+
+    /**
+     *  corresponding to `int l_shutdown_write(int fd)`
+     */
+    public int shutdownWrite(int fd) {
+        try{
+            return (int) shutdownWriteMethodHandle.invokeExact(fd);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking shutdownWrite()", throwable);
         }
     }
 

@@ -61,11 +61,7 @@ public final class Channel implements LifeCycle {
     /**
      *   Writer task queue
      */
-    private final TransferQueue<Object> queue = new LinkedTransferQueue<>();
-    /**
-     *   If current writer is writable, when TCP buffer is full, we could implement backpressure by blocking the write thread
-     */
-    private volatile boolean writable = true;
+    private final TransferQueue<Msg> queue = new LinkedTransferQueue<>();
 
     private Channel(Net net, Socket socket, ChannelHandler handler, Codec codec, Remote remote, Loc loc, Worker worker) {
         this.socket = socket;
@@ -80,14 +76,15 @@ public final class Channel implements LifeCycle {
             int writeBufferInitialSize = net.config().getWriteBufferSize();
             try{
                 while (!currentThread.isInterrupted()) {
-                    Object msg = queue.take();
+                    Msg msg = queue.take();
                     try(WriteBuffer writeBuffer = new WriteBuffer(writeBufferInitialSize)) {
-                        codec.encode(writeBuffer, msg);
+                        codec.encode(writeBuffer, msg.entity());
                         doWrite(writeBuffer);
+                        msg.tryCallBack();
                     }
                 }
             }catch (InterruptedException e) {
-                currentThread.interrupt();
+                Thread.currentThread().interrupt();
             }
         });
     }
@@ -119,11 +116,9 @@ public final class Channel implements LifeCycle {
             // register current channel to worker's map
             NetworkState workerState = worker.state();
             if(NativeUtil.isWindows()) {
-                Map<Long, Channel> longMap = workerState.longMap();
-                longMap.put(socket.longValue(), this);
+                workerState.longMap().put(socket.longValue(), this);
             }else {
-                Map<Integer, Channel> intMap = workerState.intMap();
-                intMap.put(socket.intValue(), this);
+                workerState.intMap().put(socket.intValue(), this);
             }
             // register multiplexing events
             n.registerRead(workerState.mux(), socket);
@@ -134,6 +129,13 @@ public final class Channel implements LifeCycle {
                 remote.add(this);
             }
         }
+    }
+
+    /**
+     *   return current channel's writer thread
+     */
+    public Thread writerThread() {
+        return writerThread;
     }
 
     /**
@@ -151,7 +153,15 @@ public final class Channel implements LifeCycle {
     }
 
     /**
-     *   implement write operation
+     *   return current channel's handler
+     */
+    public ChannelHandler handler() {
+        return handler;
+    }
+
+    /**
+     *   implement write operation with recursion
+     *   when this method returns, the writeBuffer's data are transferred to the OS
      */
     private void doWrite(WriteBuffer writeBuffer) {
         MemorySegment segment = writeBuffer.segment();
@@ -162,7 +172,6 @@ public final class Channel implements LifeCycle {
             int errno = n.errno();
             if(errno == n.sendBlockCode()) {
                 // current TCP write buffer is full, wait until writable again
-                writable = false;
                 NetworkState workerState = worker.state();
                 n.registerWrite(workerState.mux(), socket);
                 LockSupport.park();
@@ -175,19 +184,6 @@ public final class Channel implements LifeCycle {
             writeBuffer.truncate(bytes);
             doWrite(writeBuffer);
         }
-    }
-
-    /**
-     *   the writer thread can now resume writing
-     */
-    public void becomeWritable() {
-        assert Worker.inWorkerThread();
-        writable = true;
-        LockSupport.unpark(writerThread);
-    }
-
-    public ChannelHandler handler() {
-        return handler;
     }
 
     /**
@@ -236,16 +232,14 @@ public final class Channel implements LifeCycle {
      *   the msg will be processed by the writer thread, there is no guarantee that the msg will delivery
      *   the caller should provide a timeout mechanism to ensure the msg is not dropped
      */
-    public void send(Object msg) {
-        // send operation must be in a virtual thread because of the potential block
-        if(writable) {
-            // non-blocking put operation
-            if (!queue.offer(msg)) {
-                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-            }
-        }else {
-            // discard current msg by throwing a exception
-            throw new ServiceException("Channel is not writable");
+    public void send(Msg msg) {
+        // check if current channel has been shutdown
+        if(!available.get()) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Unable to write to a channel which has been shutdown");
+        }
+        // non-blocking put operation
+        if (!queue.offer(msg)) {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
@@ -257,20 +251,36 @@ public final class Channel implements LifeCycle {
     }
 
     /**
-     *   closing current channel, this method could be invoked from any thread
+     *   shutdown current channel, this method could be invoked from any thread
+     *   Note that shutdown current channel doesn't block the recv operation, the other side will recv 0 and close the socket
+     *   in fact, socket will only be closed when worker thread recv EOF from remote peer
      */
     @Override
     public void shutdown() {
+        // if current channel has already been closed, there is no need to shutdown
         if(available.compareAndSet(true, false)) {
-            NetworkState workerState = worker.state();
-            Channel channel = NativeUtil.isWindows() ? workerState.longMap().remove(socket.longValue()) : workerState.intMap().remove(socket.intValue());
-            // current Channel might be closed by other threads, but only one could succeed
-            if(channel != null) {
-                n.unregister(workerState.mux(), socket);
-                writerThread.interrupt();
-                n.closeSocket(socket);
-                handler.onClose(this);
-            }
+            writerThread.interrupt();
+            n.shutdownWrite(socket);
         }
+    }
+
+    /**
+     *   close current channel, this method could only be invoked from worker thread
+     */
+    public void close() {
+        assert Worker.inWorkerThread();
+        if (available.getAndSet(false)) {
+            // current channel hasn't called shutdown method, we need to interrupt the writer thread
+            writerThread.interrupt();
+        }
+        NetworkState workerState = worker.state();
+        if(NativeUtil.isWindows()) {
+            workerState.longMap().remove(socket.longValue());
+        }else {
+            workerState.intMap().remove(socket.intValue());
+        }
+        n.unregister(workerState.mux(), socket);
+        n.closeSocket(socket);
+        handler.onClose(this);
     }
 }

@@ -53,6 +53,8 @@ __declspec(dllexport) int w_send(SOCKET socket, char* buf, int len);
 
 __declspec(dllexport) int w_close_socket(SOCKET socket);
 
+__declspec(dllexport) int w_shutdown_write(SOCKET socket);
+
 __declspec(dllexport) int w_get_last_error();
 
 __declspec(dllexport) int w_clean_up();

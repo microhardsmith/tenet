@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.util.Map;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  *   Native implementation under MacOS, using kqueue
@@ -66,6 +67,7 @@ public class MacNative implements Native {
     private static final MethodHandle recvMethodHandle;
     private static final MethodHandle sendMethodHandle;
     private static final MethodHandle closeMethodHandle;
+    private static final MethodHandle shutdownWriteMethodHandle;
     private static final MethodHandle errnoMethodHandle;
     private static final int addressLen;
     private static final int connectBlockCode;
@@ -221,7 +223,7 @@ public class MacNative implements Native {
             if(channel != null) {
                 if((flags & Constants.EV_EOF) != 0) {
                     // remote current socket
-                    channel.shutdown();
+                    channel.close();
                 }else if((filter & Constants.EVFILT_READ) != 0) {
                     // read event
                     ReadBuffer readBuffer = buffers[i];
@@ -236,7 +238,7 @@ public class MacNative implements Native {
                     }
                 }else if((filter & Constants.EVFILT_WRITE) != 0) {
                     // write event
-                    channel.becomeWritable();
+                    LockSupport.unpark(channel.writerThread());
                 }else {
                     // should never happen
                     throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -276,6 +278,11 @@ public class MacNative implements Native {
     @Override
     public void closeSocket(Socket socket) {
         check(close(socket.intValue()), "close socket");
+    }
+
+    @Override
+    public void shutdownWrite(Socket socket) {
+        check(shutdownWrite(socket.intValue()), "shutdown write");
     }
 
     @Override
@@ -333,6 +340,8 @@ public class MacNative implements Native {
                 "m_send", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         closeMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_close", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
+        shutdownWriteMethodHandle = NativeUtil.methodHandle(symbolLookup,
+                "m_shutdown_write", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         errnoMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_errno", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         // initialize constants
@@ -555,6 +564,17 @@ public class MacNative implements Native {
             return (int) closeMethodHandle.invokeExact(fd);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking close()", throwable);
+        }
+    }
+
+    /**
+     *  corresponding to `int m_shutdown_write(int fd)`
+     */
+    public int shutdownWrite(int fd) {
+        try{
+            return (int) shutdownWriteMethodHandle.invokeExact(fd);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking shutdownWrite()", throwable);
         }
     }
 
