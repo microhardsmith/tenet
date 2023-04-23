@@ -311,7 +311,7 @@ public class LinuxNative implements Native {
     }
 
     static  {
-        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.commonLib());
+        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.netLib());
         epollCreateMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "l_epoll_create", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         epollCtlAddMethodHandle = NativeUtil.methodHandle(symbolLookup,

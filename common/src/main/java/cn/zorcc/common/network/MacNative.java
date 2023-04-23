@@ -301,7 +301,7 @@ public class MacNative implements Native {
     }
 
     static {
-        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.commonLib());
+        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.netLib());
         kqueueMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_kqueue", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         keventCtlMethodHandle = NativeUtil.methodHandle(symbolLookup,

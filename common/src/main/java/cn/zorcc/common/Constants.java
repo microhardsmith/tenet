@@ -271,7 +271,7 @@ public class Constants {
     public static final String DYNAMIC_SQL_ERR = "Err occurred in dynamic sql";
 
     /**
-     *  net
+     *  epoll
      */
     public static final int EPOLL_IN = 1;
     public static final int EPOLL_OUT = 1 << 2;
@@ -284,15 +284,26 @@ public class Constants {
      */
     public static final int WEPOLL_ONESHOT = 1 << 31;
     public static final int EPOLL_ONESHOT = 1 << 30;
+
+    /**
+     *   kqueue
+     */
     public static final short EVFILT_READ = -1;
     public static final short EVFILT_WRITE = -2;
     public static final short EV_ADD = 1;
     public static final short EV_ONESHOT = 1 << 4;
     public static final int EV_EOF = 1 << 15;
-    public static final int EV_ERROR = 1 << 14;
 
+    /**
+     *   ssl
+     */
+    public static final int SSL_FILETYPE_PEM = 1;
+    public static final int SSL_ERROR_WANT_READ = 2;
+    public static final int SSL_ERROR_WANT_WRITE = 3;
+    public static final int SSL_ERROR_ZERO_RETURN = 6;
 
 
     private Constants() {
+
     }
 }

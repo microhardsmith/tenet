@@ -61,15 +61,45 @@ public final class NativeUtil {
     }
 
     /**
-     *   获取当前操作系统对应的动态链接库路径字符串
+     *   获取当前操作系统对应的net动态链接库路径
      */
-    public static String commonLib() {
+    public static String netLib() {
         if(LINUX) {
             return "/lib/lib_linux.so";
         }else if(WINDOWS) {
             return "/lib/lib_win.dll";
         }else if(MACOS) {
             return "/lib/lib_macos.dylib";
+        }else {
+            throw new FrameworkException(ExceptionType.NATIVE, "Unsupported operating system : %s".formatted(OS_NAME));
+        }
+    }
+
+    /**
+     *   获取当前操作系统对应的crypto动态链接库路径
+     */
+    public static String cryptoLib() {
+        if(LINUX) {
+            return "/ssl/libcrypto-3-x64.so";
+        }else if(WINDOWS) {
+            return "/ssl/libcrypto-3-x64.dll";
+        }else if(MACOS) {
+            return "/ssl/libcrypto-3-x64.dylib";
+        }else {
+            throw new FrameworkException(ExceptionType.NATIVE, "Unsupported operating system : %s".formatted(OS_NAME));
+        }
+    }
+
+    /**
+     *   获取当前操作系统对应的ssl动态链接库路径
+     */
+    public static String sslLib() {
+        if(LINUX) {
+            return "/ssl/libssl-3-x64.so";
+        }else if(WINDOWS) {
+            return "/ssl/libssl-3-x64.dll";
+        }else if(MACOS) {
+            return "/ssl/libssl-3-x64.dylib";
         }else {
             throw new FrameworkException(ExceptionType.NATIVE, "Unsupported operating system : %s".formatted(OS_NAME));
         }

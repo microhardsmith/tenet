@@ -9,6 +9,18 @@ import lombok.Data;
 @Data
 public class NetworkConfig {
     /**
+     *   是否开启TLS加密,默认不开启
+     */
+    private Boolean enableSsl = false;
+    /**
+     *   服务端证书公钥路径
+     */
+    private String publicKeyFile = Constants.EMPTY_STRING;
+    /**
+     *   服务端证书私钥路径
+     */
+    private String privateKeyFile = Constants.EMPTY_STRING;
+    /**
      *  worker线程数量,默认为4,可以根据CPU核数进行适当调整
      *  Net的性能并不完全依赖于worker数量的提升,实际读写任务都会在虚拟线程中进行
      */

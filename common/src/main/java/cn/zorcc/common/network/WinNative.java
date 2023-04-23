@@ -83,7 +83,7 @@ public final class WinNative implements Native {
     private static final long invalidSocket;
 
     static {
-        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.commonLib());
+        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.netLib());
         epollCreateMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_epoll_create", FunctionDescriptor.of(ValueLayout.ADDRESS));
         epollCtlAddMethodHandle = NativeUtil.methodHandle(symbolLookup,

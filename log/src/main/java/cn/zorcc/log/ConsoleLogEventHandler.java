@@ -27,7 +27,7 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
     private final WriteBuffer buffer;
 
     public ConsoleLogEventHandler(LogConfig logConfig) {
-        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.commonLib());
+        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.netLib());
         this.printHandle = NativeUtil.methodHandle(symbolLookup, "g_print", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         this.consumer = parseLogFormat(logConfig);
         // Console builder should have a larger size than logEvent
