@@ -9,7 +9,7 @@ import lombok.Data;
 @Data
 public class NetworkConfig {
     /**
-     *   是否开启TLS加密,默认不开启
+     *   服务端是否开启TLS加密,默认不开启
      */
     private Boolean enableSsl = false;
     /**
@@ -53,16 +53,4 @@ public class NetworkConfig {
      *  单次epoll获取事件数组长度
      */
     private Integer maxEvents = 64;
-    /**
-     *  单次分配读内存块大小,每次轮询到事件后都会读取至多该值的内存数据
-     */
-    private Integer readBufferSize = 16 * Constants.KB;
-    /**
-     *  单次分配写内存块大小,该值只代表WriteBuffer初始大小,在后续写过程中会逐渐扩容
-     */
-    private Integer writeBufferSize = 4 * Constants.KB;
-    /**
-     *  socket map初始大小,后续会自动扩容
-     */
-    private Integer mapSize = 1024;
 }

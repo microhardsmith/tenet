@@ -49,4 +49,13 @@ public record NetworkState(
             return new NetworkState(m, null, array, null, new ConcurrentHashMap<>(config.getMapSize()));
         }
     }
+
+    public void registerChannel(Channel channel) {
+        Socket s = channel.socket();
+        if(NativeUtil.isWindows()) {
+            longMap.put(s.longValue(), channel);
+        }else {
+            intMap.put(s.intValue(), channel);
+        }
+    }
 }

@@ -6,13 +6,11 @@ import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.exception.ServiceException;
 import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.common.util.ThreadUtil;
 
 import java.lang.foreign.MemorySegment;
-import java.util.Map;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TransferQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -23,17 +21,21 @@ import java.util.concurrent.locks.LockSupport;
  */
 public final class Channel implements LifeCycle {
     private static final Native n = Native.n;
+    private final Codec codec;
+    private final ChannelHandler handler;
+    private final Protocol protocol;
+    private final Socket socket;
+    private final Worker worker;
     /**
      *   Read mask for creating virtual thread names
      *   For each read operation, a new virtual thread would be created to handle the process
      *   And the sequence number would be refreshed since it reach mask
      */
     private static final long mask = (1 << 9) - 1;
+    /**
+     *   whether the channel has been shutdown
+     */
     private final AtomicBoolean available = new AtomicBoolean(false);
-    private final ChannelHandler handler;
-    private final Codec codec;
-    private final Socket socket;
-    private final Worker worker;
     /**
      *   writer virtual thread
      */
@@ -55,29 +57,29 @@ public final class Channel implements LifeCycle {
      */
     private long counter = 0L;
     /**
-     *   Visible only for its worker
+     *   current read buffer zone, visible only for its worker
      */
-    private WriteBuffer writeBuffer;
+    private WriteBuffer buffer;
     /**
      *   Writer task queue
      */
     private final TransferQueue<Msg> queue = new LinkedTransferQueue<>();
 
-    private Channel(Net net, Socket socket, ChannelHandler handler, Codec codec, Remote remote, Loc loc, Worker worker) {
+    private Channel(Socket socket, Codec codec, ChannelHandler handler, Protocol protocol, Remote remote, Loc loc, Worker worker) {
         this.socket = socket;
-        this.handler = handler;
         this.codec = codec;
+        this.handler = handler;
+        this.protocol = protocol;
         this.remote = remote;
         this.loc = loc;
         this.worker = worker;
         this.readThreadPrefix = "Ch@" + socket.hashCode() + "-";
         this.writerThread = ThreadUtil.virtual("Ch@" + socket.hashCode(), () -> {
             Thread currentThread = Thread.currentThread();
-            int writeBufferInitialSize = net.config().getWriteBufferSize();
             try{
                 while (!currentThread.isInterrupted()) {
                     Msg msg = queue.take();
-                    try(WriteBuffer writeBuffer = new WriteBuffer(writeBufferInitialSize)) {
+                    try(WriteBuffer writeBuffer = new WriteBuffer(Net.WRITE_BUFFER_SIZE)) {
                         codec.encode(writeBuffer, msg.entity());
                         doWrite(writeBuffer);
                         msg.tryCallBack();
@@ -90,45 +92,26 @@ public final class Channel implements LifeCycle {
     }
 
     /**
-     *   create a channel that accepted by server, using default handler and codec
+     *   create a channel that accepted by server, using server-side default handler,codec and protocol
      */
-    public static Channel forServer(Net net, Socket socket, Loc loc, Worker worker) {
-        return new Channel(net, socket, net.newHandler(), net.newCodec(), null, loc, worker);
+    public static Channel forServer(Net net, ClientSocket clientSocket) {
+        Socket socket = clientSocket.socket();
+        Loc loc = clientSocket.loc();
+        return new Channel(socket, net.newCodec(), net.newHandler(), net.newProtocol(socket), null, loc, net.nextWorker());
     }
 
     /**
      *   create a channel that connected by client, using customized codec
      */
-    public static Channel forClient(Net net, Socket socket, Codec codec, Remote remote, Worker worker) {
-        return new Channel(net, socket, net.newHandler(), codec, remote, remote.loc(), worker);
+    public static Channel forClient(Socket socket, Codec codec, ChannelHandler handler, Protocol protocol, Remote remote, Worker worker) {
+        return new Channel(socket, codec, handler, protocol, remote, remote.loc(), worker);
     }
 
     /**
-     *   Channel initialization, now channel could read and write
-     *   should only be accessed in Master's thread
+     *   return current channel's socket
      */
-    @Override
-    public void init() {
-        assert Master.inMasterThread();
-        if(available.compareAndSet(false, true)) {
-            // start writer thread
-            writerThread.start();
-            // register current channel to worker's map
-            NetworkState workerState = worker.state();
-            if(NativeUtil.isWindows()) {
-                workerState.longMap().put(socket.longValue(), this);
-            }else {
-                workerState.intMap().put(socket.intValue(), this);
-            }
-            // register multiplexing events
-            n.registerRead(workerState.mux(), socket);
-            // invoke handler's function
-            handler.onConnected(this);
-            // add current channel to remote
-            if(remote != null) {
-                remote.add(this);
-            }
-        }
+    public Socket socket() {
+        return socket;
     }
 
     /**
@@ -157,6 +140,10 @@ public final class Channel implements LifeCycle {
      */
     public ChannelHandler handler() {
         return handler;
+    }
+
+    public Protocol protocol() {
+        return protocol;
     }
 
     /**
@@ -191,25 +178,25 @@ public final class Channel implements LifeCycle {
      */
     public void onReadBuffer(ReadBuffer buffer) {
         assert Worker.inWorkerThread();
-        if(writeBuffer != null) {
+        if(this.buffer != null) {
             // last time readBuffer read is not complete
-            writeBuffer.write(buffer.remaining());
-            ReadBuffer readBuffer = writeBuffer.toReadBuffer();
+            this.buffer.write(buffer.remaining());
+            ReadBuffer readBuffer = this.buffer.toReadBuffer();
             tryRead(readBuffer);
             if(readBuffer.remains()) {
                 // still incomplete read
-                writeBuffer.truncate(readBuffer.readIndex());
+                this.buffer.truncate(readBuffer.readIndex());
             }else {
                 // writeBuffer can now be released
-                writeBuffer.close();
-                writeBuffer = null;
+                this.buffer.close();
+                this.buffer = null;
             }
         }else {
             tryRead(buffer);
             if(buffer.remains()) {
                 // create a new writeBuffer to maintain the unreadable bytes
-                writeBuffer = new WriteBuffer(buffer.len());
-                writeBuffer.write(buffer.remaining());
+                this.buffer = new WriteBuffer(buffer.len());
+                this.buffer.write(buffer.remaining());
             }
         }
         // reset read buffer for reuse
@@ -244,20 +231,44 @@ public final class Channel implements LifeCycle {
     }
 
     /**
-     *   return if the channel is available (not shutdown)
+     *   Return current channel's available flag (not shutdown)
      */
-    public boolean isAvailable() {
-        return available.get();
+    public AtomicBoolean available() {
+        return available;
     }
 
     /**
-     *   shutdown current channel, this method could be invoked from any thread
+     *   Channel initialization, now channel could read and write
+     *   should only be accessed in Master's thread
+     */
+    @Override
+    public void init() {
+        assert Master.inMasterThread();
+        if(available.compareAndSet(false, true)) {
+            // start writer thread
+            writerThread.start();
+            // register current channel to worker's map
+            NetworkState workerState = worker.state();
+            workerState.registerChannel(this);
+            // register multiplexing events
+            n.registerRead(workerState.mux(), socket);
+            // invoke handler's function
+            handler.onConnected(this);
+            // add current channel to remote
+            if(remote != null) {
+                remote.add(this);
+            }
+        }
+    }
+
+    /**
+     *   Shutdown current channel, this method could be invoked from any thread
      *   Note that shutdown current channel doesn't block the recv operation, the other side will recv 0 and close the socket
      *   in fact, socket will only be closed when worker thread recv EOF from remote peer
      */
     @Override
     public void shutdown() {
-        // if current channel has already been closed, there is no need to shutdown
+        // if current channel has already been closed, there is no need to shut down
         if(available.compareAndSet(true, false)) {
             writerThread.interrupt();
             n.shutdownWrite(socket);
@@ -265,7 +276,7 @@ public final class Channel implements LifeCycle {
     }
 
     /**
-     *   close current channel, this method could only be invoked from worker thread
+     *   Close current channel, this method could only be invoked from worker thread
      */
     public void close() {
         assert Worker.inWorkerThread();

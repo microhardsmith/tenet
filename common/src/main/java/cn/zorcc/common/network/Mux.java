@@ -7,7 +7,9 @@ import cn.zorcc.common.exception.FrameworkException;
 import java.lang.foreign.MemorySegment;
 
 /**
- *   multiplexing fd abstraction on different platforms
+ *   Multiplexing fd abstraction on different platforms
+ *   On windows, it is a pointer
+ *   On linux or macOS, it is an int fd
  */
 public record Mux (
         MemorySegment winHandle,

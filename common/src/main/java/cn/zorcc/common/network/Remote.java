@@ -57,7 +57,7 @@ public class Remote implements ObjPool<Channel> {
         Thread currentThread = Thread.currentThread();
         try{
             Channel ch = channels.take();
-            if(!ch.isAvailable()) {
+            if(!ch.available().get()) {
                 counter.decrementAndGet();
                 return get();
             }
@@ -85,7 +85,7 @@ public class Remote implements ObjPool<Channel> {
                 }
                 nano -= Clock.elapsed(start);
             }
-            if(!ch.isAvailable()) {
+            if(!ch.available().get()) {
                 counter.decrementAndGet();
                 return get(nano, TimeUnit.NANOSECONDS);
             }
@@ -98,7 +98,7 @@ public class Remote implements ObjPool<Channel> {
 
     @Override
     public void release(Channel channel) {
-        if(channel.isAvailable()) {
+        if(channel.available().get()) {
             if (!channels.offer(channel)) {
                 throw new NetworkException(Constants.UNREACHED);
             }

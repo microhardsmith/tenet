@@ -80,11 +80,11 @@ public final class NativeUtil {
      */
     public static String cryptoLib() {
         if(LINUX) {
-            return "/ssl/libcrypto-3-x64.so";
+            return "/ssl/libcrypto.so";
         }else if(WINDOWS) {
             return "/ssl/libcrypto-3-x64.dll";
         }else if(MACOS) {
-            return "/ssl/libcrypto-3-x64.dylib";
+            return "/ssl/libcrypto.3.dylib";
         }else {
             throw new FrameworkException(ExceptionType.NATIVE, "Unsupported operating system : %s".formatted(OS_NAME));
         }
@@ -95,11 +95,11 @@ public final class NativeUtil {
      */
     public static String sslLib() {
         if(LINUX) {
-            return "/ssl/libssl-3-x64.so";
+            return "/ssl/libssl.so";
         }else if(WINDOWS) {
             return "/ssl/libssl-3-x64.dll";
         }else if(MACOS) {
-            return "/ssl/libssl-3-x64.dylib";
+            return "/ssl/libssl.3.dylib";
         }else {
             throw new FrameworkException(ExceptionType.NATIVE, "Unsupported operating system : %s".formatted(OS_NAME));
         }

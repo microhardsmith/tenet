@@ -27,6 +27,7 @@ public class Openssl {
     private static final MethodHandle sslCtxCheckPrivateKeyMethod;
     private static final MethodHandle sslNewMethod;
     private static final MethodHandle sslSetFdMethod;
+    private static final MethodHandle sslConnectMethod;
     private static final MethodHandle sslReadMethod;
     private static final MethodHandle sslWriteMethod;
     private static final MethodHandle sslShutdownMethod;
@@ -57,6 +58,7 @@ public class Openssl {
         sslCtxCheckPrivateKeyMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_check_private_key", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         sslNewMethod = NativeUtil.methodHandle(ssl, "SSL_new", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         sslSetFdMethod = NativeUtil.methodHandle(ssl, "SSL_set_fd", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        sslConnectMethod = NativeUtil.methodHandle(ssl, "SSL_connect", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         sslReadMethod = NativeUtil.methodHandle(ssl, "SSL_read", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         sslWriteMethod = NativeUtil.methodHandle(ssl, "SSL_write", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         sslShutdownMethod = NativeUtil.methodHandle(ssl, "SSL_shutdown", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
@@ -129,6 +131,14 @@ public class Openssl {
             return (int) sslSetFdMethod.invokeExact(ssl, fd);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslSetFd()", throwable);
+        }
+    }
+
+    public static int sslConnect(MemorySegment ssl) {
+        try{
+            return (int) sslConnectMethod.invokeExact(ssl);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslConnect()", throwable);
         }
     }
 

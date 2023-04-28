@@ -3,8 +3,10 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.NativeUtil;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 
 /**
@@ -13,20 +15,28 @@ import java.lang.foreign.MemorySegment;
 public interface Native {
 
     /**
-     *   err code means connect operation would block
+     *   return err code which means connect operation would block on current operating system
      */
     int connectBlockCode();
 
     /**
-     *   err code means send operation would block
+     *   return err code which means send operation would block on current operating system
      */
     int sendBlockCode();
 
     /**
-     *   prepare multiplexing resources (wepoll, epoll or kqueue)
+     *   create sockAddr struct according to loc using target arena
+     */
+    MemorySegment createSockAddr(Loc loc, Arena arena);
+
+    /**
+     *   create multiplexing resources (wepoll, epoll or kqueue)
      */
     Mux createMux();
 
+    /**
+     *   create multiplexing struct array
+     */
     MemorySegment createEventsArray(NetworkConfig config);
 
     /**
@@ -48,7 +58,7 @@ public interface Native {
     void registerRead(Mux mux, Socket socket);
 
     /**
-     *   register write event for only one shot
+     *   register write event for only one-shot
      *   use case:
      *      1. when channel is not writable (TCP write buffer is full)
      *      2. when nonblocking channel is establishing connection
@@ -56,12 +66,22 @@ public interface Native {
     void registerWrite(Mux mux, Socket socket);
 
     /**
-     *   unregister socket event, used when channel has disconnected
+     *   unregister socket event
+     *   note that kqueue will automatically remote the registry when socket was closed, but we still manually unregister it for consistency
      */
     void unregister(Mux mux, Socket socket);
 
     /**
-     *   waiting for new connections, don't throw exception here cause it would exit the loop thread
+     *   multiplexing wait for events, return the available events
+     */
+    int multiplexingWait(NetworkState state, int maxEvents);
+
+    void checkConnection(NetworkState state, int index, Net net);
+
+    void checkData(NetworkState state, int index, ReadBuffer readBuffer);
+
+    /**
+     *   waiting for new connections, don't throw exception here because it would exit the loop thread
      */
     void waitForAccept(Net net, NetworkState state);
 
@@ -69,11 +89,6 @@ public interface Native {
      *   waiting for data, don't throw exception here cause it would exit the loop thread
      */
     void waitForData(ReadBuffer[] buffers, NetworkState state);
-
-    /**
-     *   Connect remote Loc, adding it to current Remote instance
-     */
-    void connect(Net net, Remote remote, Codec codec);
 
     /**
      *   Close a socket
@@ -86,7 +101,28 @@ public interface Native {
     void shutdownWrite(Socket socket);
 
     /**
-     *   send data to remote socket
+     *   Accept socket connection, return the accepted client loc and socket
+     */
+    ClientSocket accept(Socket socket);
+
+    /**
+     *   Connect socket with target socketAddr, return true if connection is successful, return false if connection is in-process
+     *   throw exception if error occurred
+     */
+    boolean connect(Socket socket, MemorySegment sockAddr);
+
+    /**
+     *   Connect target channel, if non-blocking channel's connection is in-process, net will register write event
+     */
+    boolean connect(Net net, Channel channel);
+
+    /**
+     *   recv data from remote socket, return the actual bytes received
+     */
+    int recv(Socket socket, MemorySegment data, int len);
+
+    /**
+     *   send data to remote socket, return the actual bytes sent
      */
     int send(Socket socket, MemorySegment data, int len);
 
@@ -134,7 +170,6 @@ public interface Native {
         }else if(NativeUtil.isWindows()) {
             return new WinNative();
         }else if(NativeUtil.isMacos()) {
-            // TODO 需要区分x64和arm
             return new MacNative();
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, "Unsupported operating system");

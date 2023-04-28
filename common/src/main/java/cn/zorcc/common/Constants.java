@@ -278,6 +278,10 @@ public class Constants {
     public static final int EPOLL_ERR = 1 << 3;
     public static final int EPOLL_HUP = 1 << 4;
     public static final int EPOLL_RDHUP = 1 << 13;
+    /**
+     *   represent all events from remote side operation
+     */
+    public static final int EPOLL_REMOTE = EPOLL_IN & EPOLL_RDHUP & EPOLL_ERR & EPOLL_RDHUP;
 
     /**
      *   here wepoll and epoll have different values for ONESHOT, pretty weird, don't know why
@@ -291,6 +295,7 @@ public class Constants {
     public static final short EVFILT_READ = -1;
     public static final short EVFILT_WRITE = -2;
     public static final short EV_ADD = 1;
+    public static final short EV_DELETE = 1 << 1;
     public static final short EV_ONESHOT = 1 << 4;
     public static final int EV_EOF = 1 << 15;
 

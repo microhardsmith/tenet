@@ -5,16 +5,37 @@ import cn.zorcc.common.Context;
 import cn.zorcc.common.LifeCycle;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.ConfigUtil;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
  *   Net is the core of the whole Network application, Net consists of a Master and several Workers
+ *   For a network channel, the most essential three components are : codec, handler and protocol
+ *   Codec determines how the ReadBuffer should be decoded as a java object, and how to parse a java object into a writeBuffer for transferring
+ *   Handler determines how we deal with the incoming data
+ *   Protocol determines the low level operations
  */
 public class Net implements LifeCycle {
+    /**
+     *  read buffer maximum size for a read operation, could be changed according to specific circumstances
+     */
+    public static final int READ_BUFFER_SIZE = 16 * Constants.KB;
+    /**
+     *  write buffer initial size, will automatically expand, could be changed according to specific circumstances
+     */
+    public static final int WRITE_BUFFER_SIZE = 4 * Constants.KB;
+    /**
+     *  socket map initial size, will automatically expand, could be changed according to specific circumstances
+     */
+    public static final int MAP_SIZE = 1024;
+
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
     private static final Native n = Native.n;
     private final NetworkConfig config;
@@ -23,8 +44,9 @@ public class Net implements LifeCycle {
     private final AtomicLong counter = new AtomicLong(0L);
     private final Supplier<ChannelHandler> handlerSupplier;
     private final Supplier<Codec> codecSupplier;
+    private final Function<Socket, Protocol> protocolFunction;
 
-    public Net(Supplier<ChannelHandler> handlerSupplier, Supplier<Codec> codecSupplier) {
+    public Net(Supplier<ChannelHandler> handlerSupplier, Supplier<Codec> codecSupplier, Function<Socket, Protocol> protocolFunction) {
         if(!instanceFlag.compareAndSet(false, true)) {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.SINGLETON_MSG);
         }
@@ -35,6 +57,7 @@ public class Net implements LifeCycle {
         validateNetworkConfig();
         this.handlerSupplier = handlerSupplier;
         this.codecSupplier = codecSupplier;
+        this.protocolFunction = protocolFunction;
         this.master = new Master(this);
         this.workers = new Worker[config.getWorkerCount()];
         for(int sequence = 0; sequence < workers.length; sequence++) {
@@ -42,16 +65,29 @@ public class Net implements LifeCycle {
         }
     }
 
-    public ChannelHandler newHandler() {
-        return handlerSupplier.get();
-    }
-
+    /**
+     *   create a server-side default codec
+     */
     public Codec newCodec() {
         return codecSupplier.get();
     }
 
     /**
-     *   validate global network config
+     *   create a server-side default handler
+     */
+    public ChannelHandler newHandler() {
+        return handlerSupplier.get();
+    }
+
+    /**
+     *   create a server-side default protocol
+     */
+    public Protocol newProtocol(Socket socket) {
+        return protocolFunction.apply(socket);
+    }
+
+    /**
+     *   validate global network config, throw exception if illegal
      */
     private void validateNetworkConfig() {
         String ip = config.getIp();
@@ -68,6 +104,9 @@ public class Net implements LifeCycle {
         }
     }
 
+    /**
+     *   return current network config
+     */
     public NetworkConfig config() {
         return config;
     }
@@ -80,7 +119,7 @@ public class Net implements LifeCycle {
     }
 
     /**
-     *   perform round robin worker selection
+     *   perform round-robin worker selection
      */
     public Worker nextWorker() {
         int index = (int) (counter.getAndIncrement() % workers.length);
@@ -88,17 +127,30 @@ public class Net implements LifeCycle {
     }
 
     /**
-     *   launch a client connect for remote server, after connection is established, a newly created channel will be bound with current Remote instance
+     *   Launch a client connect operation for remote server
+     *   After connection is established, a newly created channel will be bound with current Remote instance
      */
-    public void connect(Remote remote, Codec codec) {
-        n.connect(this, remote, codec);
-    }
-
-    /**
-     *   launch a client connect for remote server, using default codec
-     */
-    public void connect(Remote remote) {
-        connect(remote, codecSupplier.get());
+    public void connect(Remote remote, Codec codec, ChannelHandler handler, Protocol protocol) {
+        Loc loc = remote.loc();
+        Socket socket = n.createSocket(config, false);
+        Worker worker = nextWorker();
+        Channel channel = Channel.forClient(socket, codec, handler, protocol, remote, worker);
+        try(Arena arena = Arena.openConfined()) {
+            MemorySegment sockAddr = n.createSockAddr(loc, arena);
+            if(n.connect(socket, sockAddr)) {
+                channel.protocol().canConnect(channel);
+            }else {
+                int errno = n.errno();
+                if(errno == n.connectBlockCode()) {
+                    // register channel to the master for write event
+                    NetworkState state = master.state();
+                    state.registerChannel(channel);
+                    n.registerWrite(state.mux(), socket);
+                }else {
+                    throw new FrameworkException(ExceptionType.NETWORK, "Unable to connect, err : %d".formatted(errno));
+                }
+            }
+        }
     }
 
     @Override

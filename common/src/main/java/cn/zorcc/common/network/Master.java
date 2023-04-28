@@ -25,12 +25,21 @@ public class Master implements LifeCycle {
         this.state = NetworkState.forMaster(config);
         this.thread = ThreadUtil.platform("Master", () -> {
             log.debug("Initializing network master, mux : {}, socket : {}", state.mux(), state.socket());
+            int maxEvents = config.getMaxEvents();
             Thread currentThread = Thread.currentThread();
             try{
                 n.bindAndListen(config, state.socket());
                 n.registerRead(state.mux(), state.socket());
                 while (!currentThread.isInterrupted()) {
-                    n.waitForAccept(net, state);
+                    int count = n.multiplexingWait(state, maxEvents);
+                    if(count == -1) {
+                        // multiplexing wait failed
+                        log.error("epoll_wait failed with errno : {}", n.errno());
+                        continue;
+                    }
+                    for(int index = 0; index < count; index++) {
+                        n.checkConnection(state, index);
+                    }
                 }
             } finally {
                 log.debug("Exiting network master");

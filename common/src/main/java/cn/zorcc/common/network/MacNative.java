@@ -140,7 +140,10 @@ public class MacNative implements Native {
 
     @Override
     public void unregister(Mux mux, Socket socket) {
-        // when socket is closed, the events will be automatically deleted from the mux
+        int kqfd = mux.kqfd();
+        int fd = socket.intValue();
+        // always delete read and write, as long as the socket has been registered to the kq, this action won't cause any error
+        check(keventCtl(kqfd, fd, (short) (Constants.EVFILT_READ | Constants.EVFILT_WRITE), Constants.EV_DELETE), "kevent unregister");
     }
 
     @Override

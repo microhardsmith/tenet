@@ -149,6 +149,33 @@ public final class WinNative implements Native {
         }
     }
 
+    /**
+     *   corresponding to `int w_connect_block_code()`
+     */
+    @Override
+    public int connectBlockCode() {
+        return connectBlockCode;
+    }
+
+    /**
+     *   corresponding to `int w_send_block_code()`
+     */
+    @Override
+    public int sendBlockCode() {
+        return sendBlockCode;
+    }
+
+    @Override
+    public MemorySegment createSockAddr(Loc loc, Arena arena) {
+        MemorySegment result = arena.allocate(sockAddrLayout);
+        MemorySegment ip = NativeUtil.allocateStr(arena, loc.ip(), addressLen);
+        int setSockAddr = check(setSockAddr(result, ip, loc.port()), "set SockAddr");
+        if(setSockAddr == 0) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Loc is not valid");
+        }
+        return result;
+    }
+
     @Override
     public Mux createMux() {
         MemorySegment winHandle = epollCreate();
@@ -222,6 +249,51 @@ public final class WinNative implements Native {
         MemorySegment winHandle = mux.winHandle();
         long fd = socket.longValue();
         check(epollCtlDel(winHandle, fd), "epoll_ctl_del");
+    }
+
+    @Override
+    public int multiplexingWait(NetworkState state, int maxEvents) {
+        return epollWait(state.mux().winHandle(), state.events(), maxEvents, -1);
+    }
+
+    @Override
+    public void checkConnection(NetworkState state, int index, Net net) {
+        MemorySegment events = state.events();
+        Socket serverSocket = state.socket();
+        int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
+        long socket = NativeUtil.getLong(events, index * eventSize + dataOffset + sockOffset);
+        if(socket == serverSocket.longValue()) {
+            // current server socket receive connection
+            ClientSocket clientSocket = accept(serverSocket);
+            Channel channel = Channel.forServer(net, clientSocket);
+            state.registerChannel(channel);
+            channel.protocol().canAccept(channel);
+        }else {
+            // protocol defined master behavior
+            Channel channel = state.longMap().get(socket);
+            if((event & Constants.EPOLL_IN) != 0) {
+                channel.protocol().masterCanRead(channel);
+            }else if((event & Constants.EPOLL_OUT) != 0) {
+                channel.protocol().masterCanWrite(channel);
+            }else {
+                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+            }
+        }
+    }
+
+    @Override
+    public void checkData(NetworkState state, int index, ReadBuffer readBuffer) {
+        MemorySegment events = state.events();
+        int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
+        long socket = NativeUtil.getLong(events, index * eventSize + dataOffset + sockOffset);
+        Channel channel = state.longMap().get(socket);
+        if((event & Constants.EPOLL_REMOTE) != 0) {
+            channel.protocol().workerCanRead(channel, readBuffer);
+        }else if((event & Constants.EPOLL_OUT) != 0) {
+            channel.protocol().workerCanWrite(channel);
+        }else {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        }
     }
 
     @Override
@@ -299,7 +371,6 @@ public final class WinNative implements Native {
         for(int i = 0; i < count; i++) {
             int event = NativeUtil.getInt(events, i * eventSize + eventsOffset);
             long socket = NativeUtil.getLong(events, i * eventSize + dataOffset + sockOffset);
-            log.info("event : {}, socket : {}, i : {}, count : {}", event, socket, i, count);
             Channel channel = channelMap.get(socket);
             if((event & Constants.EPOLL_IN) != 0 || (event & Constants.EPOLL_RDHUP) != 0 || (event & Constants.EPOLL_ERR) != 0 || (event & Constants.EPOLL_HUP) != 0) {
                 // read event
@@ -324,8 +395,8 @@ public final class WinNative implements Native {
     }
 
     @Override
-    public void connect(Net net, Remote remote, Codec codec) {
-        Loc loc = remote.loc();
+    public boolean connect(Net net, Channel channel) {
+        Loc loc = channel.loc();
         try(Arena arena = Arena.openConfined()) {
             Socket socket = createSocket(net.config(), false);
             MemorySegment addr = arena.allocate(sockAddrLayout);
@@ -335,9 +406,7 @@ public final class WinNative implements Native {
                 throw new FrameworkException(ExceptionType.NETWORK, "Network address is not valid");
             }
             int connect = connect(socket.longValue(), addr, addressLen);
-            Channel channel = Channel.forClient(net, socket, codec, remote, net.nextWorker());
             if(connect == -1) {
-                // we need to check if the connection is currently establishing
                 int errno = errno();
                 if(errno == connectBlockCode) {
                     // add it to current master's interest list
@@ -347,6 +416,8 @@ public final class WinNative implements Native {
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, "Unable to connect, err : %d".formatted(errno));
                 }
+            }else {
+                channel.protocol().canConnect(channel);
             }
         }
     }
@@ -362,6 +433,39 @@ public final class WinNative implements Native {
     }
 
     @Override
+    public ClientSocket accept(Socket socket) {
+        try(Arena arena = Arena.openConfined()) {
+            MemorySegment clientAddr = arena.allocate(sockAddrLayout);
+            MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, addressLen);
+            long clientFd = accept(socket.longValue(), clientAddr, sockAddrSize);
+            if(clientFd == invalidSocket) {
+                log.error("Failed to accept client socket, errno : {}", errno());
+            }
+            Socket clientSocket = new Socket(clientFd);
+            if (setNonBlocking(clientFd) == -1) {
+                log.error("Failed to set client socket as non_blocking, errno : {}", errno());
+                closeSocket(clientSocket);
+            }
+            if(address(clientAddr, address, addressLen) == -1) {
+                log.error("Failed to get client socket's remote address, errno : {}", errno());
+                closeSocket(clientSocket);
+            }
+            Loc loc = new Loc(NativeUtil.getStr(address), port(clientAddr));
+            return new ClientSocket(clientSocket, loc);
+        }
+    }
+
+    @Override
+    public boolean connect(Socket socket, MemorySegment sockAddr) {
+        return connect(socket.longValue(), sockAddr, addressLen) != -1;
+    }
+
+    @Override
+    public int recv(Socket socket, MemorySegment data, int len) {
+        return recv(socket.longValue(), data, len);
+    }
+
+    @Override
     public int send(Socket socket, MemorySegment data, int len) {
         return send(socket.longValue(), data, len);
     }
@@ -374,22 +478,6 @@ public final class WinNative implements Native {
     @Override
     public void exit() {
         check(cleanUp(), "wsa_clean_up");
-    }
-
-    /**
-     *   corresponding to `int w_connect_block_code()`
-     */
-    @Override
-    public int connectBlockCode() {
-        return connectBlockCode;
-    }
-
-    /**
-     *   corresponding to `int w_send_block_code()`
-     */
-    @Override
-    public int sendBlockCode() {
-        return sendBlockCode;
     }
 
     /**
