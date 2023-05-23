@@ -4,17 +4,12 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -22,6 +17,10 @@ import java.util.concurrent.ConcurrentHashMap;
  *  Helper class when need to reach C native methods
  */
 public final class NativeUtil {
+    /**
+     *   Global NULL pointer
+     */
+    public static final MemorySegment NULL_POINTER = MemorySegment.ofAddress(0L, ValueLayout.ADDRESS.byteSize(), SegmentScope.global());
     private static final String OS_NAME = System.getProperty("os.name").toLowerCase();
     private static final boolean LINUX = OS_NAME.contains("linux");
     private static final boolean WINDOWS = OS_NAME.contains("windows");
@@ -36,9 +35,30 @@ public final class NativeUtil {
     private static final VarHandle shortHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_SHORT);
     private static final VarHandle intHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_INT);
     private static final VarHandle longHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_LONG);
+    private static final MemorySegment stdout;
+    private static final MemorySegment stderr;
+    static {
+        try{
+            SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.netLib());
+            MethodHandle stdoutHandle = NativeUtil.methodHandle(symbolLookup, "g_stdout", FunctionDescriptor.of(ValueLayout.ADDRESS));
+            stdout = (MemorySegment) stdoutHandle.invokeExact();
+            MethodHandle stderrHandle = NativeUtil.methodHandle(symbolLookup, "g_stderr", FunctionDescriptor.of(ValueLayout.ADDRESS));
+            stderr = (MemorySegment) stdoutHandle.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Unable to load stdout and stderr", throwable);
+        }
+    }
 
     private NativeUtil() {
         throw new UnsupportedOperationException();
+    }
+
+    public static MemorySegment stdout() {
+        return stdout;
+    }
+
+    public static MemorySegment stderr() {
+        return stderr;
     }
 
     public static boolean isLinux() {
@@ -133,25 +153,8 @@ public final class NativeUtil {
      */
     public static SymbolLookup loadLibraryFromResource(String resourcePath, Class<?> clazz) {
         return cache.computeIfAbsent(resourcePath, k -> {
-            String suffix = k.substring(k.lastIndexOf('.'));
-            try(InputStream inputStream = (clazz == null ? NativeUtil.class : clazz).getResourceAsStream(k)) {
-                if(inputStream == null) {
-                    throw new FrameworkException(ExceptionType.NATIVE, "ResourcePath is not valid");
-                }else {
-                    final File tmp = File.createTempFile(Constants.TMP_LIB, suffix);
-                    Path path = tmp.toPath();
-                    Files.copy(inputStream, path, StandardCopyOption.REPLACE_EXISTING);
-                    if(tmp.exists()) {
-                        // when JVM exit, the tmp file will be destroyed
-                        tmp.deleteOnExit();
-                    }else {
-                        throw new FrameworkException(ExceptionType.NATIVE, "File %s doesn't exist".formatted(tmp.getAbsolutePath()));
-                    }
-                    return SymbolLookup.libraryLookup(path, SegmentScope.global());
-                }
-            }catch (IOException e) {
-                throw new FrameworkException(ExceptionType.NATIVE, "Unable to load library", e);
-            }
+            Path path = FileUtil.toTmp(k, Constants.TMP_LIB, clazz);
+            return SymbolLookup.libraryLookup(path, SegmentScope.global());
         });
     }
 

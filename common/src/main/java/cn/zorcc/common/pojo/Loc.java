@@ -7,7 +7,7 @@ package cn.zorcc.common.pojo;
  */
 public record Loc (
         String ip,
-        Integer port
+        short port
 ) {
 
 }

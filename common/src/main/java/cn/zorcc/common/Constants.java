@@ -1,5 +1,6 @@
 package cn.zorcc.common;
 
+import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
 
@@ -289,6 +290,10 @@ public class Constants {
     public static final int WEPOLL_ONESHOT = 1 << 31;
     public static final int EPOLL_ONESHOT = 1 << 30;
 
+    public static final int EPOLL_CTL_ADD = 1;
+    public static final int EPOLL_CTL_MOD = 2;
+    public static final int EPOLL_CTL_DEL = 3;
+
     /**
      *   kqueue
      */
@@ -306,9 +311,13 @@ public class Constants {
     public static final int SSL_ERROR_WANT_READ = 2;
     public static final int SSL_ERROR_WANT_WRITE = 3;
     public static final int SSL_ERROR_ZERO_RETURN = 6;
+    public static final long SSL_MODE_ENABLE_PARTIAL_WRITE = 1L;
+    public static final long SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER = 2L;
+    public static final long SSL_MODE_AUTO_RETRY = 4L;
+    public static final int SSL_VERIFY_PEER = 1;
 
 
     private Constants() {
-
+        throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
     }
 }

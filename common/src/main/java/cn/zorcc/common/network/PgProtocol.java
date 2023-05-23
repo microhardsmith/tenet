@@ -37,7 +37,7 @@ public final class PgProtocol implements Protocol {
     }
 
     @Override
-    public void workerCanWrite(Channel channel) {
+    public void canWrite(Channel channel) {
 
     }
 }

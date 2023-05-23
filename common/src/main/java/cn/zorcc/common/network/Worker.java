@@ -16,35 +16,56 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Slf4j
 public final class Worker implements LifeCycle {
     private final Native n = Native.n;
-    private final NetworkConfig config;
     private final NetworkState state;
     private final Thread thread;
-    private final ReadBuffer[] readBuffers;
     private final AtomicBoolean running = new AtomicBoolean(false);
+
     public Worker(Net net, int sequence) {
-        this.config = net.config();
+        NetworkConfig config = net.config();
         this.state = NetworkState.forWorker(config);
-        this.readBuffers = new ReadBuffer[config.getMaxEvents()];
+        int maxEvents = config.getMaxEvents();
         this.thread = ThreadUtil.platform("Worker-" + sequence, () -> {
-            log.debug("Initializing network worker, mux : {}, sequence : {}", state.mux(), sequence);
             Thread currentThread = Thread.currentThread();
-            try{
-                for(int i = 0; i < readBuffers.length; i++) {
-                    readBuffers[i] = new ReadBuffer(config.getReadBufferSize());
-                }
+            try(ReadBufferArray readBufferArray = new ReadBufferArray(maxEvents)) {
                 while (!currentThread.isInterrupted()) {
-                    n.waitForData(readBuffers, state);
-                }
-            } finally {
-                log.debug("Exiting network worker, sequence : {}", sequence);
-                for (ReadBuffer readBuffer : readBuffers) {
-                    if(readBuffer != null) {
-                        readBuffer.close();
+                    int count = n.multiplexingWait(state, maxEvents);
+                    if(count == -1) {
+                        log.error("Mux wait failed with errno : {}", n.errno());
+                        continue;
+                    }
+                    for(int index = 0; index < count; ++index) {
+                        n.waitForData(state, index, readBufferArray.element(index));
                     }
                 }
+            }finally {
+                log.debug("Exiting network worker, sequence : {}", sequence);
                 n.exitMux(state.mux());
             }
         });
+    }
+
+    @SuppressWarnings("resource")
+    private static class ReadBufferArray implements AutoCloseable {
+        private final ReadBuffer[] readBuffers;
+        public ReadBufferArray(int size) {
+            this.readBuffers = new ReadBuffer[size];
+            for(int i = 0; i < readBuffers.length; i++) {
+                readBuffers[i] = new ReadBuffer(Net.READ_BUFFER_SIZE);
+            }
+        }
+
+        public ReadBuffer element(int index) {
+            return readBuffers[index];
+        }
+
+        @Override
+        public void close() {
+            for (ReadBuffer readBuffer : readBuffers) {
+                if(readBuffer != null) {
+                    readBuffer.close();
+                }
+            }
+        }
     }
 
     /**

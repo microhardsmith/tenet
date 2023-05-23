@@ -10,8 +10,6 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
-import java.util.Map;
-import java.util.concurrent.locks.LockSupport;
 
 /**
  *  Native implementation under Windows, using wepoll
@@ -54,8 +52,7 @@ public final class WinNative implements Native {
     );
     private static final int sockAddrSize = (int) sockAddrLayout.byteSize();
     private static final MethodHandle epollCreateMethodHandle;
-    private static final MethodHandle epollCtlAddMethodHandle;
-    private static final MethodHandle epollCtlDelMethodHandle;
+    private static final MethodHandle epollCtlMethodHandle;
     private static final MethodHandle epollWaitMethodHandle;
     private static final MethodHandle epollCloseMethodHandle;
     private static final MethodHandle addressMethodHandle;
@@ -86,10 +83,8 @@ public final class WinNative implements Native {
         SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.netLib());
         epollCreateMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_epoll_create", FunctionDescriptor.of(ValueLayout.ADDRESS));
-        epollCtlAddMethodHandle = NativeUtil.methodHandle(symbolLookup,
-                "w_epoll_ctl_add", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
-        epollCtlDelMethodHandle = NativeUtil.methodHandle(symbolLookup,
-                "w_epoll_ctl_del", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+        epollCtlMethodHandle = NativeUtil.methodHandle(symbolLookup,
+                "w_epoll_ctl_add", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
         epollWaitMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_epoll_wait", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         epollCloseMethodHandle = NativeUtil.methodHandle(symbolLookup,
@@ -97,13 +92,13 @@ public final class WinNative implements Native {
         addressMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_address", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         portMethodHandle = NativeUtil.methodHandle(symbolLookup,
-                "w_port", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+                "w_port", FunctionDescriptor.of(ValueLayout.JAVA_SHORT, ValueLayout.ADDRESS));
         socketCreateMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_socket_create", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
         acceptMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_accept", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         setSockAddrMethodHandle = NativeUtil.methodHandle(symbolLookup,
-                "w_set_sock_addr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+                "w_set_sock_addr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_SHORT));
         setReuseAddrMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_set_reuse_addr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT));
         setKeepAliveMethodHandle = NativeUtil.methodHandle(symbolLookup,
@@ -111,7 +106,7 @@ public final class WinNative implements Native {
         setTcpNoDelayMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_set_tcp_no_delay", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT));
         getErrOptMethodHandle = NativeUtil.methodHandle(symbolLookup,
-                "w_get_err_opt", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG));
+                "w_get_err_opt", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
         setNonBlockingMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_set_nonblocking", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG));
         bindMethodHandle = NativeUtil.methodHandle(symbolLookup,
@@ -167,13 +162,12 @@ public final class WinNative implements Native {
 
     @Override
     public MemorySegment createSockAddr(Loc loc, Arena arena) {
-        MemorySegment result = arena.allocate(sockAddrLayout);
+        MemorySegment r = arena.allocate(sockAddrLayout);
         MemorySegment ip = NativeUtil.allocateStr(arena, loc.ip(), addressLen);
-        int setSockAddr = check(setSockAddr(result, ip, loc.port()), "set SockAddr");
-        if(setSockAddr == 0) {
+        if(check(setSockAddr(r, ip, loc.port()), "setSockAddr") == 0) {
             throw new FrameworkException(ExceptionType.NETWORK, "Loc is not valid");
         }
-        return result;
+        return r;
     }
 
     @Override
@@ -192,18 +186,13 @@ public final class WinNative implements Native {
     }
 
     @Override
-    public Socket createSocket(NetworkConfig config, boolean isServer) {
+    public Socket createSocket(NetworkConfig config) {
         long socketFd = check(socketCreate(), "create socket");
-        Socket socket = new Socket(socketFd);
-        // if it's a client socket, this is no need to set the SO_REUSE_ADDR opt
-        if(isServer) {
-            check(setReuseAddr(socketFd, config.getReuseAddr() ? 1 : 0), "set SO_REUSE_ADDR");
-        }
+        check(setReuseAddr(socketFd, config.getReuseAddr() ? 1 : 0), "set SO_REUSE_ADDR");
         check(setKeepAlive(socketFd, config.getKeepAlive() ? 1 : 0), "set SO_KEEPALIVE");
         check(setTcpNoDelay(socketFd, config.getTcpNoDelay() ? 1 : 0), "set TCP_NODELAY");
-        // socket must be non_blocking
         check(setNonBlocking(socketFd), "set NON_BLOCKING");
-        return socket;
+        return new Socket(socketFd);
     }
 
     @Override
@@ -221,26 +210,20 @@ public final class WinNative implements Native {
     }
 
     @Override
-    public void registerRead(Mux mux, Socket socket) {
+    public void register(Mux mux, Socket socket, int from, int to) {
+        int target = switch (to) {
+            case Native.REGISTER_READ -> Constants.EPOLL_IN | Constants.EPOLL_RDHUP;
+            case Native.REGISTER_WRITE -> Constants.EPOLL_OUT;
+            case Native.REGISTER_READ_WRITE -> Constants.EPOLL_IN | Constants.EPOLL_RDHUP | Constants.EPOLL_OUT;
+            default -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        };
         try(Arena arena = Arena.openConfined()) {
             MemorySegment winHandle = mux.winHandle();
             long fd = socket.longValue();
             MemorySegment ev = arena.allocate(epollEventLayout);
-            NativeUtil.setInt(ev, eventsOffset, Constants.EPOLL_IN | Constants.EPOLL_RDHUP);
+            NativeUtil.setInt(ev, eventsOffset, target);
             NativeUtil.setLong(ev, dataOffset + sockOffset, fd);
-            check(epollCtlAdd(winHandle, fd, ev), "epoll_ctl_add read");
-        }
-    }
-
-    @Override
-    public void registerWrite(Mux mux, Socket socket) {
-        try(Arena arena = Arena.openConfined()) {
-            MemorySegment winHandle = mux.winHandle();
-            long fd = socket.longValue();
-            MemorySegment ev = arena.allocate(epollEventLayout);
-            NativeUtil.setInt(ev, eventsOffset, Constants.EPOLL_OUT | Constants.WEPOLL_ONESHOT);
-            NativeUtil.setLong(ev, dataOffset + sockOffset, fd);
-            check(epollCtlAdd(winHandle, fd, ev), "epoll_ctl_add write");
+            check(epollCtl(winHandle, from == Native.REGISTER_NONE ? Constants.EPOLL_CTL_ADD : Constants.EPOLL_CTL_MOD, fd, ev), "epollCtl");
         }
     }
 
@@ -248,7 +231,7 @@ public final class WinNative implements Native {
     public void unregister(Mux mux, Socket socket) {
         MemorySegment winHandle = mux.winHandle();
         long fd = socket.longValue();
-        check(epollCtlDel(winHandle, fd), "epoll_ctl_del");
+        check(epollCtl(winHandle, Constants.EPOLL_CTL_DEL, fd, NativeUtil.NULL_POINTER), "epollCtl");
     }
 
     @Override
@@ -257,168 +240,79 @@ public final class WinNative implements Native {
     }
 
     @Override
-    public void checkConnection(NetworkState state, int index, Net net) {
+    public void waitForAccept(NetworkState state, int index, Net net) {
         MemorySegment events = state.events();
         Socket serverSocket = state.socket();
         int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
         long socket = NativeUtil.getLong(events, index * eventSize + dataOffset + sockOffset);
-        if(socket == serverSocket.longValue()) {
+        if(socket == serverSocket.longValue() && (event & Constants.EPOLL_IN) != 0) {
             // current server socket receive connection
-            ClientSocket clientSocket = accept(serverSocket);
-            Channel channel = Channel.forServer(net, clientSocket);
-            state.registerChannel(channel);
-            channel.protocol().canAccept(channel);
-        }else {
-            // protocol defined master behavior
-            Channel channel = state.longMap().get(socket);
-            if((event & Constants.EPOLL_IN) != 0) {
-                channel.protocol().masterCanRead(channel);
-            }else if((event & Constants.EPOLL_OUT) != 0) {
-                channel.protocol().masterCanWrite(channel);
-            }else {
-                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-            }
-        }
-    }
-
-    @Override
-    public void checkData(NetworkState state, int index, ReadBuffer readBuffer) {
-        MemorySegment events = state.events();
-        int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
-        long socket = NativeUtil.getLong(events, index * eventSize + dataOffset + sockOffset);
-        Channel channel = state.longMap().get(socket);
-        if((event & Constants.EPOLL_REMOTE) != 0) {
-            channel.protocol().workerCanRead(channel, readBuffer);
-        }else if((event & Constants.EPOLL_OUT) != 0) {
-            channel.protocol().workerCanWrite(channel);
+            ClientSocket clientSocket = accept(net.config(), serverSocket);
+            net.distribute(clientSocket);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
     @Override
-    public void waitForAccept(Net net, NetworkState state) {
+    public void waitForData(NetworkState state, int index, ReadBuffer readBuffer) {
         MemorySegment events = state.events();
-        long serverSocket = state.socket().longValue();
-        int count = epollWait(state.mux().winHandle(), events, net.config().getMaxEvents(), -1);
-        if(count == -1) {
-            if(Thread.currentThread().isInterrupted()) {
-                // already shutdown
-                return ;
-            }else {
-                // epoll wait failed
-                log.error("epoll_wait failed with errno : {}", errno());
-            }
-        }
-        for(int i = 0; i < count; i++) {
-            int event = NativeUtil.getInt(events, i * eventSize + eventsOffset);
-            long socket = NativeUtil.getLong(events, i * eventSize + dataOffset + sockOffset);
-            if((event & Constants.EPOLL_IN) != 0 && socket == serverSocket) {
-                // accept connection
-                try(Arena arena = Arena.openConfined()) {
-                    MemorySegment clientAddr = arena.allocate(sockAddrLayout);
-                    MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, addressLen);
-                    long clientFd = accept(serverSocket, clientAddr, sockAddrSize);
-                    if(clientFd == invalidSocket) {
-                        log.error("Failed to accept client socket, errno : {}", errno());
-                    }
-                    Socket clientSocket = new Socket(clientFd);
-                    if (setNonBlocking(clientFd) == -1) {
-                        log.error("Failed to set client socket as non_blocking, errno : {}", errno());
-                        closeSocket(clientSocket);
-                    }
-                    if(address(clientAddr, address, addressLen) == -1) {
-                        log.error("Failed to get client socket's remote address, errno : {}", errno());
-                        closeSocket(clientSocket);
-                    }
-                    Loc loc = new Loc(NativeUtil.getStr(address), port(clientAddr));
-                    Worker worker = net.nextWorker();
-                    Channel channel = Channel.forServer(net, clientSocket, loc, worker);
-                    channel.init();
-                }
-            }else if((event & Constants.EPOLL_OUT) != 0){
-                // some client connections has been established, validate if there is a socket err
-                int errOpt = getErrOpt(socket);
-                if (errOpt == 0) {
-                    Channel channel = state.longMap().get(socket);
-                    channel.init();
-                }else {
-                    log.error("Establishing connection failed with socket err : {}", errOpt);
-                    state.longMap().remove(socket);
-                }
-            }else {
-                // should never happen
-                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-            }
-        }
-    }
-
-
-    @Override
-    public void waitForData(ReadBuffer[] buffers, NetworkState state) {
-        MemorySegment events = state.events();
-        Map<Long, Channel> channelMap = state.longMap();
-        int count = epollWait(state.mux().winHandle(), events, buffers.length, -1);
-        if(count == -1) {
-            if(Thread.currentThread().isInterrupted()) {
-                // already shutdown
-                return ;
-            }else {
-                // epoll wait failed
-                log.error("epoll_wait failed with errno : {}", errno());
-            }
-        }
-        for(int i = 0; i < count; i++) {
-            int event = NativeUtil.getInt(events, i * eventSize + eventsOffset);
-            long socket = NativeUtil.getLong(events, i * eventSize + dataOffset + sockOffset);
-            Channel channel = channelMap.get(socket);
-            if((event & Constants.EPOLL_IN) != 0 || (event & Constants.EPOLL_RDHUP) != 0 || (event & Constants.EPOLL_ERR) != 0 || (event & Constants.EPOLL_HUP) != 0) {
-                // read event
-                ReadBuffer readBuffer = buffers[i];
-                int readableBytes = recv(socket, readBuffer.segment(), readBuffer.len());
-                if(readableBytes > 0) {
-                    // recv data from remote peer
-                    readBuffer.setWriteIndex(readableBytes);
-                    channel.onReadBuffer(readBuffer);
-                }else if(channel != null){
-                    // close current socket
-                    channel.close();
-                }
-            }else if((event & Constants.EPOLL_OUT) != 0) {
-                // write event
-                LockSupport.unpark(channel.writerThread());
-            }else {
-                // should never happen
-                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-            }
+        int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
+        Socket socket = new Socket(NativeUtil.getLong(events, index * eventSize + dataOffset + sockOffset));
+        if((event & Constants.EPOLL_REMOTE) != 0) {
+            state.shouldRead(socket, readBuffer);
+        }else if((event & Constants.EPOLL_OUT) != 0) {
+            state.shouldWrite(socket);
+        }else {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
     @Override
-    public boolean connect(Net net, Channel channel) {
-        Loc loc = channel.loc();
+    public int connect(Socket socket, MemorySegment sockAddr) {
+        return connect(socket.longValue(), sockAddr, addressLen);
+    }
+
+    @Override
+    public ClientSocket accept(NetworkConfig config, Socket socket) {
         try(Arena arena = Arena.openConfined()) {
-            Socket socket = createSocket(net.config(), false);
-            MemorySegment addr = arena.allocate(sockAddrLayout);
-            MemorySegment ip = NativeUtil.allocateStr(arena, loc.ip(), addressLen);
-            int setSockAddr = check(setSockAddr(addr, ip, loc.port()), "set SockAddr");
-            if(setSockAddr == 0) {
-                throw new FrameworkException(ExceptionType.NETWORK, "Network address is not valid");
+            MemorySegment clientAddr = arena.allocate(sockAddrLayout);
+            MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, addressLen);
+            long socketFd = accept(socket.longValue(), clientAddr, sockAddrSize);
+            if(socketFd == invalidSocket) {
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to accept client socket, errno : {}", errno());
             }
-            int connect = connect(socket.longValue(), addr, addressLen);
-            if(connect == -1) {
-                int errno = errno();
-                if(errno == connectBlockCode) {
-                    // add it to current master's interest list
-                    NetworkState masterState = net.master().state();
-                    masterState.longMap().put(socket.longValue(), channel);
-                    registerWrite(masterState.mux(), socket);
-                }else {
-                    throw new FrameworkException(ExceptionType.NETWORK, "Unable to connect, err : %d".formatted(errno));
-                }
-            }else {
-                channel.protocol().canConnect(channel);
+            Socket clientSocket = new Socket(socketFd);
+            check(setReuseAddr(socketFd, config.getReuseAddr() ? 1 : 0), "set SO_REUSE_ADDR");
+            check(setKeepAlive(socketFd, config.getKeepAlive() ? 1 : 0), "set SO_KEEPALIVE");
+            check(setTcpNoDelay(socketFd, config.getTcpNoDelay() ? 1 : 0), "set TCP_NODELAY");
+            check(setNonBlocking(socketFd), "set NON_BLOCKING");
+            if(address(clientAddr, address, addressLen) == -1) {
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to get client socket's remote address, errno : {}", errno());
             }
+            Loc loc = new Loc(NativeUtil.getStr(address), port(clientAddr));
+            return new ClientSocket(clientSocket, loc);
+        }
+    }
+
+    @Override
+    public int recv(Socket socket, MemorySegment data, int len) {
+        return recv(socket.longValue(), data, len);
+    }
+
+    @Override
+    public int send(Socket socket, MemorySegment data, int len) {
+        return send(socket.longValue(), data, len);
+    }
+
+    @Override
+    public int getErrOpt(Socket socket) {
+        try(Arena arena = Arena.openConfined()) {
+            MemorySegment ptr = arena.allocate(ValueLayout.JAVA_INT, -1);
+            if (getErrOpt(socket.longValue(), ptr) == -1) {
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to get Socket's err opt");
+            }
+            return NativeUtil.getInt(ptr, 0);
         }
     }
 
@@ -430,44 +324,6 @@ public final class WinNative implements Native {
     @Override
     public void shutdownWrite(Socket socket) {
         check(shutdownWrite(socket.longValue()), "shutdown write");
-    }
-
-    @Override
-    public ClientSocket accept(Socket socket) {
-        try(Arena arena = Arena.openConfined()) {
-            MemorySegment clientAddr = arena.allocate(sockAddrLayout);
-            MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, addressLen);
-            long clientFd = accept(socket.longValue(), clientAddr, sockAddrSize);
-            if(clientFd == invalidSocket) {
-                log.error("Failed to accept client socket, errno : {}", errno());
-            }
-            Socket clientSocket = new Socket(clientFd);
-            if (setNonBlocking(clientFd) == -1) {
-                log.error("Failed to set client socket as non_blocking, errno : {}", errno());
-                closeSocket(clientSocket);
-            }
-            if(address(clientAddr, address, addressLen) == -1) {
-                log.error("Failed to get client socket's remote address, errno : {}", errno());
-                closeSocket(clientSocket);
-            }
-            Loc loc = new Loc(NativeUtil.getStr(address), port(clientAddr));
-            return new ClientSocket(clientSocket, loc);
-        }
-    }
-
-    @Override
-    public boolean connect(Socket socket, MemorySegment sockAddr) {
-        return connect(socket.longValue(), sockAddr, addressLen) != -1;
-    }
-
-    @Override
-    public int recv(Socket socket, MemorySegment data, int len) {
-        return recv(socket.longValue(), data, len);
-    }
-
-    @Override
-    public int send(Socket socket, MemorySegment data, int len) {
-        return send(socket.longValue(), data, len);
     }
 
     @Override
@@ -492,24 +348,13 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_epoll_ctl_add(void* handle, SOCKET socket, struct epoll_event* event)`
+     *  corresponding to `int w_epoll_ctl(void* handle, int op, SOCKET socket, struct epoll_event* event)`
      */
-    public int epollCtlAdd(MemorySegment handle, long socket, MemorySegment event) {
+    public int epollCtl(MemorySegment handle, int op, long socket, MemorySegment event) {
         try{
-            return (int) epollCtlAddMethodHandle.invokeExact(handle, socket, event);
+            return (int) epollCtlMethodHandle.invokeExact(handle, op, socket, event);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking epollCtlAdd()", throwable);
-        }
-    }
-
-    /**
-     *  corresponding to `int w_epoll_ctl_del(void* handle, SOCKET socket)`
-     */
-    public int epollCtlDel(MemorySegment handle, long socket) {
-        try{
-            return (int) epollCtlDelMethodHandle.invokeExact(handle, socket);
-        }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking epollCtlDel()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking epollCtl()", throwable);
         }
     }
 
@@ -547,11 +392,11 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_port(struct sockaddr_in* clientAddr)`
+     *  corresponding to `u_short w_port(struct sockaddr_in* clientAddr)`
      */
-    public int port(MemorySegment clientAddr) {
+    public short port(MemorySegment clientAddr) {
         try{
-            return (int) portMethodHandle.invokeExact(clientAddr);
+            return (short) portMethodHandle.invokeExact(clientAddr);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking port()", throwable);
         }
@@ -580,9 +425,9 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_set_sock_addr(struct sockaddr_in* sockAddr, char* address, int port)`
+     *  corresponding to `int w_set_sock_addr(struct sockaddr_in* sockAddr, char* address, u_short port)`
      */
-    public int setSockAddr(MemorySegment sockAddr, MemorySegment address, int port) {
+    public int setSockAddr(MemorySegment sockAddr, MemorySegment address, short port) {
         try{
             return (int) setSockAddrMethodHandle.invokeExact(sockAddr, address, port);
         }catch (Throwable throwable) {
@@ -624,11 +469,11 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_get_err_opt(SOCKET socket)`
+     *  corresponding to `int w_get_err_opt(SOCKET socket, int* ptr)`
      */
-    public int getErrOpt(long socket) {
+    public int getErrOpt(long socket, MemorySegment ptr) {
         try{
-            return (int) getErrOptMethodHandle.invokeExact(socket);
+            return (int) getErrOptMethodHandle.invokeExact(socket, ptr);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking setTcpNoDelay()", throwable);
         }

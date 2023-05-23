@@ -1,8 +1,10 @@
 package cn.zorcc.common.network;
 
+import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
+import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.MemorySegment;
@@ -15,6 +17,7 @@ import java.lang.invoke.MethodHandle;
  *   To update current OpenSSL version, just replace the dynamic library under /resources/ssl
  *   On success, the functions return 1. Otherwise check out the error stack to find out the reason.
  */
+@Slf4j
 public class Openssl {
     private static final SymbolLookup crypto;
     private static final SymbolLookup ssl;
@@ -25,15 +28,20 @@ public class Openssl {
     private static final MethodHandle sslCtxUseCertificateFileMethod;
     private static final MethodHandle sslCtxUsePrivateKeyFileMethod;
     private static final MethodHandle sslCtxCheckPrivateKeyMethod;
+    private static final MethodHandle sslCtxSetModeMethod;
+    private static final MethodHandle sslCtxClearModeMethod;
+    private static final MethodHandle sslCtxSetVerifyMethod;
     private static final MethodHandle sslNewMethod;
     private static final MethodHandle sslSetFdMethod;
     private static final MethodHandle sslConnectMethod;
+    private static final MethodHandle sslAcceptMethod;
     private static final MethodHandle sslReadMethod;
     private static final MethodHandle sslWriteMethod;
     private static final MethodHandle sslShutdownMethod;
     private static final MethodHandle sslFreeMethod;
     private static final MethodHandle sslCtxFreeMethod;
     private static final MethodHandle sslGetErrMethod;
+    private static final MethodHandle sslErrPrintMethod;
 
 
     static {
@@ -56,34 +64,39 @@ public class Openssl {
         sslCtxUseCertificateFileMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_use_certificate_file", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         sslCtxUsePrivateKeyFileMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_use_PrivateKey_file", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         sslCtxCheckPrivateKeyMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_check_private_key", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        sslCtxSetModeMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_set_mode", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+        sslCtxClearModeMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_clear_mode", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+        sslCtxSetVerifyMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_set_verify", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         sslNewMethod = NativeUtil.methodHandle(ssl, "SSL_new", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         sslSetFdMethod = NativeUtil.methodHandle(ssl, "SSL_set_fd", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         sslConnectMethod = NativeUtil.methodHandle(ssl, "SSL_connect", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        sslAcceptMethod = NativeUtil.methodHandle(ssl, "SSL_accept", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         sslReadMethod = NativeUtil.methodHandle(ssl, "SSL_read", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         sslWriteMethod = NativeUtil.methodHandle(ssl, "SSL_write", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         sslShutdownMethod = NativeUtil.methodHandle(ssl, "SSL_shutdown", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         sslFreeMethod = NativeUtil.methodHandle(ssl, "SSL_free", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         sslCtxFreeMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         sslGetErrMethod = NativeUtil.methodHandle(ssl, "SSL_get_error", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        sslErrPrintMethod = NativeUtil.methodHandle(ssl, "ERR_print_errors_fp", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
     }
 
     public static String version() {
         return version;
     }
 
-    public static MemorySegment tlsServer() {
+    public static MemorySegment tlsServerMethod() {
         try{
             return (MemorySegment) tlsServerMethod.invokeExact();
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking tlsServer()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking tlsServerMethod()", throwable);
         }
     }
 
-    public static MemorySegment tlsClient() {
+    public static MemorySegment tlsClientMethod() {
         try{
             return (MemorySegment) tlsClientMethod.invokeExact();
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking tlsClient()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking tlsClientMethod()", throwable);
         }
     }
 
@@ -118,6 +131,36 @@ public class Openssl {
         }
     }
 
+    public static void setMode(MemorySegment ctx, long mode) {
+        try{
+            long m = (long) sslCtxSetModeMethod.invokeExact(ctx, mode);
+            if((m & mode) == 0) {
+                throw new FrameworkException(ExceptionType.NETWORK, "set mode failed for openssl");
+            }
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslCtxSetMode()", throwable);
+        }
+    }
+
+    public static void clearMode(MemorySegment ctx, long mode) {
+        try{
+            long m = (long) sslCtxClearModeMethod.invokeExact(ctx, mode);
+            if((m & mode) > 0) {
+                throw new FrameworkException(ExceptionType.NETWORK, "clear mode failed for openssl");
+            }
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslCtxClearMode()", throwable);
+        }
+    }
+
+    public static void setVerify(MemorySegment ctx, int mode, MemorySegment callback) {
+        try{
+            sslCtxSetVerifyMethod.invokeExact(ctx, mode, callback);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslCtxSetVerify()", throwable);
+        }
+    }
+
     public static MemorySegment sslNew(MemorySegment ctx) {
         try{
             return (MemorySegment) sslNewMethod.invokeExact(ctx);
@@ -139,6 +182,14 @@ public class Openssl {
             return (int) sslConnectMethod.invokeExact(ssl);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslConnect()", throwable);
+        }
+    }
+
+    public static int sslAccept(MemorySegment ssl) {
+        try{
+            return (int) sslAcceptMethod.invokeExact(ssl);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslAccept()", throwable);
         }
     }
 
@@ -174,9 +225,9 @@ public class Openssl {
         }
     }
 
-    public static void sslCtxFree(MemorySegment ssl) {
+    public static void sslCtxFree(MemorySegment sslCtx) {
         try{
-            sslCtxFreeMethod.invokeExact(ssl);
+            sslCtxFreeMethod.invokeExact(sslCtx);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslCtxFree()", throwable);
         }
@@ -188,5 +239,22 @@ public class Openssl {
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslGetErr()", throwable);
         }
+    }
+
+    public static void sslErrPrint(MemorySegment fp) {
+        try{
+            sslErrPrintMethod.invokeExact(fp);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslErrPrint()", throwable);
+        }
+    }
+
+    /**
+     *   configure CTX for non-blocking socket with several preassigned options
+     */
+    public static void configureCtx(MemorySegment ctx) {
+        setMode(ctx, Constants.SSL_MODE_ENABLE_PARTIAL_WRITE);
+        setMode(ctx, Constants.SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+        clearMode(ctx, Constants.SSL_MODE_AUTO_RETRY);
     }
 }

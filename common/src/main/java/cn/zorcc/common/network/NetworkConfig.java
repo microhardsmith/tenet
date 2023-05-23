@@ -13,11 +13,11 @@ public class NetworkConfig {
      */
     private Boolean enableSsl = false;
     /**
-     *   服务端证书公钥路径
+     *   服务端证书公钥路径,必须为绝对路径
      */
     private String publicKeyFile = Constants.EMPTY_STRING;
     /**
-     *   服务端证书私钥路径
+     *   服务端证书私钥路径,必须为绝对路径
      */
     private String privateKeyFile = Constants.EMPTY_STRING;
     /**
@@ -26,7 +26,7 @@ public class NetworkConfig {
      */
     private Integer workerCount = 4;
     /**
-     *  是否可复用端口,默认为true
+     *  是否可复用端口,默认为true,该选项只会影响服务端socket在bind上的行为,对客户端socket设置不会产生影响
      */
     private Boolean reuseAddr = Boolean.TRUE;
     /**
@@ -44,7 +44,7 @@ public class NetworkConfig {
     /**
      *  服务器端口号
      */
-    private Integer port = 8001;
+    private Short port = 8001;
     /**
      *  等待接受全连接socket队列长度
      */

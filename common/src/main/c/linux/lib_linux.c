@@ -38,7 +38,7 @@ int main() {
     struct epoll_event ev, events[20];
     ev.events = EPOLLIN;
     ev.data.fd = socket;
-    check(l_epoll_ctl_add(epfd, socket, &ev));
+    check(l_epoll_ctl(epfd, EPOLL_CTL_ADD, socket, &ev));
     while(1) {
         int size = check(l_epoll_wait(epfd, events, 20, -1));
         for(int i = 0; i < size; i++) {
@@ -51,7 +51,7 @@ int main() {
                 l_set_nonblocking(client);
                 ev.events = EPOLLIN;
                 ev.data.fd = client;
-                check(l_epoll_ctl_add(epfd, client, &ev));
+                check(l_epoll_ctl(epfd, EPOLL_CTL_ADD, client, &ev));
             }else {
                 int fd = ev.data.fd;
                 if(ev.events & EPOLLIN) {
@@ -61,7 +61,7 @@ int main() {
                     if(n < 0) {
                         printf("read fd failure : %d \n", fd);
                     }else if(n == 0) {
-                        check(l_epoll_ctl_del(epfd, fd));
+                        check(l_epoll_ctl(epfd, EPOLL_CTL_DEL, fd, NULL));
                         l_close(fd);
                     }else {
                         printf("recv from client: %s \n", buf);
@@ -96,14 +96,9 @@ int l_epoll_create() {
     return epoll_create(1);
 }
 
-// 添加epoll事件,失败则返回-1,成功则返回0
-int l_epoll_ctl_add(int epfd, int socket, struct epoll_event* ev) {
-    return epoll_ctl(epfd, EPOLL_CTL_ADD, socket, ev);
-}
-
-// 删除epoll事件,失败则返回-1,成功则返回0
-int l_epoll_ctl_del(int epfd, int socket) {
-    return epoll_ctl(epfd, EPOLL_CTL_DEL, socket, NULL);
+// 操作epoll事件,失败则返回-1,成功则返回0
+int l_epoll_ctl(int epfd, int op, int socket, struct epoll_event* ev) {
+    return epoll_ctl(epfd, op, socket, ev);
 }
 
 // 等待epoll事件,失败则返回-1,成功则返回获取事件的数量,可能为0
@@ -126,7 +121,7 @@ int l_address(struct sockaddr_in* sockAddr, char* addrStr, socklen_t len) {
 }
 
 // 获取客户端连接的端口号
-int l_port(struct sockaddr_in* sockAddr) {
+uint16_t l_port(struct sockaddr_in* sockAddr) {
     return ntohs(sockAddr -> sin_port);
 }
 
@@ -141,8 +136,7 @@ int l_accept(int socket, struct sockaddr_in* clientAddr, socklen_t clientAddrSiz
 }
 
 // 设置sock地址,失败则返回-1,成功则返回1,地址为非法字符串则返回0
-int l_set_sock_addr(struct sockaddr_in* sockAddr, char* address, int port) {
-    memset(sockAddr, 0, sizeof(struct sockaddr_in));
+int l_set_sock_addr(struct sockaddr_in* sockAddr, char* address, uint16_t port) {
     sockAddr -> sin_family = AF_INET;
     sockAddr -> sin_port = htons(port);
     return inet_pton(AF_INET, address, &(sockAddr -> sin_addr));
@@ -167,14 +161,9 @@ int l_set_tcp_no_delay(int socket, int value) {
 }
 
 // 获取指定socket上的错误码,如果socket上无错误应返回0
-int l_get_err_opt(int socket) {
-    int value = -1;
-    void* ptr = &value;
-    socklen_t ptr_size = sizeof(value);
-    if(getsockopt(socket, SOL_SOCKET, SO_ERROR, ptr, &ptr_size) == -1) {
-        return -1;
-    }
-    return value;
+int l_get_err_opt(int socket, int* ptr) {
+    socklen_t ptr_size = sizeof(int);
+    return getsockopt(socket, SOL_SOCKET, SO_ERROR, (void*) ptr, &ptr_size);
 }
 
 // 设置socket为非阻塞,失败则返回-1,成功则返回0

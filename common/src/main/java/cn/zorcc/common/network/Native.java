@@ -8,6 +8,7 @@ import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  *   Platform native interface for Network operation
@@ -15,34 +16,34 @@ import java.lang.foreign.MemorySegment;
 public interface Native {
 
     /**
-     *   return err code which means connect operation would block on current operating system
+     *   Return err code which means connect operation would possibly block
      */
     int connectBlockCode();
 
     /**
-     *   return err code which means send operation would block on current operating system
+     *   Return err code which means send operation would possibly block
      */
     int sendBlockCode();
 
     /**
-     *   create sockAddr struct according to loc using target arena
+     *   Create sockAddr struct according to loc using target arena
      */
     MemorySegment createSockAddr(Loc loc, Arena arena);
 
     /**
-     *   create multiplexing resources (wepoll, epoll or kqueue)
+     *   Create multiplexing resources (wepoll, epoll or kqueue)
      */
     Mux createMux();
 
     /**
-     *   create multiplexing struct array
+     *   Create multiplexing struct array
      */
     MemorySegment createEventsArray(NetworkConfig config);
 
     /**
-     *   create socket, could be server socket or client socket
+     *   Create a socket, could be server socket or client socket
      */
-    Socket createSocket(NetworkConfig config, boolean isServer);
+    Socket createSocket(NetworkConfig config);
 
     /**
      *   bind and listen target port
@@ -50,24 +51,15 @@ public interface Native {
     void bindAndListen(NetworkConfig config, Socket socket);
 
     /**
-     *   register read event
-     *   use case:
-     *      1. when client-side channel is connected, register read events
-     *      2. when server-side channel is accepted, register read events
+     *   register mux event, from represent the old status, to represent the target status
+     *   return 0 if success, -1 if failed
      */
-    void registerRead(Mux mux, Socket socket);
+    void register(Mux mux, Socket socket, int from, int to);
 
     /**
-     *   register write event for only one-shot
-     *   use case:
-     *      1. when channel is not writable (TCP write buffer is full)
-     *      2. when nonblocking channel is establishing connection
-     */
-    void registerWrite(Mux mux, Socket socket);
-
-    /**
-     *   unregister socket event
+     *   unregister socket event, delete all events from current mux
      *   note that kqueue will automatically remote the registry when socket was closed, but we still manually unregister it for consistency
+     *   return 0 if success, -1 if failed
      */
     void unregister(Mux mux, Socket socket);
 
@@ -76,45 +68,25 @@ public interface Native {
      */
     int multiplexingWait(NetworkState state, int maxEvents);
 
-    void checkConnection(NetworkState state, int index, Net net);
-
-    void checkData(NetworkState state, int index, ReadBuffer readBuffer);
-
     /**
      *   waiting for new connections, don't throw exception here because it would exit the loop thread
      */
-    void waitForAccept(Net net, NetworkState state);
+    void waitForAccept(NetworkState state, int index, Net net);
 
     /**
      *   waiting for data, don't throw exception here cause it would exit the loop thread
      */
-    void waitForData(ReadBuffer[] buffers, NetworkState state);
+    void waitForData(NetworkState state, int index, ReadBuffer readBuffer);
 
     /**
-     *   Close a socket
+     *   Connect socket with target socketAddr, return 0 if connection is successful, return -1 if error occurred
      */
-    void closeSocket(Socket socket);
-
-    /**
-     *   Shutdown the write side of the socket
-     */
-    void shutdownWrite(Socket socket);
+    int connect(Socket socket, MemorySegment sockAddr);
 
     /**
      *   Accept socket connection, return the accepted client loc and socket
      */
-    ClientSocket accept(Socket socket);
-
-    /**
-     *   Connect socket with target socketAddr, return true if connection is successful, return false if connection is in-process
-     *   throw exception if error occurred
-     */
-    boolean connect(Socket socket, MemorySegment sockAddr);
-
-    /**
-     *   Connect target channel, if non-blocking channel's connection is in-process, net will register write event
-     */
-    boolean connect(Net net, Channel channel);
+    ClientSocket accept(NetworkConfig config, Socket socket);
 
     /**
      *   recv data from remote socket, return the actual bytes received
@@ -125,6 +97,21 @@ public interface Native {
      *   send data to remote socket, return the actual bytes sent
      */
     int send(Socket socket, MemorySegment data, int len);
+
+    /**
+     *   get target socket's err opt, should return 0 if there is no error
+     */
+    int getErrOpt(Socket socket);
+
+    /**
+     *   Close a socket
+     */
+    void closeSocket(Socket socket);
+
+    /**
+     *   Shutdown the write side of the socket
+     */
+    void shutdownWrite(Socket socket);
 
     /**
      *   get current errno
@@ -142,7 +129,29 @@ public interface Native {
     void exit();
 
     /**
-     *   internal check the return value
+     *   read write status code
+     */
+    int REGISTER_NONE = 0;
+    int REGISTER_READ = 1;
+    int REGISTER_WRITE = 2;
+    int REGISTER_READ_WRITE = 3;
+
+    static void tryRegisterRead(AtomicInteger state, Mux mux, Socket socket) {
+        int current = state.getAndUpdate(i -> (i & REGISTER_READ) == 0 ? i + REGISTER_READ : i);
+        if((current & REGISTER_READ) == 0) {
+            n.register(mux, socket, current, current + REGISTER_READ);
+        }
+    }
+
+    static void tryRegisterWrite(AtomicInteger state, Mux mux, Socket socket) {
+        int current = state.getAndUpdate(i -> (i & REGISTER_WRITE) == 0 ? i + REGISTER_WRITE : i);
+        if((current & REGISTER_WRITE) == 0) {
+            n.register(mux, socket, current, current + REGISTER_READ);
+        }
+    }
+
+    /**
+     *   Internal check the return value
      */
     default int check(int value, String errMsg) {
         if(value == -1) {
@@ -153,7 +162,7 @@ public interface Native {
     }
 
     /**
-     *   internal check the return value
+     *   Internal check the return value
      */
     default long check(long value, String errMsg) {
         if(value == -1L) {
@@ -163,8 +172,15 @@ public interface Native {
         return value;
     }
 
+    /**
+     *   Global native network library
+     */
     Native n = createNative();
-    static Native createNative() {
+
+    /**
+     *   Create native library based on target operating system
+     */
+    private static Native createNative() {
         if(NativeUtil.isLinux()) {
             return new LinuxNative();
         }else if(NativeUtil.isWindows()) {

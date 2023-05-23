@@ -1,8 +1,7 @@
 package cn.zorcc.log;
 
 import cn.zorcc.common.network.Channel;
-import cn.zorcc.common.network.ChannelHandler;
-import cn.zorcc.common.network.Msg;
+import cn.zorcc.common.network.Handler;
 import cn.zorcc.common.network.http.HttpReq;
 import cn.zorcc.common.network.http.HttpRes;
 import lombok.extern.slf4j.Slf4j;
@@ -15,7 +14,7 @@ import java.util.Locale;
 import java.util.Map;
 
 @Slf4j
-public class HttpTestHandler implements ChannelHandler {
+public class HttpTestHandler implements Handler {
     private static final byte[] body = """
             {
                 "hello" : "world"
@@ -37,7 +36,7 @@ public class HttpTestHandler implements ChannelHandler {
             headers.put("Content-Length", String.valueOf(body.length));
             headers.put("Date", formatter.format(ZonedDateTime.now(gmt)));
             httpRes.setData(body);
-            channel.send(Msg.of(httpRes));
+            channel.send(httpRes);
         }
     }
 

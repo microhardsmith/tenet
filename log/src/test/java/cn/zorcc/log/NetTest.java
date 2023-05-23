@@ -1,8 +1,6 @@
 package cn.zorcc.log;
 
-import cn.zorcc.common.Context;
 import cn.zorcc.common.network.Net;
-import cn.zorcc.common.network.NetworkConfig;
 import cn.zorcc.common.network.http.HttpCodec;
 import cn.zorcc.common.util.ThreadUtil;
 import cn.zorcc.common.wheel.Wheel;
@@ -15,7 +13,6 @@ public class NetTest {
         LoggerConsumer loggerConsumer = new LoggerConsumer();
         loggerConsumer.init();
         Runtime.getRuntime().addShutdownHook(Thread.ofVirtual().unstarted(loggerConsumer::shutdown));
-        Context.loadContainer(new NetworkConfig(), NetworkConfig.class);
         Net net = new Net(HttpTestHandler::new, HttpCodec::new);
         Runtime.getRuntime().addShutdownHook(ThreadUtil.virtual("shutdown", net::shutdown));
         net.init();

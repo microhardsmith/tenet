@@ -1,25 +1,28 @@
 package cn.zorcc.common.network;
 
-import cn.zorcc.common.util.NativeUtil;
+import cn.zorcc.common.Constants;
+import cn.zorcc.common.ReadBuffer;
+import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.exception.FrameworkException;
+import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.MemorySegment;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Multiplexing state for Master and Worker
+ * Note that there is no need to manually close all the sockets in the map when exit, the operating system would do it automatically.
  * @param mux Multiplexing handle, For master and worker
  * @param socket Current server socket, could be long in Windows or int in macOS and Linux
  * @param events events array
- * @param longMap socket map for established channel binding for windows
- * @param intMap socket map for established channel binding for linux and macos
+ * @param socketMap socket node map for established acceptor bindings or channel bindings
  */
+@Slf4j
 public record NetworkState(
         Mux mux,
         Socket socket,
         MemorySegment events,
-        Map<Long, Channel> longMap,
-        Map<Integer, Channel> intMap
+        ConcurrentHashMap<Socket, Object> socketMap
 ) {
     private static final Native n = Native.n;
 
@@ -30,11 +33,7 @@ public record NetworkState(
         Mux m = n.createMux();
         Socket s = n.createSocket(config, true);
         MemorySegment array = n.createEventsArray(config);
-        if(NativeUtil.isWindows()) {
-            return new NetworkState(m, s, array, new ConcurrentHashMap<>(config.getMapSize()), null);
-        }else {
-            return new NetworkState(m, s, array, null, new ConcurrentHashMap<>(config.getMapSize()));
-        }
+        return new NetworkState(m, s, array, new ConcurrentHashMap<>(Net.MAP_SIZE));
     }
 
     /**
@@ -43,19 +42,24 @@ public record NetworkState(
     public static NetworkState forWorker(NetworkConfig config) {
         Mux m = n.createMux();
         MemorySegment array = n.createEventsArray(config);
-        if(NativeUtil.isWindows()) {
-            return new NetworkState(m, null, array, new ConcurrentHashMap<>(config.getMapSize()), null);
-        }else {
-            return new NetworkState(m, null, array, null, new ConcurrentHashMap<>(config.getMapSize()));
+        return new NetworkState(m, null, array, new ConcurrentHashMap<>(Net.MAP_SIZE));
+    }
+
+    public void shouldRead(Socket socket, ReadBuffer readBuffer) {
+        switch (socketMap.get(socket)) {
+            case null -> {}
+            case Acceptor acceptor -> acceptor.connector().shouldRead(acceptor);
+            case Channel channel -> channel.protocol().canRead(channel, readBuffer);
+            case default -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
-    public void registerChannel(Channel channel) {
-        Socket s = channel.socket();
-        if(NativeUtil.isWindows()) {
-            longMap.put(s.longValue(), channel);
-        }else {
-            intMap.put(s.intValue(), channel);
+    public void shouldWrite(Socket socket) {
+        switch (socketMap.get(socket)) {
+            case null -> {}
+            case Acceptor acceptor -> acceptor.connector().shouldWrite(acceptor);
+            case Channel channel -> channel.protocol().canWrite(channel);
+            case default -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 }

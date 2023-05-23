@@ -96,11 +96,11 @@ public class MacNative implements Native {
     }
 
     @Override
-    public Socket createSocket(NetworkConfig config, boolean isServer) {
+    public Socket createSocket(NetworkConfig config, boolean serverSide) {
         int socketFd = check(socketCreate(), "create socket");
         Socket socket = new Socket(socketFd);
         // if it's a client socket, this is no need to set the SO_REUSE_ADDR opt
-        if(isServer) {
+        if(serverSide) {
             check(setReuseAddr(socketFd, config.getReuseAddr() ? 1 : 0), "set SO_REUSE_ADDR");
         }
         check(setKeepAlive(socketFd, config.getKeepAlive() ? 1 : 0), "set SO_KEEPALIVE");
@@ -184,14 +184,14 @@ public class MacNative implements Native {
                     Loc loc = new Loc(NativeUtil.getStr(address), port(clientAddr));
                     Worker worker = net.nextWorker();
                     Channel channel = Channel.forServer(net, clientSocket, loc, worker);
-                    channel.init();
+                    channel.bindToWorker();
                 }
             }else if((filter & Constants.EVFILT_WRITE) != 0) {
                 // some client connections has been established, validate if there is a socket err
                 int errOpt = getErrOpt(ident);
                 if (errOpt == 0) {
                     Channel channel = state.intMap().get(ident);
-                    channel.init();
+                    channel.bindToWorker();
                 }else {
                     log.error("Establishing connection failed with socket err : {}", errOpt);
                     state.intMap().remove(ident);
@@ -251,34 +251,6 @@ public class MacNative implements Native {
     }
 
     @Override
-    public void connect(Net net, Remote remote, Codec codec) {
-        Loc loc = remote.loc();
-        try(Arena arena = Arena.openConfined()) {
-            Socket socket = createSocket(net.config(), false);
-            MemorySegment addr = arena.allocate(sockAddrLayout);
-            MemorySegment ip = NativeUtil.allocateStr(arena, loc.ip(), addressLen);
-            int setSockAddr = check(setSockAddr(addr, ip, loc.port()), "set SockAddr");
-            if(setSockAddr == 0) {
-                throw new FrameworkException(ExceptionType.NETWORK, "Network address is not valid");
-            }
-            int connect = connect(socket.intValue(), addr, addressLen);
-            Channel channel = Channel.forClient(net, socket, codec, remote, net.nextWorker());
-            if(connect == -1) {
-                // we need to check if the connection is currently establishing
-                int errno = errno();
-                if(errno == connectBlockCode) {
-                    // add it to current master's interest list
-                    NetworkState masterState = net.master().state();
-                    masterState.intMap().put(socket.intValue(), channel);
-                    registerWrite(masterState.mux(), socket);
-                }else {
-                    throw new FrameworkException(ExceptionType.NETWORK, "Unable to connect, err : %d".formatted(errno));
-                }
-            }
-        }
-    }
-
-    @Override
     public void closeSocket(Socket socket) {
         check(close(socket.intValue()), "close socket");
     }
@@ -294,13 +266,23 @@ public class MacNative implements Native {
     }
 
     @Override
+    public int recv(Socket socket, MemorySegment data, int len) {
+        return recv(socket.intValue(), data, len);
+    }
+
+    @Override
+    public int getErrOpt(Socket socket) {
+        return getErrOpt(socket.intValue());
+    }
+
+    @Override
     public void exitMux(Mux mux) {
         check(close(mux.kqfd()), "close kqueue fd");
     }
 
     @Override
     public void exit() {
-        // no action, kqueue doesn't need external operations for clean up
+        // No action, kqueue doesn't need external operations for clean up
     }
 
     static {

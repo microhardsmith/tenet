@@ -141,11 +141,13 @@ public final class WheelImpl implements Wheel {
             JobImpl current = head.next;
             while (current != null) {
                 JobImpl next = remove(current);
-                if(!current.cancel.get()) {
+                // the executor thread and the canceller thread will fight for ownership, but only one would succeed
+                if(current.owner.compareAndSet(false, true)) {
                     ThreadUtil.virtual(NAME, current.mission).start();
                     final long period = current.period;
                     if(period != JobImpl.ONCE) {
                         // reset current node's status
+                        current.owner.set(false);
                         current.execMilli = current.execMilli + period;
                         current.prev = null;
                         current.next = null;
@@ -232,7 +234,7 @@ public final class WheelImpl implements Wheel {
         private JobImpl prev;
         private JobImpl next;
         private final Runnable mission;
-        private final AtomicBoolean cancel = new AtomicBoolean(false);
+        private final AtomicBoolean owner = new AtomicBoolean(false);
         private final AtomicLong count = new AtomicLong(0L);
         private final long period;
 
@@ -257,7 +259,7 @@ public final class WheelImpl implements Wheel {
 
         @Override
         public boolean cancel() {
-            return cancel.compareAndSet(false, true);
+            return owner.compareAndSet(false, true);
         }
 
         @Override

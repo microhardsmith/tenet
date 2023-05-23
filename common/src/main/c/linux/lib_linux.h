@@ -9,9 +9,7 @@ int l_send_block_code();
 
 int l_epoll_create();
 
-int l_epoll_ctl_add(int epfd, int socket, struct epoll_event* ev);
-
-int l_epoll_ctl_del(int epfd, int socket);
+int l_epoll_ctl(int epfd, int op, int socket, struct epoll_event* ev);
 
 int l_epoll_wait(int epfd, struct epoll_event* events, int maxEvents, int timeout);
 
@@ -19,13 +17,13 @@ socklen_t l_address_len();
 
 int l_address(struct sockaddr_in* sockAddr, char* addrStr, socklen_t len);
 
-int l_port(struct sockaddr_in* sockAddr);
+uint16_t l_port(struct sockaddr_in* sockAddr);
 
 int l_socket_create();
 
 int l_accept(int socket, struct sockaddr_in* clientAddr, socklen_t clientAddrSize);
 
-int l_set_sock_addr(struct sockaddr_in* sockAddr, char* address, int port);
+int l_set_sock_addr(struct sockaddr_in* sockAddr, char* address, uint16_t port);
 
 int l_set_reuse_addr(int socket, int value);
 
@@ -33,7 +31,7 @@ int l_set_keep_alive(int socket, int value);
 
 int l_set_tcp_no_delay(int socket, int value);
 
-int l_get_err_opt(int socket);
+int l_get_err_opt(int socket, int* ptr);
 
 int l_set_nonblocking(int socket);
 

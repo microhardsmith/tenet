@@ -1,15 +1,11 @@
 package cn.zorcc.orm.pg;
 
-import cn.zorcc.common.Constants;
-import cn.zorcc.common.enums.ExceptionType;
-import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Channel;
-import cn.zorcc.common.network.ChannelHandler;
-import cn.zorcc.common.network.Msg;
+import cn.zorcc.common.network.Handler;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class PgHandler implements ChannelHandler {
+public class PgHandler implements Handler {
     private static final int INITIAL_STATE = 1;
     private static final int WAITING_SSL_STATE = 2;
     private static final int WAITING_START_UP_STATE = 3;
@@ -21,12 +17,7 @@ public class PgHandler implements ChannelHandler {
     private volatile int state = INITIAL_STATE;
     @Override
     public void onConnected(Channel channel) {
-        log.debug("Successfully connected to the postgresql server : {}", channel.loc());
-        if(state == INITIAL_STATE) {
-            channel.send(Msg.of(PgCommand.SSL, () -> state = WAITING_SSL_STATE));
-        }else {
-            throw new FrameworkException(ExceptionType.ORM, Constants.UNREACHED);
-        }
+
     }
 
     @Override

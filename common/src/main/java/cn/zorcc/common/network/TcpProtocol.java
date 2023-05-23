@@ -6,12 +6,13 @@ import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.util.ThreadUtil;
+import cn.zorcc.common.wheel.Wheel;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.concurrent.LinkedTransferQueue;
-import java.util.concurrent.TransferQueue;
-import java.util.function.Supplier;
+import java.lang.foreign.MemorySegment;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  *   Tcp channel protocol, using system send and recv
@@ -19,72 +20,100 @@ import java.util.function.Supplier;
 @Slf4j
 public final class TcpProtocol implements Protocol {
     private static final Native n = Native.n;
-    private final TransferQueue<Msg> queue = new LinkedTransferQueue<>();
-    private final Thread writerThread;
-    public TcpProtocol(Socket socket) {
-        this.writerThread = ThreadUtil.virtual("Ch@" + socket.hashCode(), () -> {
-            Thread currentThread = Thread.currentThread();
-            try{
-                while (!currentThread.isInterrupted()) {
-                    Msg msg = queue.take();
-                    try(WriteBuffer writeBuffer = new WriteBuffer(Net.WRITE_BUFFER_SIZE)) {
-                        codec.encode(writeBuffer, msg.entity());
-                        doWrite(writeBuffer);
-                        msg.tryCallBack();
-                    }
-                }
-            }catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        });
-    }
-
-    @Override
-    public void canAccept(Channel channel) {
-
-    }
-
-    @Override
-    public void canConnect(Channel channel) {
-
-    }
-
     /**
-     *   This should never happen, since master thread should only accept connection for tcp channel
+     *   when Protocol is created, the channel is available by default, the availability changed when channel was shutdown or closed
      */
-    @Override
-    public void masterCanRead(Channel channel) {
-        throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-    }
-
+    private final AtomicBoolean availableFlag = new AtomicBoolean(true);
     /**
-     *   Current channel has successfully established connection, the channel must be a client-side channel
+     *   shutdownFlag is to make sure that doShutdown() method will only be invoked once, by any user thread
      */
+    private final AtomicBoolean shutdownFlag = new AtomicBoolean(false);
+    /**
+     *   closeFlag is to make sure that doClose() method will only be invoked once, by worker or by wheel
+     *   there is no need to cancel the timeout wheelJob manually since there are no side effects
+     */
+    private final AtomicBoolean closeFlag = new AtomicBoolean(false);
+
     @Override
-    public void masterCanWrite(Channel channel) {
-        canConnect(channel);
+    public boolean available() {
+        return availableFlag.get();
     }
 
     @Override
-    public void workerCanRead(Channel channel, ReadBuffer readBuffer) {
+    public void canRead(Channel channel, ReadBuffer readBuffer) {
         int readableBytes = n.recv(channel.socket(), readBuffer.segment(), readBuffer.len());
         if(readableBytes > 0) {
             readBuffer.setWriteIndex(readableBytes);
             channel.onReadBuffer(readBuffer);
-        }else if(readableBytes == 0){
-            channel.close();
+        }else if(readableBytes == 0) {
+            doClose(channel);
+        }else {
+            throw new FrameworkException(ExceptionType.NETWORK, "Unable to recv, errno : %d".formatted(n.errno()));
+        }
+    }
+
+    @Override
+    public void canWrite(Channel channel) {
+        if(channel.state().compareAndSet(Native.REGISTER_READ_WRITE, Native.REGISTER_READ)) {
+            n.register(channel.worker().state().mux(), channel.socket(), Native.REGISTER_READ_WRITE, Native.REGISTER_READ);
+            LockSupport.unpark(channel.writerThread());
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
     @Override
-    public void workerCanWrite(Channel channel) {
-
+    public void doWrite(Channel channel, WriteBuffer writeBuffer) {
+        Socket socket = channel.socket();
+        MemorySegment segment = writeBuffer.segment();
+        int len = (int) segment.byteSize();
+        int bytes = n.send(socket, segment, len);
+        if(bytes == -1) {
+            // error occurred
+            int errno = n.errno();
+            if(errno == n.sendBlockCode()) {
+                // current TCP write buffer is full, wait until writable again
+                if(channel.state().compareAndSet(Native.REGISTER_READ, Native.REGISTER_READ_WRITE)) {
+                    NetworkState workerState = channel.worker().state();
+                    n.register(workerState.mux(), socket, Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
+                    LockSupport.park();
+                    doWrite(channel, writeBuffer);
+                }else {
+                    throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+                }
+            }else {
+                throw new FrameworkException(ExceptionType.NETWORK, "Unable to write using TCP protocol, errno : %d".formatted(errno));
+            }
+        }else if(bytes < len){
+            // only write a part of the segment, wait for next loop
+            writeBuffer.truncate(bytes);
+            doWrite(channel, writeBuffer);
+        }
     }
 
     @Override
-    public void doWrite(WriteBuffer writeBuffer) {
+    public void doShutdown(Channel channel, long timeout, TimeUnit timeUnit) {
+        if(shutdownFlag.compareAndSet(false ,true)) {
+            availableFlag.set(false);
+            n.shutdownWrite(channel.socket());
+            Wheel.wheel().addJob(() -> doClose(channel), timeout, timeUnit);
+        }
+    }
 
+    @Override
+    public void doClose(Channel channel) {
+        if(closeFlag.compareAndSet(false, true)) {
+            availableFlag.set(false);
+            channel.writerThread().interrupt();
+            Socket socket = channel.socket();
+            NetworkState workerState = channel.worker().state();
+            workerState.socketMap().remove(socket, channel);
+            if(channel.state().getAndSet(Native.REGISTER_NONE) > 0) {
+                n.unregister(workerState.mux(), socket);
+            }
+            n.closeSocket(socket);
+            // invoke handler's onConnected callback
+            channel.handler().onClose(channel);
+        }
     }
 }

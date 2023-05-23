@@ -2,12 +2,14 @@ package cn.zorcc.common.wheel;
 
 public interface Job {
     /**
-     *   返回当前任务已执行的次数
+     *   return current job execution count
      */
     long count();
 
     /**
-     *   取消任务执行,返回是否取消成功
+     *   cancel current job execution, return if successfully canceled
+     *   Note that cancel itself is a atomic operation, the canceller thread could never be the job execution thread
+     *   so different threads are actually fight for the opportunity of either running or canceling, but only one would succeed
      */
     boolean cancel();
 }

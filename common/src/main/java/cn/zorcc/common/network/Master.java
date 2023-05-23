@@ -15,30 +15,27 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Slf4j
 public class Master implements LifeCycle {
     private static final Native n = Native.n;
-    private final NetworkConfig config;
     private final NetworkState state;
     private final Thread thread;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     public Master(Net net) {
-        this.config = net.config();
+        NetworkConfig config = net.config();
         this.state = NetworkState.forMaster(config);
         this.thread = ThreadUtil.platform("Master", () -> {
-            log.debug("Initializing network master, mux : {}, socket : {}", state.mux(), state.socket());
             int maxEvents = config.getMaxEvents();
             Thread currentThread = Thread.currentThread();
             try{
                 n.bindAndListen(config, state.socket());
-                n.registerRead(state.mux(), state.socket());
+                n.register(state.mux(), state.socket(), Native.REGISTER_NONE, Native.REGISTER_READ);
                 while (!currentThread.isInterrupted()) {
                     int count = n.multiplexingWait(state, maxEvents);
                     if(count == -1) {
-                        // multiplexing wait failed
-                        log.error("epoll_wait failed with errno : {}", n.errno());
+                        log.error("Mux wait failed with errno : {}", n.errno());
                         continue;
                     }
-                    for(int index = 0; index < count; index++) {
-                        n.checkConnection(state, index);
+                    for(int index = 0; index < count; ++index) {
+                        n.waitForAccept(state, index, net);
                     }
                 }
             } finally {
@@ -46,14 +43,6 @@ public class Master implements LifeCycle {
                 n.exitMux(state.mux());
             }
         });
-    }
-
-    /**
-     *   Examine if current operation runs in the worker thread
-     *   TODO Could be removed after validation
-     */
-    public static boolean inMasterThread() {
-        return Thread.currentThread().getName().equals("Master");
     }
 
     public NetworkState state() {

@@ -3,7 +3,8 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.Clock;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ObjPool;
-import cn.zorcc.common.exception.NetworkException;
+import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.wheel.Job;
 import cn.zorcc.common.wheel.Wheel;
@@ -20,7 +21,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   Remote instance is unique for a single Loc, and it doesn't take over the channel management
  */
 public class Remote implements ObjPool<Channel> {
+    private static final String CONNECTION_TIME_OUT = "Acquire connection timeout";
     private static final Wheel wheel = Wheel.wheel();
+    /**
+     *   global remote map
+     */
     private static final Map<Loc, Remote> remoteMap = new ConcurrentHashMap<>();
 
     /**
@@ -32,9 +37,18 @@ public class Remote implements ObjPool<Channel> {
      */
     private final TransferQueue<Channel> channels = new LinkedTransferQueue<>();
     /**
-     *   available channel count
+     *   available channel count, when channel is actually put into channels, the availableCounter will increment
      */
-    private final AtomicInteger counter = new AtomicInteger(Constants.ZERO);
+    private final AtomicInteger availableCounter = new AtomicInteger(Constants.ZERO);
+    /**
+     *   connect call times, when Net.connect() is called, the connectCounter will increment
+     */
+    private final AtomicInteger connectCounter = new AtomicInteger(Constants.ZERO);
+    /**
+     *   permitted maximum connections
+     */
+    private volatile int maximum = 1;
+
     private Remote(Loc loc) {
         this.loc = loc;
     }
@@ -48,6 +62,18 @@ public class Remote implements ObjPool<Channel> {
         return remoteMap.computeIfAbsent(loc, Remote::new);
     }
 
+    public AtomicInteger connectCounter() {
+        return connectCounter;
+    }
+
+    public void setMaximum(int maximum) {
+        this.maximum = maximum;
+    }
+
+    public int getMaximum() {
+        return maximum;
+    }
+
     public Loc loc() {
         return loc;
     }
@@ -57,14 +83,15 @@ public class Remote implements ObjPool<Channel> {
         Thread currentThread = Thread.currentThread();
         try{
             Channel ch = channels.take();
-            if(!ch.available().get()) {
-                counter.decrementAndGet();
+            if(!ch.available()) {
+                availableCounter.decrementAndGet();
+                connectCounter.decrementAndGet();
                 return get();
             }
             return ch;
         } catch (InterruptedException e) {
             currentThread.interrupt();
-            throw new NetworkException(NetworkException.CONNECTION_TIME_OUT);
+            throw new FrameworkException(ExceptionType.NETWORK, CONNECTION_TIME_OUT);
         }
     }
 
@@ -81,26 +108,27 @@ public class Remote implements ObjPool<Channel> {
                 ch = channels.take();
                 if (!timeoutJob.cancel()) {
                     // failed to cancel the interrupt
-                    throw new NetworkException(NetworkException.CONNECTION_TIME_OUT);
+                    throw new FrameworkException(ExceptionType.NETWORK, CONNECTION_TIME_OUT);
                 }
                 nano -= Clock.elapsed(start);
             }
-            if(!ch.available().get()) {
-                counter.decrementAndGet();
+            if(!ch.available()) {
+                availableCounter.decrementAndGet();
+                connectCounter.decrementAndGet();
                 return get(nano, TimeUnit.NANOSECONDS);
             }
             return ch;
         } catch (InterruptedException e) {
             currentThread.interrupt();
-            throw new NetworkException(NetworkException.CONNECTION_TIME_OUT);
+            throw new FrameworkException(ExceptionType.NETWORK, CONNECTION_TIME_OUT);
         }
     }
 
     @Override
     public void release(Channel channel) {
-        if(channel.available().get()) {
+        if(channel.available()) {
             if (!channels.offer(channel)) {
-                throw new NetworkException(Constants.UNREACHED);
+                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
         }
     }
@@ -108,11 +136,11 @@ public class Remote implements ObjPool<Channel> {
     @Override
     public void add(Channel channel) {
         release(channel);
-        counter.getAndIncrement();
+        availableCounter.getAndIncrement();
     }
 
     @Override
     public int count() {
-        return counter.get();
+        return availableCounter.get();
     }
 }

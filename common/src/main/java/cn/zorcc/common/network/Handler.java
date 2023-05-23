@@ -1,6 +1,6 @@
 package cn.zorcc.common.network;
 
-public interface ChannelHandler {
+public interface Handler {
 
     /**
      *   After channel got connected, this function would be invoked

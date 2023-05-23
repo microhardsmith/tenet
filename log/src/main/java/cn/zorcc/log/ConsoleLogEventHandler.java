@@ -9,7 +9,6 @@ import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SymbolLookup;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 import java.nio.charset.StandardCharsets;
@@ -22,13 +21,14 @@ import java.util.function.BiConsumer;
  *      PrintTest.testSout    avgt   25  2758.746 ± 108.389  ns/op
  */
 public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
-    private final MethodHandle printHandle;
+    private final MethodHandle puts;
+    private final MethodHandle fflush;
     private final BiConsumer<WriteBuffer, LogEvent> consumer;
     private final WriteBuffer buffer;
 
     public ConsoleLogEventHandler(LogConfig logConfig) {
-        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.netLib());
-        this.printHandle = NativeUtil.methodHandle(symbolLookup, "g_print", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+        this.puts = NativeUtil.getNativeMethodHandle("puts", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        this.fflush = NativeUtil.getNativeMethodHandle("fflush", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         this.consumer = parseLogFormat(logConfig);
         // Console builder should have a larger size than logEvent
         this.buffer = new WriteBuffer(logConfig.getBufferSize() << 1);
@@ -41,7 +41,14 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
         try{
             buffer.writeByte(Constants.NUT);
             MemorySegment segment = buffer.segment();
-            printHandle.invokeExact(segment);
+            int p = (int) puts.invokeExact(segment);
+            if(p < 0) {
+                throw new FrameworkException(ExceptionType.LOG, "Failed to call puts() method");
+            }
+            int f = (int) fflush.invokeExact(NativeUtil.stdout());
+            if(f != 0) {
+                throw new FrameworkException(ExceptionType.LOG, "Failed to call fflush method");
+            }
             buffer.reset();
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.LOG, "Exception caught when invoking print()", throwable);
