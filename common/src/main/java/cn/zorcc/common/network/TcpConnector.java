@@ -3,6 +3,7 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.wheel.Job;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -37,7 +38,7 @@ public class TcpConnector implements Connector {
             int errOpt = n.getErrOpt(acceptor.socket());
             if(errOpt == 0) {
                 // whether cancel succeed or fail will not matter, race will make sure only one succeed
-                acceptor.cancelJob().cancel();
+                acceptor.cancelTimeout();
                 acceptor.toChannel(new TcpProtocol());
             }else {
                 log.error("Failed to establish tcp connection, errno : {}", n.errno());

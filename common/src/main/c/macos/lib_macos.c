@@ -37,7 +37,7 @@ int main() {
     check(m_kevent_ctl(kq, socket, EVFILT_READ, EV_ADD));
     struct kevent eventlist[32];
     while(1) {
-        int size = m_kevent_wait(kq, eventlist, 32);
+        int size = m_kevent_wait(kq, eventlist, 32, NULL);
         for(int i = 0; i < size; i++) {
             struct kevent event = eventlist[i];
             int fd = event.ident;
@@ -52,7 +52,7 @@ int main() {
                 printf("client %d disconnected \n", fd);
                 // When the client disconnects an EOF is sent. By closing the file
                 // descriptor the event is automatically removed from the kqueue.
-                check(m_close(fd));
+                check(m_close(fd)); 
             }else if(event.filter == EVFILT_READ) {
                 char buf[1024];
                 size_t count = m_recv(fd, buf, sizeof(buf));
@@ -62,10 +62,14 @@ int main() {
     }
 }
 
-// 向标准输出流输出字符
-void g_print(char* str) {
-    puts(str);
-    fflush(stdout);
+// 获取标准输入流
+FILE* g_stdout() {
+    return stdout;
+}
+
+// 获取标准错误流
+FILE* g_stderr() {
+    return stderr;
 }
 
 // 返回connect导致阻塞的错误码,在macos下为EINPROGRESS
@@ -78,22 +82,21 @@ int m_send_block_code() {
     return EAGAIN;
 }
 
-// 创建kqueue,失败则返回-1，成功则返回fd
+// 创建kqueue,失败则返回-1,成功则返回fd
 int m_kqueue() {
     return kqueue();
 }
 
-// 向kqueue中注册事件,失败则返回-1，成功则返回0 changelist应只包含一个元素，如果changelist的flag为EV_ERROR则表示出现了错误
+// 向kqueue中注册事件,失败则返回-1,成功则返回0 changelist应只包含一个元素,如果changelist的flag为EV_ERROR则表示出现了错误
 int m_kevent_ctl(int kq, int fd, int16_t filter, uint16_t flags) {
-    struct kevent changelist;
-    memset(&changelist, 0, sizeof(struct kevent));
-    EV_SET(&changelist, fd, filter, flags, 0, 0, NULL);
-    return kevent(kq, &changelist, 1, NULL, 0, NULL);
+    struct kevent event;
+    EV_SET(&event, fd, filter, flags, 0, 0, NULL);
+    return kevent(kq, &event, 1, NULL, 0, NULL);
 }
 
-// 阻塞等待事件,失败则返回-1，成功则返回事件个数
-int m_kevent_wait(int kq, struct kevent* eventlist, int nevents) {
-    return kevent(kq, NULL, 0, eventlist, nevents, NULL);
+// 阻塞等待事件,失败则返回-1,成功则返回事件个数
+int m_kevent_wait(int kq, struct kevent* eventlist, int nevents, struct timespec* timeout) {
+    return kevent(kq, NULL, 0, eventlist, nevents, timeout);
 }
 
 // 返回ip地址字节长度
@@ -111,23 +114,22 @@ int m_address(struct sockaddr_in* sockAddr, char* addrStr, socklen_t len) {
 }
 
 // 获取客户端连接的端口号
-int m_port(struct sockaddr_in* sockAddr) {
+uint16_t m_port(struct sockaddr_in* sockAddr) {
     return ntohs(sockAddr -> sin_port);
 }
 
-// 创建socket，失败则返回-1，成功则返回fd
+// 创建socket,失败则返回-1,成功则返回fd
 int m_socket_create() {
     return socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 }
 
-// 接受socket连接，失败则返回-1，成功则返回socket fd，在非阻塞情况下，未立刻建立的连接错误码为EAGAIN或EWOULDBLOCK
+// 接受socket连接,失败则返回-1,成功则返回socket fd,在非阻塞情况下,未立刻建立的连接错误码为EAGAIN或EWOULDBLOCK
 int m_accept(int socket, struct sockaddr_in* clientAddr, socklen_t clientAddrSize) {
     return accept(socket, (struct sockaddr *) clientAddr, &clientAddrSize);
 }
 
-// 设置sock地址，失败则返回-1，成功则返回1，地址为非法字符串则返回0
-int m_set_sock_addr(struct sockaddr_in* sockAddr, char* address, int port) {
-    memset(sockAddr, 0, sizeof(struct sockaddr_in));
+// 设置sock地址,失败则返回-1,成功则返回1,地址为非法字符串则返回0
+int m_set_sock_addr(struct sockaddr_in* sockAddr, char* address, uint16_t port) {
     sockAddr -> sin_family = AF_INET;
     sockAddr -> sin_port = htons(port);
     return inet_pton(AF_INET, address, &(sockAddr -> sin_addr));
@@ -151,15 +153,10 @@ int m_set_tcp_no_delay(int socket, int value) {
     return setsockopt(socket, IPPROTO_TCP, TCP_NODELAY, ptr, sizeof(value));
 }
 
-// 获取指定socket上的错误码，如果socket上无错误应返回0
-int m_get_err_opt(int socket) {
-    int value = -1;
-    void* ptr = &value;
-    socklen_t ptr_size = sizeof(value);
-    if(getsockopt(socket, SOL_SOCKET, SO_ERROR, ptr, &ptr_size) == -1) {
-        return -1;
-    }
-    return value;
+// 获取指定socket上的错误码,如果socket上无错误应返回0
+int m_get_err_opt(int socket, int* ptr) {
+    socklen_t ptr_size = sizeof(int);
+    return getsockopt(socket, SOL_SOCKET, SO_ERROR, (void*) ptr, &ptr_size);
 }
 
 // 设置socket为非阻塞,失败则返回-1,成功则返回0
@@ -168,22 +165,22 @@ int m_set_nonblocking(int socket) {
     return fcntl(socket, F_SETFL, flag | O_NONBLOCK);
 }
 
-// bind端口地址，失败则返回-1，成功则返回0
+// bind端口地址,失败则返回-1,成功则返回0
 int m_bind(int socket, struct sockaddr_in* sockAddr, socklen_t size) {
     return bind(socket, (struct sockaddr*) sockAddr, size);
 }
 
-// 连接指定地址，失败则返回-1，成功则返回0
+// 连接指定地址,失败则返回-1,成功则返回0
 int m_connect(int socket, struct sockaddr_in* sockAddr, socklen_t size) {
     return connect(socket, (struct sockaddr*) sockAddr, size);
 }
 
-// listen端口地址，失败则返回-1，成功则返回0
+// listen端口地址,失败则返回-1,成功则返回0
 int m_listen(int socket, int backlog) {
     return listen(socket, backlog);
 }
 
-// 返回EINPROGRESS的值，用于判定非阻塞socket是否在连接中
+// 返回EINPROGRESS的值,用于判定非阻塞socket是否在连接中
 int m_err_inprogress() {
     return EINPROGRESS;
 }
@@ -192,14 +189,19 @@ ssize_t m_send(int socket, void* buf, size_t len) {
     return send(socket, buf, len, 0);
 }
 
-// 从socket接受数据，失败则返回-1，成功则返回接受的字节数
+// 从socket接受数据,失败则返回-1,成功则返回接受的字节数
 ssize_t m_recv(int socket, void* buf, size_t len) {
     return recv(socket, buf, len, 0);
 }
 
-// 关闭fd,失败则返回-1，成功则返回0
+// 关闭fd,失败则返回-1,成功则返回0
 int m_close(int fd) {
     return close(fd);
+}
+
+// 关闭socket写端,失败则返回-1,成功则返回0
+int m_shutdown_write(int fd) {
+    return shutdown(fd, SHUT_WR);
 }
 
 // 返回当前错误码

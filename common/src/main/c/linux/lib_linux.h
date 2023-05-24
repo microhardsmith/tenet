@@ -1,7 +1,10 @@
 #ifndef LIB_LINUX_H
 #define LIB_LINUX_H
 
-void g_print(char* str);
+
+FILE* g_stdout();
+
+FILE* g_stderr();
 
 int l_connect_block_code();
 

@@ -13,7 +13,7 @@ public class NetTest {
         LoggerConsumer loggerConsumer = new LoggerConsumer();
         loggerConsumer.init();
         Runtime.getRuntime().addShutdownHook(Thread.ofVirtual().unstarted(loggerConsumer::shutdown));
-        Net net = new Net(HttpTestHandler::new, HttpCodec::new);
+        Net net = new Net(HttpCodec::new, HttpTestHandler::new);
         Runtime.getRuntime().addShutdownHook(ThreadUtil.virtual("shutdown", net::shutdown));
         net.init();
         log.info("Start now");

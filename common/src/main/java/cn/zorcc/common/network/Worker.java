@@ -8,6 +8,8 @@ import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.ThreadUtil;
 import lombok.extern.slf4j.Slf4j;
 
+import java.lang.foreign.MemorySegment;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -22,7 +24,9 @@ public final class Worker implements LifeCycle {
 
     public Worker(Net net, int sequence) {
         NetworkConfig config = net.config();
-        this.state = NetworkState.forWorker(config);
+        Mux mux = n.createMux();
+        MemorySegment eventsArray = n.createEventsArray(config);
+        this.state = new NetworkState(mux, eventsArray, new ConcurrentHashMap<>(Net.MAP_SIZE));
         int maxEvents = config.getMaxEvents();
         this.thread = ThreadUtil.platform("Worker-" + sequence, () -> {
             Thread currentThread = Thread.currentThread();

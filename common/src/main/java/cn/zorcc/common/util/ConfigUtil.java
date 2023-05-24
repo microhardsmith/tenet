@@ -39,13 +39,6 @@ public class ConfigUtil {
     }
 
     /**
-     *   validate port number
-     */
-    public static boolean checkPort(Integer port) {
-        return port >= 1024 && port <= 65535;
-    }
-
-    /**
      * 加载项目配置json文件,从调用者线程检索项目resource下json文件
      * @param fileName 配置文件名称
      * @param configClass 配置文件类

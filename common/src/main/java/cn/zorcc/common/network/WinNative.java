@@ -164,7 +164,8 @@ public final class WinNative implements Native {
     public MemorySegment createSockAddr(Loc loc, Arena arena) {
         MemorySegment r = arena.allocate(sockAddrLayout);
         MemorySegment ip = NativeUtil.allocateStr(arena, loc.ip(), addressLen);
-        if(check(setSockAddr(r, ip, loc.port()), "setSockAddr") == 0) {
+        short port = shortPort(loc.port());
+        if(check(setSockAddr(r, ip, port), "setSockAddr") == 0) {
             throw new FrameworkException(ExceptionType.NETWORK, "Loc is not valid");
         }
         return r;
@@ -228,10 +229,12 @@ public final class WinNative implements Native {
     }
 
     @Override
-    public void unregister(Mux mux, Socket socket) {
-        MemorySegment winHandle = mux.winHandle();
-        long fd = socket.longValue();
-        check(epollCtl(winHandle, Constants.EPOLL_CTL_DEL, fd, NativeUtil.NULL_POINTER), "epollCtl");
+    public void unregister(Mux mux, Socket socket, int current) {
+        if(current > 0) {
+            MemorySegment winHandle = mux.winHandle();
+            long fd = socket.longValue();
+            check(epollCtl(winHandle, Constants.EPOLL_CTL_DEL, fd, NativeUtil.NULL_POINTER), "epollCtl");
+        }
     }
 
     @Override
@@ -242,7 +245,7 @@ public final class WinNative implements Native {
     @Override
     public void waitForAccept(NetworkState state, int index, Net net) {
         MemorySegment events = state.events();
-        Socket serverSocket = state.socket();
+        Socket serverSocket = net.master().socket();
         int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
         long socket = NativeUtil.getLong(events, index * eventSize + dataOffset + sockOffset);
         if(socket == serverSocket.longValue() && (event & Constants.EPOLL_IN) != 0) {
@@ -290,7 +293,7 @@ public final class WinNative implements Native {
             if(address(clientAddr, address, addressLen) == -1) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Failed to get client socket's remote address, errno : {}", errno());
             }
-            Loc loc = new Loc(NativeUtil.getStr(address), port(clientAddr));
+            Loc loc = new Loc(NativeUtil.getStr(address), intPort(port(clientAddr)));
             return new ClientSocket(clientSocket, loc);
         }
     }

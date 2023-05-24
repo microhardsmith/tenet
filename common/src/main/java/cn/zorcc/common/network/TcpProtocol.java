@@ -108,8 +108,9 @@ public final class TcpProtocol implements Protocol {
             Socket socket = channel.socket();
             NetworkState workerState = channel.worker().state();
             workerState.socketMap().remove(socket, channel);
-            if(channel.state().getAndSet(Native.REGISTER_NONE) > 0) {
-                n.unregister(workerState.mux(), socket);
+            int current = channel.state().getAndSet(Native.REGISTER_NONE);
+            if(current > 0) {
+                n.unregister(workerState.mux(), socket, current);
             }
             n.closeSocket(socket);
             // invoke handler's onConnected callback

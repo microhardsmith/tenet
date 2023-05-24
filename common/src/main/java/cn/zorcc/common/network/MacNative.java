@@ -84,6 +84,17 @@ public class MacNative implements Native {
     }
 
     @Override
+    public MemorySegment createSockAddr(Loc loc, Arena arena) {
+        MemorySegment r = arena.allocate(sockAddrLayout);
+        MemorySegment ip = NativeUtil.allocateStr(arena, loc.ip(), addressLen);
+        short port = shortPort(loc.port());
+        if(check(setSockAddr(r, ip, port), "setSockAddr") == 0) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Loc is not valid");
+        }
+        return r;
+    }
+
+    @Override
     public Mux createMux() {
         int kqfd = check(kqueue(), "kqueue create");
         return Mux.mac(kqfd);
@@ -96,18 +107,13 @@ public class MacNative implements Native {
     }
 
     @Override
-    public Socket createSocket(NetworkConfig config, boolean serverSide) {
+    public Socket createSocket(NetworkConfig config) {
         int socketFd = check(socketCreate(), "create socket");
-        Socket socket = new Socket(socketFd);
-        // if it's a client socket, this is no need to set the SO_REUSE_ADDR opt
-        if(serverSide) {
-            check(setReuseAddr(socketFd, config.getReuseAddr() ? 1 : 0), "set SO_REUSE_ADDR");
-        }
+        check(setReuseAddr(socketFd, config.getReuseAddr() ? 1 : 0), "set SO_REUSE_ADDR");
         check(setKeepAlive(socketFd, config.getKeepAlive() ? 1 : 0), "set SO_KEEPALIVE");
         check(setTcpNoDelay(socketFd, config.getTcpNoDelay() ? 1 : 0), "set TCP_NODELAY");
-        // socket must be non_blocking
         check(setNonBlocking(socketFd), "set NON_BLOCKING");
-        return socket;
+        return new Socket(socketFd);
     }
 
     @Override
@@ -115,7 +121,8 @@ public class MacNative implements Native {
         try(Arena arena = Arena.openConfined()) {
             MemorySegment addr = arena.allocate(sockAddrLayout);
             MemorySegment ip = NativeUtil.allocateStr(arena, config.getIp(), addressLen);
-            int setSockAddr = check(setSockAddr(addr, ip, config.getPort()), "set SockAddr");
+            short port = shortPort(config.getPort());
+            int setSockAddr = check(setSockAddr(addr, ip, port), "set SockAddr");
             if(setSockAddr == 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Network address is not valid");
             }
@@ -125,128 +132,110 @@ public class MacNative implements Native {
     }
 
     @Override
-    public void registerRead(Mux mux, Socket socket) {
+    public void register(Mux mux, Socket socket, int from, int to) {
         int kqfd = mux.kqfd();
         int fd = socket.intValue();
-        check(keventCtl(kqfd, fd, Constants.EVFILT_READ, Constants.EV_ADD), "kevent register read");
+        int r1 = from & Native.REGISTER_READ, r2 = to & Native.REGISTER_READ;
+        if(r1 != r2) {
+            check(keventCtl(kqfd, fd, Constants.EVFILT_READ, r1 > r2 ? Constants.EV_DELETE : Constants.EV_ADD), "kevent_ctl");
+        }
+        int w1 = from & Native.REGISTER_WRITE, w2 = to & Native.REGISTER_WRITE;
+        if(w1 != w2) {
+            check(keventCtl(kqfd, fd, Constants.EVFILT_WRITE, w1 > w2 ? Constants.EV_DELETE : Constants.EV_ADD), "kevent_ctl");
+        }
     }
 
     @Override
-    public void registerWrite(Mux mux, Socket socket) {
+    public void unregister(Mux mux, Socket socket, int current) {
         int kqfd = mux.kqfd();
         int fd = socket.intValue();
-        check(keventCtl(kqfd, fd, Constants.EVFILT_WRITE, (short) (Constants.EV_ADD | Constants.EV_ONESHOT)), "kevent register write");
+        if((current & Native.REGISTER_READ) != 0) {
+            check(keventCtl(kqfd, fd, Constants.EVFILT_READ, Constants.EV_DELETE), "kevent_del");
+        }
+        if((current & Native.REGISTER_WRITE) != 0) {
+            check(keventCtl(kqfd, fd, Constants.EVFILT_WRITE, Constants.EV_DELETE), "kevent_del");
+        }
     }
 
     @Override
-    public void unregister(Mux mux, Socket socket) {
-        int kqfd = mux.kqfd();
-        int fd = socket.intValue();
-        // always delete read and write, as long as the socket has been registered to the kq, this action won't cause any error
-        check(keventCtl(kqfd, fd, (short) (Constants.EVFILT_READ | Constants.EVFILT_WRITE), Constants.EV_DELETE), "kevent unregister");
+    public int multiplexingWait(NetworkState state, int maxEvents) {
+        return keventWait(state.mux().kqfd(), state.events(), maxEvents, NativeUtil.NULL_POINTER);
     }
 
     @Override
-    public void waitForAccept(Net net, NetworkState state) {
+    public void waitForAccept(NetworkState state, int index, Net net) {
         MemorySegment events = state.events();
-        int serverSocket = state.socket().intValue();
-        int count = keventWait(state.mux().kqfd(), events, net.config().getMaxEvents());
-        if(count == -1) {
-            if(Thread.currentThread().isInterrupted()) {
-                // already shutdown
-                return ;
-            }else {
-                // kqueue wait failed
-                log.error("kevent failed with errno : {}", errno());
-            }
-        }
-        for(int i = 0; i < count; i++) {
-            int ident = (int) NativeUtil.getLong(events, i * keventSize + identOffset);
-            short filter = NativeUtil.getShort(events, i * keventSize + filterOffset);
-            if((filter & Constants.EVFILT_READ) != 0 && ident == serverSocket) {
-                // accept connection
-                try(Arena arena = Arena.openConfined()) {
-                    MemorySegment clientAddr = arena.allocate(sockAddrLayout);
-                    MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, addressLen);
-                    int clientFd = accept(serverSocket, clientAddr, sockAddrSize);
-                    if(clientFd == -1) {
-                        log.error("Failed to accept client socket, errno : {}", errno());
-                    }
-                    Socket clientSocket = new Socket(clientFd);
-                    if (setNonBlocking(clientFd) == -1) {
-                        log.error("Failed to set client socket as non_blocking, errno : {}", errno());
-                        closeSocket(clientSocket);
-                    }
-                    if(address(clientAddr, address, addressLen) == -1) {
-                        log.error("Failed to get client socket's remote address, errno : {}", errno());
-                        closeSocket(clientSocket);
-                    }
-                    Loc loc = new Loc(NativeUtil.getStr(address), port(clientAddr));
-                    Worker worker = net.nextWorker();
-                    Channel channel = Channel.forServer(net, clientSocket, loc, worker);
-                    channel.bindToWorker();
-                }
-            }else if((filter & Constants.EVFILT_WRITE) != 0) {
-                // some client connections has been established, validate if there is a socket err
-                int errOpt = getErrOpt(ident);
-                if (errOpt == 0) {
-                    Channel channel = state.intMap().get(ident);
-                    channel.bindToWorker();
-                }else {
-                    log.error("Establishing connection failed with socket err : {}", errOpt);
-                    state.intMap().remove(ident);
-                }
-            }else {
-                // should never happen
-                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-            }
+        Socket serverSocket = net.master().socket();
+        short filter = NativeUtil.getShort(events, index * keventSize + filterOffset);
+        int ident = (int) NativeUtil.getLong(events, index * keventSize + identOffset);
+        if(ident == serverSocket.intValue() && filter == Constants.EVFILT_READ) {
+            // current server socket receive connection
+            ClientSocket clientSocket = accept(net.config(), serverSocket);
+            net.distribute(clientSocket);
+        }else {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
     @Override
-    public void waitForData(ReadBuffer[] buffers, NetworkState state) {
+    public void waitForData(NetworkState state, int index, ReadBuffer readBuffer) {
         MemorySegment events = state.events();
-        Map<Integer, Channel> channelMap = state.intMap();
-        int count = keventWait(state.mux().kqfd(), events, buffers.length);
-        if(count == -1) {
-            if(Thread.currentThread().isInterrupted()) {
-                // already shutdown
-                return ;
-            }else {
-                // kqueue wait failed
-                log.error("kevent failed with errno : {}", errno());
-            }
+        short filter = NativeUtil.getShort(events, index * keventSize + filterOffset);
+        Socket socket = new Socket(NativeUtil.getInt(events, index * keventSize + identOffset));
+        if(filter == Constants.EVFILT_READ) {
+            state.shouldRead(socket, readBuffer);
+        }else if(filter == Constants.EVFILT_WRITE) {
+            state.shouldWrite(socket);
+        }else {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
-        for(int i = 0; i < count; i++) {
-            long baseOffset = i * keventSize;
-            int ident = (int) NativeUtil.getLong(events, baseOffset + identOffset);
-            short filter = NativeUtil.getShort(events, baseOffset + filterOffset);
-            short flags = NativeUtil.getShort(events, baseOffset + flagsOffset);
-            Channel channel = channelMap.get(ident);
-            if(channel != null) {
-                if((flags & Constants.EV_EOF) != 0) {
-                    // remote current socket
-                    channel.close();
-                }else if((filter & Constants.EVFILT_READ) != 0) {
-                    // read event
-                    ReadBuffer readBuffer = buffers[i];
-                    int readableBytes = recv(ident, readBuffer.segment(), readBuffer.len());
-                    if(readableBytes > 0) {
-                        // recv data from remote peer
-                        readBuffer.setWriteIndex(readableBytes);
-                        channel.onReadBuffer(readBuffer);
-                    }else {
-                        // shouldn't happen in kqueue implementation, we already checked whether channel was closed
-                        throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-                    }
-                }else if((filter & Constants.EVFILT_WRITE) != 0) {
-                    // write event
-                    LockSupport.unpark(channel.writerThread());
-                }else {
-                    // should never happen
-                    throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-                }
+    }
+
+    @Override
+    public int connect(Socket socket, MemorySegment sockAddr) {
+        return connect(socket.intValue(), sockAddr, addressLen);
+    }
+
+    @Override
+    public ClientSocket accept(NetworkConfig config, Socket socket) {
+        try(Arena arena = Arena.openConfined()) {
+            MemorySegment clientAddr = arena.allocate(sockAddrLayout);
+            MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, addressLen);
+            int socketFd = accept(socket.intValue(), clientAddr, sockAddrSize);
+            if(socketFd == -1) {
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to accept client socket, errno : {}", errno());
             }
+            Socket clientSocket = new Socket(socketFd);
+            check(setReuseAddr(socketFd, config.getReuseAddr() ? 1 : 0), "set SO_REUSE_ADDR");
+            check(setKeepAlive(socketFd, config.getKeepAlive() ? 1 : 0), "set SO_KEEPALIVE");
+            check(setTcpNoDelay(socketFd, config.getTcpNoDelay() ? 1 : 0), "set TCP_NODELAY");
+            check(setNonBlocking(socketFd), "set NON_BLOCKING");
+            if(address(clientAddr, address, addressLen) == -1) {
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to get client socket's remote address, errno : {}", errno());
+            }
+            Loc loc = new Loc(NativeUtil.getStr(address), intPort(port(clientAddr)));
+            return new ClientSocket(clientSocket, loc);
+        }
+    }
+
+    @Override
+    public int recv(Socket socket, MemorySegment data, int len) {
+        return recv(socket.intValue(), data, len);
+    }
+
+    @Override
+    public int send(Socket socket, MemorySegment data, int len) {
+        return send(socket.intValue(), data, len);
+    }
+
+    @Override
+    public int getErrOpt(Socket socket) {
+        try(Arena arena = Arena.openConfined()) {
+            MemorySegment ptr = arena.allocate(ValueLayout.JAVA_INT, -1);
+            if (getErrOpt(socket.intValue(), ptr) == -1) {
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to get Socket's err opt");
+            }
+            return NativeUtil.getInt(ptr, 0);
         }
     }
 
@@ -258,21 +247,6 @@ public class MacNative implements Native {
     @Override
     public void shutdownWrite(Socket socket) {
         check(shutdownWrite(socket.intValue()), "shutdown write");
-    }
-
-    @Override
-    public int send(Socket socket, MemorySegment data, int len) {
-        return send(socket.intValue(), data, len);
-    }
-
-    @Override
-    public int recv(Socket socket, MemorySegment data, int len) {
-        return recv(socket.intValue(), data, len);
-    }
-
-    @Override
-    public int getErrOpt(Socket socket) {
-        return getErrOpt(socket.intValue());
     }
 
     @Override
@@ -292,17 +266,17 @@ public class MacNative implements Native {
         keventCtlMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_kevent_ctl", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_SHORT, ValueLayout.JAVA_SHORT));
         keventWaitMethodHandle = NativeUtil.methodHandle(symbolLookup,
-                "m_kevent_wait", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+                "m_kevent_wait", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         addressMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_address", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         portMethodHandle = NativeUtil.methodHandle(symbolLookup,
-                "m_port", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+                "m_port", FunctionDescriptor.of(ValueLayout.JAVA_SHORT, ValueLayout.ADDRESS));
         socketCreateMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_socket_create", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         acceptMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_accept", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         setSockAddrMethodHandle = NativeUtil.methodHandle(symbolLookup,
-                "m_set_sock_addr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+                "m_set_sock_addr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_SHORT));
         setReuseAddrMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_set_reuse_addr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         setKeepAliveMethodHandle = NativeUtil.methodHandle(symbolLookup,
@@ -310,7 +284,7 @@ public class MacNative implements Native {
         setTcpNoDelayMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_set_tcp_no_delay", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         getErrOptMethodHandle = NativeUtil.methodHandle(symbolLookup,
-                "m_get_err_opt", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
+                "m_get_err_opt", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         setNonBlockingMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_set_nonblocking", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         bindMethodHandle = NativeUtil.methodHandle(symbolLookup,
@@ -361,16 +335,16 @@ public class MacNative implements Native {
         try{
             return (int) keventCtlMethodHandle.invokeExact(kq, fd, filter, flags);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking keventAdd()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking keventCtl()", throwable);
         }
     }
 
     /**
-     *  corresponding to `int m_kevent_wait(int kq, struct kevent* eventlist, int nevents)`
+     *  corresponding to `int m_kevent_wait(int kq, struct kevent* eventlist, int nevents, struct timespec* timeout)`
      */
-    public int keventWait(int kq, MemorySegment eventlist, int nevents) {
+    public int keventWait(int kq, MemorySegment eventlist, int nevents, MemorySegment timeout) {
         try{
-            return (int) keventWaitMethodHandle.invokeExact(kq, eventlist, nevents);
+            return (int) keventWaitMethodHandle.invokeExact(kq, eventlist, nevents, timeout);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking keventWait()", throwable);
         }
@@ -388,11 +362,11 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_port(struct sockaddr_in* sockAddr)`
+     *  corresponding to `uint16_t m_port(struct sockaddr_in* sockAddr)`
      */
-    public int port(MemorySegment sockAddr) {
+    public short port(MemorySegment sockAddr) {
         try{
-            return (int) portMethodHandle.invokeExact(sockAddr);
+            return (short) portMethodHandle.invokeExact(sockAddr);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking port()", throwable);
         }
@@ -421,9 +395,9 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_set_sock_addr(struct sockaddr_in* sockAddr, char* address, int port)`
+     *  corresponding to `int m_set_sock_addr(struct sockaddr_in* sockAddr, char* address, uint16_t port)`
      */
-    public int setSockAddr(MemorySegment sockAddr, MemorySegment address, int port) {
+    public int setSockAddr(MemorySegment sockAddr, MemorySegment address, short port) {
         try{
             return (int) setSockAddrMethodHandle.invokeExact(sockAddr, address, port);
         }catch (Throwable throwable) {
@@ -465,11 +439,11 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_get_err_opt(int socket)`
+     *  corresponding to `int m_get_err_opt(int socket, int* ptr)`
      */
-    public int getErrOpt(int socket) {
+    public int getErrOpt(int socket, MemorySegment ptr) {
         try{
-            return (int) getErrOptMethodHandle.invokeExact(socket);
+            return (int) getErrOptMethodHandle.invokeExact(socket, ptr);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking getErrOpt()", throwable);
         }

@@ -51,20 +51,20 @@ public interface Native {
     void bindAndListen(NetworkConfig config, Socket socket);
 
     /**
-     *   register mux event, from represent the old status, to represent the target status
+     *   Register mux event, from represent the old status, to represent the target status
      *   return 0 if success, -1 if failed
      */
     void register(Mux mux, Socket socket, int from, int to);
 
     /**
-     *   unregister socket event, delete all events from current mux
+     *   Unregister socket event, delete all events from current mux
      *   note that kqueue will automatically remote the registry when socket was closed, but we still manually unregister it for consistency
      *   return 0 if success, -1 if failed
      */
-    void unregister(Mux mux, Socket socket);
+    void unregister(Mux mux, Socket socket, int current);
 
     /**
-     *   multiplexing wait for events, return the available events
+     *   Multiplexing wait for events, return the available events
      */
     int multiplexingWait(NetworkState state, int maxEvents);
 
@@ -148,6 +148,24 @@ public interface Native {
         if((current & REGISTER_WRITE) == 0) {
             n.register(mux, socket, current, current + REGISTER_READ);
         }
+    }
+
+    /**
+     *   Convert a int port to a unsigned short type
+     */
+    default short shortPort(int port) {
+        if(port < 1 || port > 65535) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Port overflow");
+        }
+        // force retain the lower 16bits, the answer could be negative
+        return (short) port;
+    }
+
+    /**
+     *   Convert  a unsigned short type to a int
+     */
+    default int intPort(short port) {
+        return 0xFFFF & port;
     }
 
     /**

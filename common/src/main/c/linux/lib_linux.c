@@ -74,10 +74,15 @@ int main() {
     check(l_close(epfd));
 }
 
-// 向标准输出流输出字符并刷新缓冲区
-void g_print(char* str) {
-    puts(str);
-    fflush(stdout);
+
+// 获取标准输入流
+FILE* g_stdout() {
+    return stdout;
+}
+
+// 获取标准错误流
+FILE* g_stderr() {
+    return stderr;
 }
 
 // 返回connect导致阻塞的错误码,在Linux系统下为EINPROGRESS

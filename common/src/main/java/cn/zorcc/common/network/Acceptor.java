@@ -48,8 +48,10 @@ public class Acceptor {
         return state;
     }
 
-    public Job cancelJob() {
-        return cancelJob;
+    public void cancelTimeout() {
+        if(cancelJob != null) {
+            cancelJob.cancel();
+        }
     }
 
     /**
@@ -59,15 +61,13 @@ public class Acceptor {
         Codec codec = codecSupplier.get();
         Handler handler = handlerSupplier.get();
         Channel channel = new Channel(socket, state, codec, handler, protocol, remote, loc, worker);
-        // replace current acceptor with newly created channel
         worker.state().socketMap().put(socket, channel);
-        // register only read events
         int from = state.getAndSet(Native.REGISTER_READ);
         if(from != Native.REGISTER_READ) {
             n.register(worker.state().mux(), socket, from, Native.REGISTER_READ);
         }
-        // invoke handler's onConnected callback
         handler.onConnected(channel);
+        channel.writerThread().start();
     }
 
     /**
@@ -75,7 +75,10 @@ public class Acceptor {
      */
     public void unbind() {
         if (worker.state().socketMap().remove(socket, this)) {
-            n.unregister(worker.state().mux(), socket);
+            int current = state.getAndSet(Native.REGISTER_NONE);
+            if(current > 0) {
+                n.unregister(worker.state().mux(), socket, current);
+            }
             connector.shouldClose(socket);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);

@@ -93,7 +93,8 @@ public class LinuxNative implements Native {
     public MemorySegment createSockAddr(Loc loc, Arena arena) {
         MemorySegment r = arena.allocate(sockAddrLayout);
         MemorySegment ip = NativeUtil.allocateStr(arena, loc.ip(), addressLen);
-        if(check(setSockAddr(r, ip, loc.port()), "setSockAddr") == 0) {
+        short port = shortPort(loc.port());
+        if(check(setSockAddr(r, ip, port), "setSockAddr") == 0) {
             throw new FrameworkException(ExceptionType.NETWORK, "Loc is not valid");
         }
         return r;
@@ -126,7 +127,8 @@ public class LinuxNative implements Native {
         try(Arena arena = Arena.openConfined()) {
             MemorySegment addr = arena.allocate(sockAddrLayout);
             MemorySegment ip = NativeUtil.allocateStr(arena, config.getIp(), addressLen);
-            int setSockAddr = check(setSockAddr(addr, ip, config.getPort()), "set SockAddr");
+            short port = shortPort(config.getPort());
+            int setSockAddr = check(setSockAddr(addr, ip, port), "set SockAddr");
             if(setSockAddr == 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Network address is not valid");
             }
@@ -154,10 +156,12 @@ public class LinuxNative implements Native {
     }
 
     @Override
-    public void unregister(Mux mux, Socket socket) {
-        int epFd = mux.epfd();
-        int fd = socket.intValue();
-        check(epollCtl(epFd, Constants.EPOLL_CTL_DEL, fd, NativeUtil.NULL_POINTER), "epoll_ctl");
+    public void unregister(Mux mux, Socket socket, int current) {
+        if(current > 0) {
+            int epFd = mux.epfd();
+            int fd = socket.intValue();
+            check(epollCtl(epFd, Constants.EPOLL_CTL_DEL, fd, NativeUtil.NULL_POINTER), "epoll_ctl");
+        }
     }
 
     @Override
@@ -168,7 +172,7 @@ public class LinuxNative implements Native {
     @Override
     public void waitForAccept(NetworkState state, int index, Net net) {
         MemorySegment events = state.events();
-        Socket serverSocket = state.socket();
+        Socket serverSocket = net.master().socket();
         int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
         int socket = NativeUtil.getInt(events, index * eventSize + dataOffset + fdOffset);
         if(socket == serverSocket.intValue() && (event & Constants.EPOLL_IN) != 0) {
@@ -216,7 +220,7 @@ public class LinuxNative implements Native {
             if(address(clientAddr, address, addressLen) == -1) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Failed to get client socket's remote address, errno : {}", errno());
             }
-            Loc loc = new Loc(NativeUtil.getStr(address), port(clientAddr));
+            Loc loc = new Loc(NativeUtil.getStr(address), intPort(port(clientAddr)));
             return new ClientSocket(clientSocket, loc);
         }
     }

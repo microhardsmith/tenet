@@ -144,10 +144,6 @@ public class Net implements LifeCycle {
         if(!ConfigUtil.checkIp(ip)) {
             throw new FrameworkException(ExceptionType.NETWORK, "IpAddress is not valid : %s".formatted(ip));
         }
-        Integer port = config.getPort();
-        if(!ConfigUtil.checkPort(port)) {
-            throw new FrameworkException(ExceptionType.NETWORK, "Port is not valid : %d".formatted(port));
-        }
         Integer workerCount = config.getWorkerCount();
         if(workerCount < 1) {
             throw new FrameworkException(ExceptionType.NETWORK, "Worker count must be at least 1");
@@ -159,6 +155,13 @@ public class Net implements LifeCycle {
      */
     public NetworkConfig config() {
         return config;
+    }
+
+    /**
+     *   return current network master
+     */
+    public Master master() {
+        return master;
     }
 
     /**
@@ -227,13 +230,13 @@ public class Net implements LifeCycle {
     }
 
     /**
-     *   mount current acceptor to its worker thread for write events
+     *   Mount target acceptor to its worker thread for write events to happen
      */
     private void mount(Acceptor acceptor) {
-        NetworkState state = acceptor.worker().state();
-        state.socketMap().put(acceptor.socket(), acceptor);
+        NetworkState workerState = acceptor.worker().state();
+        workerState.socketMap().put(acceptor.socket(), acceptor);
         if (acceptor.state().compareAndSet(Native.REGISTER_NONE, Native.REGISTER_WRITE)) {
-            n.register(state.mux(), state.socket(), Native.REGISTER_NONE, Native.REGISTER_WRITE);
+            n.register(workerState.mux(), acceptor.socket(), Native.REGISTER_NONE, Native.REGISTER_WRITE);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }

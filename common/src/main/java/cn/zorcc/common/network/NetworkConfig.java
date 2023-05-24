@@ -11,7 +11,7 @@ public class NetworkConfig {
     /**
      *   服务端是否开启TLS加密,默认不开启
      */
-    private Boolean enableSsl = false;
+    private Boolean enableSsl = Boolean.FALSE;
     /**
      *   服务端证书公钥路径,必须为绝对路径
      */
@@ -22,7 +22,7 @@ public class NetworkConfig {
     private String privateKeyFile = Constants.EMPTY_STRING;
     /**
      *  worker线程数量,默认为4,可以根据CPU核数进行适当调整
-     *  Net的性能并不完全依赖于worker数量的提升,实际读写任务都会在虚拟线程中进行
+     *  Net的性能并不完全依赖于worker数量的提升,实际读写任务都可在虚拟线程中进行
      */
     private Integer workerCount = 4;
     /**
@@ -50,7 +50,7 @@ public class NetworkConfig {
      */
     private Integer backlog = 64;
     /**
-     *  单次epoll获取事件数组长度
+     *  多路复用事件数组长度
      */
     private Integer maxEvents = 64;
 }

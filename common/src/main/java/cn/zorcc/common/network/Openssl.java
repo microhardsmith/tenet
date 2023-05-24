@@ -19,6 +19,11 @@ import java.lang.invoke.MethodHandle;
  */
 @Slf4j
 public class Openssl {
+    /**
+     *   There two variable is hard-coded definition from ssl.h, since SSL_CTX_set_mode and SSL_CTX_clear_mode are macros, we can't directly use it
+     */
+    private static final int SSL_CTRL_MODE = 33;
+    private static final int SSL_CTRL_CLEAR_MODE = 78;
     private static final SymbolLookup crypto;
     private static final SymbolLookup ssl;
     private static final String version;
@@ -28,8 +33,7 @@ public class Openssl {
     private static final MethodHandle sslCtxUseCertificateFileMethod;
     private static final MethodHandle sslCtxUsePrivateKeyFileMethod;
     private static final MethodHandle sslCtxCheckPrivateKeyMethod;
-    private static final MethodHandle sslCtxSetModeMethod;
-    private static final MethodHandle sslCtxClearModeMethod;
+    private static final MethodHandle sslCtxCtrlMethod;
     private static final MethodHandle sslCtxSetVerifyMethod;
     private static final MethodHandle sslNewMethod;
     private static final MethodHandle sslSetFdMethod;
@@ -64,8 +68,7 @@ public class Openssl {
         sslCtxUseCertificateFileMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_use_certificate_file", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         sslCtxUsePrivateKeyFileMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_use_PrivateKey_file", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         sslCtxCheckPrivateKeyMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_check_private_key", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        sslCtxSetModeMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_set_mode", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
-        sslCtxClearModeMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_clear_mode", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+        sslCtxCtrlMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_ctrl", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
         sslCtxSetVerifyMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_set_verify", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         sslNewMethod = NativeUtil.methodHandle(ssl, "SSL_new", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         sslSetFdMethod = NativeUtil.methodHandle(ssl, "SSL_set_fd", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
@@ -131,25 +134,11 @@ public class Openssl {
         }
     }
 
-    public static void setMode(MemorySegment ctx, long mode) {
+    public static long ctxCtrl(MemorySegment ctx, int cmd, long mode, MemorySegment ptr) {
         try{
-            long m = (long) sslCtxSetModeMethod.invokeExact(ctx, mode);
-            if((m & mode) == 0) {
-                throw new FrameworkException(ExceptionType.NETWORK, "set mode failed for openssl");
-            }
+            return (long) sslCtxCtrlMethod.invokeExact(ctx, cmd, mode, ptr);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslCtxSetMode()", throwable);
-        }
-    }
-
-    public static void clearMode(MemorySegment ctx, long mode) {
-        try{
-            long m = (long) sslCtxClearModeMethod.invokeExact(ctx, mode);
-            if((m & mode) > 0) {
-                throw new FrameworkException(ExceptionType.NETWORK, "clear mode failed for openssl");
-            }
-        }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslCtxClearMode()", throwable);
         }
     }
 
@@ -253,8 +242,14 @@ public class Openssl {
      *   configure CTX for non-blocking socket with several preassigned options
      */
     public static void configureCtx(MemorySegment ctx) {
-        setMode(ctx, Constants.SSL_MODE_ENABLE_PARTIAL_WRITE);
-        setMode(ctx, Constants.SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
-        clearMode(ctx, Constants.SSL_MODE_AUTO_RETRY);
+        if((ctxCtrl(ctx, SSL_CTRL_MODE, Constants.SSL_MODE_ENABLE_PARTIAL_WRITE, NativeUtil.NULL_POINTER) & Constants.SSL_MODE_ENABLE_PARTIAL_WRITE) == 0) {
+            throw new FrameworkException(ExceptionType.NETWORK, "set SSL_MODE_ENABLE_PARTIAL_WRITE failed for openssl");
+        }
+        if((ctxCtrl(ctx, SSL_CTRL_MODE, Constants.SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER, NativeUtil.NULL_POINTER) & Constants.SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER) == 0) {
+            throw new FrameworkException(ExceptionType.NETWORK, "set SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER failed for openssl");
+        }
+        if(((~ctxCtrl(ctx, SSL_CTRL_CLEAR_MODE, Constants.SSL_MODE_AUTO_RETRY, NativeUtil.NULL_POINTER)) & Constants.SSL_MODE_AUTO_RETRY) == 0) {
+            throw new FrameworkException(ExceptionType.NETWORK, "unset SSL_MODE_AUTO_RETRY failed for openssl");
+        }
     }
 }

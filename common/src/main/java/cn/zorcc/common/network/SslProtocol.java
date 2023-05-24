@@ -203,10 +203,11 @@ public class SslProtocol implements Protocol {
                 availableFlag.set(false);
                 channel.writerThread().interrupt();
                 Socket socket = channel.socket();
-                if(channel.state().getAndSet(Native.REGISTER_NONE) > 0) {
-                    NetworkState workerState = channel.worker().state();
-                    workerState.socketMap().remove(socket);
-                    n.unregister(workerState.mux(), socket);
+                NetworkState workerState = channel.worker().state();
+                workerState.socketMap().remove(socket);
+                int current = channel.state().getAndSet(Native.REGISTER_NONE);
+                if(current > 0) {
+                    n.unregister(workerState.mux(), socket, current);
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, "Close state err");
                 }
