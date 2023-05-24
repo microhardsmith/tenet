@@ -27,7 +27,7 @@ public class Clock {
 
     /**
      *  计算时间间隔,单位纳秒
-     * @return 自nano开始经过的毫秒时间
+     * @return 自nano开始经过的纳秒时间
      */
     public static long elapsed(long nano) {
         return nano() - nano;

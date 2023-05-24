@@ -69,7 +69,7 @@ public class LogConfig {
     /**
      * 是否将日志输出到文件,默认为false
      */
-    private boolean usingFile = true;
+    private boolean usingFile = false;
     /**
      *  日志文件缓冲区大小,单位byte
      */
