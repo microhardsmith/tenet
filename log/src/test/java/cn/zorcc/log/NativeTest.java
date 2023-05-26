@@ -27,7 +27,7 @@ public class NativeTest {
     }
     private final long count = 100000;
     private final MemoryLayout layout = MemoryLayout.sequenceLayout(count, ValueLayout.JAVA_BYTE);
-    private final MethodHandle memcpy = NativeUtil.getNativeMethodHandle("memcpy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+    private final MethodHandle memcpy = NativeUtil.nativeMethodHandle("memcpy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
 
     @Benchmark
     public void testNative(Blackhole blackhole) {

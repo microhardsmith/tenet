@@ -157,6 +157,10 @@ public final class WheelImpl implements Wheel {
                             current.pos = (int) ((slot + (period / tick)) & mask);
                             insert(current);
                         }
+                    } else {
+                        // help GC
+                        current.prev = null;
+                        current.next = null;
                     }
                 }
                 current = next;

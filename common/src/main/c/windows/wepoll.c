@@ -61,11 +61,12 @@ enum EPOLL_EVENTS {
 #define EPOLLWRBAND  (1U <<  9)
 #define EPOLLMSG     (1U << 10)
 #define EPOLLRDHUP   (1U << 13)
-#define EPOLLONESHOT (1U << 31)
+#define EPOLLONESHOT (1U << 30)
 
 #define EPOLL_CTL_ADD 1
-#define EPOLL_CTL_MOD 2
-#define EPOLL_CTL_DEL 3
+#define EPOLL_CTL_DEL 2
+#define EPOLL_CTL_MOD 3
+
 
 typedef void* HANDLE;
 typedef uintptr_t SOCKET;

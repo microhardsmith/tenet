@@ -2,7 +2,6 @@ package cn.zorcc.log;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.util.NativeUtil;
-import cn.zorcc.common.util.ThreadUtil;
 import cn.zorcc.common.wheel.Wheel;
 import lombok.extern.slf4j.Slf4j;
 
@@ -21,7 +20,7 @@ import java.util.concurrent.atomic.AtomicLong;
 @Slf4j
 public class LogTest {
     public static void main(String[] args) throws Throwable {
-        testWheel();
+        testLog();
     }
 
     private static void testLog() throws InterruptedException {
@@ -29,12 +28,8 @@ public class LogTest {
         LoggerConsumer loggerConsumer = new LoggerConsumer();
         loggerConsumer.init();
         Runtime.getRuntime().addShutdownHook(Thread.ofVirtual().unstarted(loggerConsumer::shutdown));
-        for(int t = 0;t < 10;t++) {
-            ThreadUtil.virtual(String.valueOf(t), () -> {
-                for(int i = 0;i < 10; i++) {
-                    log.info("hello " + i);
-                }
-            }).start();
+        for(int i = 0; i < 10000; i++) {
+            log.info("hello : {}", i);
         }
         Thread.sleep(Long.MAX_VALUE);
     }

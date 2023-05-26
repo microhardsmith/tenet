@@ -236,7 +236,7 @@ public class Net implements LifeCycle {
         NetworkState workerState = acceptor.worker().state();
         workerState.socketMap().put(acceptor.socket(), acceptor);
         if (acceptor.state().compareAndSet(Native.REGISTER_NONE, Native.REGISTER_WRITE)) {
-            n.register(workerState.mux(), acceptor.socket(), Native.REGISTER_NONE, Native.REGISTER_WRITE);
+            n.ctl(workerState.mux(), acceptor.socket(), Native.REGISTER_NONE, Native.REGISTER_WRITE);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }

@@ -55,7 +55,7 @@ public final class TcpProtocol implements Protocol {
     @Override
     public void canWrite(Channel channel) {
         if(channel.state().compareAndSet(Native.REGISTER_READ_WRITE, Native.REGISTER_READ)) {
-            n.register(channel.worker().state().mux(), channel.socket(), Native.REGISTER_READ_WRITE, Native.REGISTER_READ);
+            n.ctl(channel.worker().state().mux(), channel.socket(), Native.REGISTER_READ_WRITE, Native.REGISTER_READ);
             LockSupport.unpark(channel.writerThread());
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -75,7 +75,7 @@ public final class TcpProtocol implements Protocol {
                 // current TCP write buffer is full, wait until writable again
                 if(channel.state().compareAndSet(Native.REGISTER_READ, Native.REGISTER_READ_WRITE)) {
                     NetworkState workerState = channel.worker().state();
-                    n.register(workerState.mux(), socket, Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
+                    n.ctl(workerState.mux(), socket, Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
                     LockSupport.park();
                     doWrite(channel, writeBuffer);
                 }else {
@@ -110,7 +110,7 @@ public final class TcpProtocol implements Protocol {
             workerState.socketMap().remove(socket, channel);
             int current = channel.state().getAndSet(Native.REGISTER_NONE);
             if(current > 0) {
-                n.unregister(workerState.mux(), socket, current);
+                n.ctl(workerState.mux(), socket, current, Native.REGISTER_NONE);
             }
             n.closeSocket(socket);
             // invoke handler's onConnected callback

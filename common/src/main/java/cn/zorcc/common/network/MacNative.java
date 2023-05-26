@@ -1,5 +1,6 @@
 package cn.zorcc.common.network;
 
+import cn.zorcc.common.Clock;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.enums.ExceptionType;
@@ -10,8 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
-import java.util.Map;
-import java.util.concurrent.locks.LockSupport;
+import java.util.concurrent.TimeUnit;
 
 /**
  *   Native implementation under MacOS, using kqueue
@@ -132,7 +132,10 @@ public class MacNative implements Native {
     }
 
     @Override
-    public void register(Mux mux, Socket socket, int from, int to) {
+    public void ctl(Mux mux, Socket socket, int from, int to) {
+        if(from == to) {
+            return ;
+        }
         int kqfd = mux.kqfd();
         int fd = socket.intValue();
         int r1 = from & Native.REGISTER_READ, r2 = to & Native.REGISTER_READ;
@@ -142,18 +145,6 @@ public class MacNative implements Native {
         int w1 = from & Native.REGISTER_WRITE, w2 = to & Native.REGISTER_WRITE;
         if(w1 != w2) {
             check(keventCtl(kqfd, fd, Constants.EVFILT_WRITE, w1 > w2 ? Constants.EV_DELETE : Constants.EV_ADD), "kevent_ctl");
-        }
-    }
-
-    @Override
-    public void unregister(Mux mux, Socket socket, int current) {
-        int kqfd = mux.kqfd();
-        int fd = socket.intValue();
-        if((current & Native.REGISTER_READ) != 0) {
-            check(keventCtl(kqfd, fd, Constants.EVFILT_READ, Constants.EV_DELETE), "kevent_del");
-        }
-        if((current & Native.REGISTER_WRITE) != 0) {
-            check(keventCtl(kqfd, fd, Constants.EVFILT_WRITE, Constants.EV_DELETE), "kevent_del");
         }
     }
 
@@ -260,6 +251,7 @@ public class MacNative implements Native {
     }
 
     static {
+        long nano = Clock.nano();
         SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.netLib());
         kqueueMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_kqueue", FunctionDescriptor.of(ValueLayout.JAVA_INT));
@@ -315,6 +307,7 @@ public class MacNative implements Native {
             // should never happen
             throw new FrameworkException(ExceptionType.NATIVE, "Failed to initialize constants", throwable);
         }
+        log.info("Initializing MacNative cost : {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
     }
 
     /**

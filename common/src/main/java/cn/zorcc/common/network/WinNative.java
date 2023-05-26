@@ -1,5 +1,6 @@
 package cn.zorcc.common.network;
 
+import cn.zorcc.common.Clock;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.enums.ExceptionType;
@@ -10,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
+import java.util.concurrent.TimeUnit;
 
 /**
  *  Native implementation under Windows, using wepoll
@@ -80,11 +82,12 @@ public final class WinNative implements Native {
     private static final long invalidSocket;
 
     static {
+        long nano = Clock.nano();
         SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.netLib());
         epollCreateMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_epoll_create", FunctionDescriptor.of(ValueLayout.ADDRESS));
         epollCtlMethodHandle = NativeUtil.methodHandle(symbolLookup,
-                "w_epoll_ctl_add", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+                "w_epoll_ctl", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
         epollWaitMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_epoll_wait", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         epollCloseMethodHandle = NativeUtil.methodHandle(symbolLookup,
@@ -142,6 +145,7 @@ public final class WinNative implements Native {
             // should never happen
             throw new FrameworkException(ExceptionType.NATIVE, "Failed to initialize constants", throwable);
         }
+        log.info("Initializing WinNative cost : {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
     }
 
     /**
@@ -211,29 +215,27 @@ public final class WinNative implements Native {
     }
 
     @Override
-    public void register(Mux mux, Socket socket, int from, int to) {
-        int target = switch (to) {
-            case Native.REGISTER_READ -> Constants.EPOLL_IN | Constants.EPOLL_RDHUP;
-            case Native.REGISTER_WRITE -> Constants.EPOLL_OUT;
-            case Native.REGISTER_READ_WRITE -> Constants.EPOLL_IN | Constants.EPOLL_RDHUP | Constants.EPOLL_OUT;
-            default -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-        };
-        try(Arena arena = Arena.openConfined()) {
-            MemorySegment winHandle = mux.winHandle();
-            long fd = socket.longValue();
-            MemorySegment ev = arena.allocate(epollEventLayout);
-            NativeUtil.setInt(ev, eventsOffset, target);
-            NativeUtil.setLong(ev, dataOffset + sockOffset, fd);
-            check(epollCtl(winHandle, from == Native.REGISTER_NONE ? Constants.EPOLL_CTL_ADD : Constants.EPOLL_CTL_MOD, fd, ev), "epollCtl");
+    public void ctl(Mux mux, Socket socket, int from, int to) {
+        if(from == to) {
+            return ;
         }
-    }
-
-    @Override
-    public void unregister(Mux mux, Socket socket, int current) {
-        if(current > 0) {
-            MemorySegment winHandle = mux.winHandle();
-            long fd = socket.longValue();
+        MemorySegment winHandle = mux.winHandle();
+        long fd = socket.longValue();
+        if(to == Native.REGISTER_NONE) {
             check(epollCtl(winHandle, Constants.EPOLL_CTL_DEL, fd, NativeUtil.NULL_POINTER), "epollCtl");
+        }else {
+            int target = switch (to) {
+                case Native.REGISTER_READ -> Constants.EPOLL_IN | Constants.EPOLL_RDHUP;
+                case Native.REGISTER_WRITE -> Constants.EPOLL_OUT;
+                case Native.REGISTER_READ_WRITE -> Constants.EPOLL_IN | Constants.EPOLL_RDHUP | Constants.EPOLL_OUT;
+                default -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+            };
+            try(Arena arena = Arena.openConfined()) {
+                MemorySegment ev = arena.allocate(epollEventLayout);
+                NativeUtil.setInt(ev, eventsOffset, target);
+                NativeUtil.setLong(ev, dataOffset + sockOffset, fd);
+                check(epollCtl(winHandle, from == Native.REGISTER_NONE ? Constants.EPOLL_CTL_ADD : Constants.EPOLL_CTL_MOD, fd, ev), "epollCtl");
+            }
         }
     }
 
@@ -262,7 +264,7 @@ public final class WinNative implements Native {
         MemorySegment events = state.events();
         int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
         Socket socket = new Socket(NativeUtil.getLong(events, index * eventSize + dataOffset + sockOffset));
-        if((event & Constants.EPOLL_REMOTE) != 0) {
+        if((event & (Constants.EPOLL_IN | Constants.EPOLL_ERR | Constants.EPOLL_HUP | Constants.EPOLL_RDHUP)) != 0) {
             state.shouldRead(socket, readBuffer);
         }else if((event & Constants.EPOLL_OUT) != 0) {
             state.shouldWrite(socket);

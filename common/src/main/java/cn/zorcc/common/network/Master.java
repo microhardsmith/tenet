@@ -33,7 +33,7 @@ public class Master implements LifeCycle {
             Thread currentThread = Thread.currentThread();
             try{
                 n.bindAndListen(config, socket);
-                n.register(state.mux(), socket, Native.REGISTER_NONE, Native.REGISTER_READ);
+                n.ctl(state.mux(), socket, Native.REGISTER_NONE, Native.REGISTER_READ);
                 while (!currentThread.isInterrupted()) {
                     int count = n.multiplexingWait(state, maxEvents);
                     if(count == -1) {

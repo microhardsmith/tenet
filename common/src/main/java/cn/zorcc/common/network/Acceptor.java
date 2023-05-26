@@ -56,6 +56,7 @@ public class Acceptor {
 
     /**
      *   Upgrade current Acceptor to a new created Channel
+     *   Note that this function should only be invoked by its connector in shouldRead() or shouldWrite() to replace current Acceptor.
      */
     public void toChannel(Protocol protocol) {
         Codec codec = codecSupplier.get();
@@ -64,7 +65,7 @@ public class Acceptor {
         worker.state().socketMap().put(socket, channel);
         int from = state.getAndSet(Native.REGISTER_READ);
         if(from != Native.REGISTER_READ) {
-            n.register(worker.state().mux(), socket, from, Native.REGISTER_READ);
+            n.ctl(worker.state().mux(), socket, from, Native.REGISTER_READ);
         }
         handler.onConnected(channel);
         channel.writerThread().start();
@@ -77,7 +78,7 @@ public class Acceptor {
         if (worker.state().socketMap().remove(socket, this)) {
             int current = state.getAndSet(Native.REGISTER_NONE);
             if(current > 0) {
-                n.unregister(worker.state().mux(), socket, current);
+                n.ctl(worker.state().mux(), socket, current, Native.REGISTER_NONE);
             }
             connector.shouldClose(socket);
         }else {

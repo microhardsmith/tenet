@@ -8,7 +8,6 @@ import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  *   Platform native interface for Network operation
@@ -46,22 +45,15 @@ public interface Native {
     Socket createSocket(NetworkConfig config);
 
     /**
-     *   bind and listen target port
+     *   Bind and listen target port
      */
     void bindAndListen(NetworkConfig config, Socket socket);
 
     /**
-     *   Register mux event, from represent the old status, to represent the target status
+     *   Modify mux event registration, from represent the old status, to represent the target status
      *   return 0 if success, -1 if failed
      */
-    void register(Mux mux, Socket socket, int from, int to);
-
-    /**
-     *   Unregister socket event, delete all events from current mux
-     *   note that kqueue will automatically remote the registry when socket was closed, but we still manually unregister it for consistency
-     *   return 0 if success, -1 if failed
-     */
-    void unregister(Mux mux, Socket socket, int current);
+    void ctl(Mux mux, Socket socket, int from, int to);
 
     /**
      *   Multiplexing wait for events, return the available events
@@ -69,12 +61,12 @@ public interface Native {
     int multiplexingWait(NetworkState state, int maxEvents);
 
     /**
-     *   waiting for new connections, don't throw exception here because it would exit the loop thread
+     *   Waiting for new connections, don't throw exception here because it would exit the loop thread
      */
     void waitForAccept(NetworkState state, int index, Net net);
 
     /**
-     *   waiting for data, don't throw exception here cause it would exit the loop thread
+     *   Waiting for data, don't throw exception here cause it would exit the loop thread
      */
     void waitForData(NetworkState state, int index, ReadBuffer readBuffer);
 
@@ -89,17 +81,17 @@ public interface Native {
     ClientSocket accept(NetworkConfig config, Socket socket);
 
     /**
-     *   recv data from remote socket, return the actual bytes received
+     *   Recv data from remote socket, return the actual bytes received TODO 8 bytes len and result
      */
     int recv(Socket socket, MemorySegment data, int len);
 
     /**
-     *   send data to remote socket, return the actual bytes sent
+     *   Send data to remote socket, return the actual bytes sent
      */
     int send(Socket socket, MemorySegment data, int len);
 
     /**
-     *   get target socket's err opt, should return 0 if there is no error
+     *   Target socket's err opt, should return 0 if there is no error
      */
     int getErrOpt(Socket socket);
 
@@ -114,41 +106,27 @@ public interface Native {
     void shutdownWrite(Socket socket);
 
     /**
-     *   get current errno
+     *   Current thread's errno
      */
     int errno();
 
     /**
-     *   exit mux resource
+     *   Exit mux resource
      */
     void exitMux(Mux mux);
 
     /**
-     *   exit, releasing all resources
+     *   Exit, releasing all resources
      */
     void exit();
 
     /**
-     *   read write status code
+     *   Read write status constants
      */
     int REGISTER_NONE = 0;
     int REGISTER_READ = 1;
     int REGISTER_WRITE = 2;
     int REGISTER_READ_WRITE = 3;
-
-    static void tryRegisterRead(AtomicInteger state, Mux mux, Socket socket) {
-        int current = state.getAndUpdate(i -> (i & REGISTER_READ) == 0 ? i + REGISTER_READ : i);
-        if((current & REGISTER_READ) == 0) {
-            n.register(mux, socket, current, current + REGISTER_READ);
-        }
-    }
-
-    static void tryRegisterWrite(AtomicInteger state, Mux mux, Socket socket) {
-        int current = state.getAndUpdate(i -> (i & REGISTER_WRITE) == 0 ? i + REGISTER_WRITE : i);
-        if((current & REGISTER_WRITE) == 0) {
-            n.register(mux, socket, current, current + REGISTER_READ);
-        }
-    }
 
     /**
      *   Convert a int port to a unsigned short type

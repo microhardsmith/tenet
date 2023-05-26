@@ -9,46 +9,42 @@ import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SymbolLookup;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 import java.nio.charset.StandardCharsets;
 import java.util.function.BiConsumer;
 
 /**
- *   print log to the console
+ *   Print log to the console, using C's puts and fflush mechanism
  *   Using fputs and fflush from C to replace Java's PrintStream regarding to benchmark, could be several times faster that normal System.out.println():
  *      PrintTest.testNative  avgt   25   759.945 ±  28.064  ns/op
  *      PrintTest.testSout    avgt   25  2758.746 ± 108.389  ns/op
  */
 public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
-    private final MethodHandle puts;
-    private final MethodHandle fflush;
+    /**
+     *  corresponding to `void g_print(char* str, FILE* stream)`
+     */
+    private final MethodHandle print;
     private final BiConsumer<WriteBuffer, LogEvent> consumer;
     private final WriteBuffer buffer;
+    private static final MemorySegment stdout = NativeUtil.stdout();
+    private static final MemorySegment stderr = NativeUtil.stderr();
 
     public ConsoleLogEventHandler(LogConfig logConfig) {
-        this.puts = NativeUtil.getNativeMethodHandle("puts", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        this.fflush = NativeUtil.getNativeMethodHandle("fflush", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.netLib());
+        this.print = NativeUtil.methodHandle(symbolLookup, "g_print", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         this.consumer = parseLogFormat(logConfig);
         // Console builder should have a larger size than logEvent
         this.buffer = new WriteBuffer(logConfig.getBufferSize() << 1);
     }
 
     /**
-     *  向标准输出流打印数据,因为C风格的字符串以'\0'结尾,覆写内存后需要手动添加'\0'
+     *  向标准流打印数据,因为C风格的字符串以'\0'结尾,覆写内存后需要手动添加'\0'
      */
-    private void print(WriteBuffer buffer) {
+    private void print(WriteBuffer buffer, MemorySegment stream) {
         try{
-            buffer.writeByte(Constants.NUT);
-            MemorySegment segment = buffer.segment();
-            int p = (int) puts.invokeExact(segment);
-            if(p < 0) {
-                throw new FrameworkException(ExceptionType.LOG, "Failed to call puts() method");
-            }
-            int f = (int) fflush.invokeExact(NativeUtil.stdout());
-            if(f != 0) {
-                throw new FrameworkException(ExceptionType.LOG, "Failed to call fflush method");
-            }
+            print.invokeExact(buffer.segment(), stream);
             buffer.reset();
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.LOG, "Exception caught when invoking print()", throwable);
@@ -102,11 +98,14 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
     public void handle(LogEvent event) {
         if(!event.flush()) {
             consumer.accept(buffer, event);
-            print(buffer);
+            buffer.writeByte(Constants.LF);
+            buffer.writeByte(Constants.NUT);
+            print(buffer, stdout);
             byte[] throwable = event.throwable();
             if(throwable != null) {
                 buffer.writeBytes(throwable);
-                print(buffer);
+                buffer.writeByte(Constants.NUT);
+                print(buffer, stderr);
             }
         }
     }

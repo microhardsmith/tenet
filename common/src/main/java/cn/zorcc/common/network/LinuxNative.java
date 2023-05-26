@@ -1,5 +1,6 @@
 package cn.zorcc.common.network;
 
+import cn.zorcc.common.Clock;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.enums.ExceptionType;
@@ -10,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
+import java.util.concurrent.TimeUnit;
 
 /**
  *   Native implementation under Linux, using epoll
@@ -138,30 +140,29 @@ public class LinuxNative implements Native {
     }
 
     @Override
-    public void register(Mux mux, Socket socket, int from, int to) {
-        int target = switch (to) {
-            case Native.REGISTER_READ -> Constants.EPOLL_IN | Constants.EPOLL_RDHUP;
-            case Native.REGISTER_WRITE -> Constants.EPOLL_OUT;
-            case Native.REGISTER_READ_WRITE -> Constants.EPOLL_IN | Constants.EPOLL_RDHUP | Constants.EPOLL_OUT;
-            default -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-        };
-        try(Arena arena = Arena.openConfined()) {
-            int epfd = mux.epfd();
-            int fd = socket.intValue();
-            MemorySegment ev = arena.allocate(epollEventLayout);
-            NativeUtil.setInt(ev, eventsOffset, target);
-            NativeUtil.setInt(ev, dataOffset + fdOffset, fd);
-            check(epollCtl(epfd, from == Native.REGISTER_NONE ? Constants.EPOLL_CTL_ADD : Constants.EPOLL_CTL_MOD, fd, ev), "epoll_ctl");
+    public void ctl(Mux mux, Socket socket, int from, int to) {
+        if(from == to) {
+            return ;
         }
-    }
+        int epfd = mux.epfd();
+        int fd = socket.intValue();
+        if(to == Native.REGISTER_NONE) {
+            check(epollCtl(epfd, Constants.EPOLL_CTL_DEL, fd, NativeUtil.NULL_POINTER), "epoll_ctl");
+        }else {
+            int target = switch (to) {
+                case Native.REGISTER_READ -> Constants.EPOLL_IN | Constants.EPOLL_RDHUP;
+                case Native.REGISTER_WRITE -> Constants.EPOLL_OUT;
+                case Native.REGISTER_READ_WRITE -> Constants.EPOLL_IN | Constants.EPOLL_RDHUP | Constants.EPOLL_OUT;
+                default -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+            };
+            try(Arena arena = Arena.openConfined()) {
+                MemorySegment ev = arena.allocate(epollEventLayout);
+                NativeUtil.setInt(ev, eventsOffset, target);
+                NativeUtil.setInt(ev, dataOffset + fdOffset, fd);
+                check(epollCtl(epfd, from == Native.REGISTER_NONE ? Constants.EPOLL_CTL_ADD : Constants.EPOLL_CTL_MOD, fd, ev), "epoll_ctl");
+            }
+        }
 
-    @Override
-    public void unregister(Mux mux, Socket socket, int current) {
-        if(current > 0) {
-            int epFd = mux.epfd();
-            int fd = socket.intValue();
-            check(epollCtl(epFd, Constants.EPOLL_CTL_DEL, fd, NativeUtil.NULL_POINTER), "epoll_ctl");
-        }
     }
 
     @Override
@@ -189,7 +190,7 @@ public class LinuxNative implements Native {
         MemorySegment events = state.events();
         int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
         Socket socket = new Socket(NativeUtil.getInt(events, index * eventSize + dataOffset + fdOffset));
-        if((event & Constants.EPOLL_REMOTE) != 0) {
+        if((event & (Constants.EPOLL_IN | Constants.EPOLL_ERR | Constants.EPOLL_HUP | Constants.EPOLL_RDHUP)) != 0) {
             state.shouldRead(socket, readBuffer);
         }else if((event & Constants.EPOLL_OUT) != 0) {
             state.shouldWrite(socket);
@@ -267,6 +268,7 @@ public class LinuxNative implements Native {
     }
 
     static  {
+        long nano = Clock.nano();
         SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.netLib());
         epollCreateMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "l_epoll_create", FunctionDescriptor.of(ValueLayout.JAVA_INT));
@@ -323,6 +325,7 @@ public class LinuxNative implements Native {
             // should never happen
             throw new FrameworkException(ExceptionType.NATIVE, "Failed to initialize constants", throwable);
         }
+        log.info("Initializing LinuxNative cost : {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
     }
 
     /**

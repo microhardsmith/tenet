@@ -1,10 +1,11 @@
 #ifndef LIB_LINUX_H
 #define LIB_LINUX_H
 
-
 FILE* g_stdout();
 
 FILE* g_stderr();
+
+void g_print(char* str, FILE* stream);
 
 int l_connect_block_code();
 

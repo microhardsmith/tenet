@@ -161,7 +161,7 @@ public final class NativeUtil {
     /**
      *  从操作系统已加载的动态链接库中获取函数索引,例如strlen
      */
-    public static MethodHandle getNativeMethodHandle(String methodName, FunctionDescriptor functionDescriptor) {
+    public static MethodHandle nativeMethodHandle(String methodName, FunctionDescriptor functionDescriptor) {
         return linker.downcallHandle(linker.defaultLookup()
                 .find(methodName)
                 .orElseThrow(() -> new FrameworkException(ExceptionType.NATIVE, "Unable to locate [%s] native method".formatted(methodName))),

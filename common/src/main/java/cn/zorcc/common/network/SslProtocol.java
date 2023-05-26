@@ -21,25 +21,19 @@ import java.util.concurrent.locks.ReentrantLock;
 @Slf4j
 public class SslProtocol implements Protocol {
     private static final Native n = Native.n;
-    /**
-     *   whether it's a client-side
-     */
-    private final boolean clientSide;
     private final MemorySegment ssl;
     private final AtomicBoolean availableFlag = new AtomicBoolean(true);
     private final AtomicBoolean shutdownFlag = new AtomicBoolean(false);
     private final AtomicBoolean closeFlag = new AtomicBoolean(false);
     private final Lock lock = new ReentrantLock();
     private int state = 0;
-    private static final int SHUTDOWN_CALLED = 1;
-    private static final int RECV_WANT_TO_WRITE = 1 << 1;
-    private static final int SEND_WANT_TO_READ = 1 << 2;
-    private static final int SEND_WANT_TO_WRITE = 1 << 3;
-    private static final int SHUTDOWN_WANT_TO_READ = 1 << 4;
-    private static final int SHUTDOWN_WANT_TO_WRITE = 1 << 5;
+    private static final int RECV_WANT_TO_WRITE = 1;
+    private static final int SEND_WANT_TO_READ = 1 << 1;
+    private static final int SEND_WANT_TO_WRITE = 1 << 2;
+    private static final int SHUTDOWN_WANT_TO_READ = 1 << 3;
+    private static final int SHUTDOWN_WANT_TO_WRITE = 1 << 4;
 
-    public SslProtocol(boolean clientSide, MemorySegment ssl) {
-        this.clientSide = clientSide;
+    public SslProtocol(MemorySegment ssl) {
         this.ssl = ssl;
     }
 
@@ -76,7 +70,8 @@ public class SslProtocol implements Protocol {
                     }else if(err == Constants.SSL_ERROR_ZERO_RETURN) {
                         performShutdown(channel);
                     }else if(err != Constants.SSL_ERROR_WANT_READ) {
-                        log.error("SSL read failed with err : {}", err);
+                        throw new FrameworkException(ExceptionType.NETWORK, "err read : " + err);
+                        // TODO log.error("SSL read failed with err : {}", err);
                     }
                 }else {
                     readBuffer.setWriteIndex(r);
@@ -109,7 +104,7 @@ public class SslProtocol implements Protocol {
             }
             if(channel.state().compareAndSet(Native.REGISTER_READ_WRITE, Native.REGISTER_READ)) {
                 NetworkState workerState = channel.worker().state();
-                n.register(workerState.mux(), channel.socket(), Native.REGISTER_READ_WRITE, Native.REGISTER_READ);
+                n.ctl(workerState.mux(), channel.socket(), Native.REGISTER_READ_WRITE, Native.REGISTER_READ);
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
@@ -136,7 +131,7 @@ public class SslProtocol implements Protocol {
                     state &= SEND_WANT_TO_WRITE;
                     if(channel.state().compareAndSet(Native.REGISTER_READ, Native.REGISTER_READ_WRITE)) {
                         NetworkState workerState = channel.worker().state();
-                        n.register(workerState.mux(), channel.socket(), Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
+                        n.ctl(workerState.mux(), channel.socket(), Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
                     }
                 }else if(err == Constants.SSL_ERROR_WANT_READ) {
                     state &= SEND_WANT_TO_READ;
@@ -185,7 +180,7 @@ public class SslProtocol implements Protocol {
                 state &= SHUTDOWN_WANT_TO_WRITE;
                 if(channel.state().compareAndSet(Native.REGISTER_READ, Native.REGISTER_READ_WRITE)) {
                     NetworkState workerState = channel.worker().state();
-                    n.register(workerState.mux(), channel.socket(), Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
+                    n.ctl(workerState.mux(), channel.socket(), Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
                 }
             }else {
                 log.error("SSL shutdown failed with err : {}", err);
@@ -207,7 +202,7 @@ public class SslProtocol implements Protocol {
                 workerState.socketMap().remove(socket);
                 int current = channel.state().getAndSet(Native.REGISTER_NONE);
                 if(current > 0) {
-                    n.unregister(workerState.mux(), socket, current);
+                    n.ctl(workerState.mux(), socket, current, Native.REGISTER_NONE);
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, "Close state err");
                 }

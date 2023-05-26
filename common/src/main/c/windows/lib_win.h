@@ -5,6 +5,8 @@ __declspec(dllexport) FILE* g_stdout();
 
 __declspec(dllexport) FILE* g_stderr();
 
+__declspec(dllexport) void g_print(char* str, FILE* stream);
+
 __declspec(dllexport) int w_connect_block_code();
 
 __declspec(dllexport) int w_send_block_code();
