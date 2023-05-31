@@ -298,6 +298,7 @@ public class Constants {
     public static final int SSL_FILETYPE_PEM = 1;
     public static final int SSL_ERROR_WANT_READ = 2;
     public static final int SSL_ERROR_WANT_WRITE = 3;
+    public static final int SSL_ERROR_SYSCALL = 5;
     public static final int SSL_ERROR_ZERO_RETURN = 6;
     public static final long SSL_MODE_ENABLE_PARTIAL_WRITE = 1L;
     public static final long SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER = 2L;

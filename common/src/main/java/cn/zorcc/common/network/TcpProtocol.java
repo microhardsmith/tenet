@@ -41,7 +41,7 @@ public final class TcpProtocol implements Protocol {
 
     @Override
     public void canRead(Channel channel, ReadBuffer readBuffer) {
-        int readableBytes = n.recv(channel.socket(), readBuffer.segment(), readBuffer.len());
+        long readableBytes = n.recv(channel.socket(), readBuffer.segment(), readBuffer.len());
         if(readableBytes > 0) {
             readBuffer.setWriteIndex(readableBytes);
             channel.onReadBuffer(readBuffer);
@@ -66,9 +66,9 @@ public final class TcpProtocol implements Protocol {
     public void doWrite(Channel channel, WriteBuffer writeBuffer) {
         Socket socket = channel.socket();
         MemorySegment segment = writeBuffer.segment();
-        int len = (int) segment.byteSize();
-        int bytes = n.send(socket, segment, len);
-        if(bytes == -1) {
+        long len = segment.byteSize();
+        long bytes = n.send(socket, segment, len);
+        if(bytes == -1L) {
             // error occurred
             int errno = n.errno();
             if(errno == n.sendBlockCode()) {
@@ -82,7 +82,7 @@ public final class TcpProtocol implements Protocol {
                     throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
                 }
             }else {
-                throw new FrameworkException(ExceptionType.NETWORK, "Unable to write using TCP protocol, errno : %d".formatted(errno));
+                doClose(channel);
             }
         }else if(bytes < len){
             // only write a part of the segment, wait for next loop
@@ -113,7 +113,6 @@ public final class TcpProtocol implements Protocol {
                 n.ctl(workerState.mux(), socket, current, Native.REGISTER_NONE);
             }
             n.closeSocket(socket);
-            // invoke handler's onConnected callback
             channel.handler().onClose(channel);
         }
     }

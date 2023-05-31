@@ -7,7 +7,6 @@ import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.ConfigUtil;
 import cn.zorcc.common.util.NativeUtil;
-import cn.zorcc.common.wheel.Job;
 import cn.zorcc.common.wheel.Wheel;
 import lombok.extern.slf4j.Slf4j;
 
@@ -30,7 +29,7 @@ public class Net implements LifeCycle {
     /**
      *  read buffer maximum size for a read operation, could be changed according to specific circumstances
      */
-    public static final int READ_BUFFER_SIZE = 16 * Constants.KB;
+    public static final long READ_BUFFER_SIZE = 16 * Constants.KB;
     /**
      *  write buffer initial size, will automatically expand, could be changed according to specific circumstances
      */
@@ -186,8 +185,7 @@ public class Net implements LifeCycle {
             Socket socket = n.createSocket(config);
             Worker worker = nextWorker();
             Connector connector = connectorSupplier.get();
-            Job cancelJob = wheel.addJob(() -> connector.shouldCancel(socket), timeout, timeUnit);
-            Acceptor acceptor = new Acceptor(socket, codecSupplier, handlerSupplier, connector, worker, remote, loc, cancelJob);
+            Acceptor acceptor = new Acceptor(socket, codecSupplier, handlerSupplier, connector, worker, remote, loc);
             try(Arena arena = Arena.openConfined()) {
                 MemorySegment sockAddr = n.createSockAddr(loc, arena);
                 if(n.connect(socket, sockAddr) == 0) {
@@ -198,6 +196,7 @@ public class Net implements LifeCycle {
                     if (errno == n.connectBlockCode()) {
                         // connection is still in-process
                         mount(acceptor);
+                        wheel.addJob(acceptor::close, timeout, timeUnit);
                     }else {
                         return errno;
                     }
@@ -213,8 +212,8 @@ public class Net implements LifeCycle {
     /**
      *   Launch a client connect operation for remote server, using default timeout and time-unit
      */
-    public void connect(Remote remote, Supplier<Codec> codecSupplier, Supplier<Handler> handlerSupplier, Supplier<Connector> connectorSupplier) {
-        connect(remote, codecSupplier, handlerSupplier, connectorSupplier, DEFAULT_CONNECT_TIMEOUT, DEFAULT_TIME_UNIT);
+    public int connect(Remote remote, Supplier<Codec> codecSupplier, Supplier<Handler> handlerSupplier, Supplier<Connector> connectorSupplier) {
+        return connect(remote, codecSupplier, handlerSupplier, connectorSupplier, DEFAULT_CONNECT_TIMEOUT, DEFAULT_TIME_UNIT);
     }
 
     /**
@@ -225,7 +224,7 @@ public class Net implements LifeCycle {
         Loc loc = clientSocket.loc();
         Worker worker = nextWorker();
         Connector connector = connectorSupplier.get();
-        Acceptor acceptor = new Acceptor(socket, codecSupplier, handlerSupplier, connector, worker, null, loc, null);
+        Acceptor acceptor = new Acceptor(socket, codecSupplier, handlerSupplier, connector, worker, null, loc);
         mount(acceptor);
     }
 

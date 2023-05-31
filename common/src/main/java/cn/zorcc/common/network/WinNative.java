@@ -83,7 +83,7 @@ public final class WinNative implements Native {
 
     static {
         long nano = Clock.nano();
-        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.netLib());
+        SymbolLookup symbolLookup = NativeUtil.loadLibrary(Native.LIB);
         epollCreateMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "w_epoll_create", FunctionDescriptor.of(ValueLayout.ADDRESS));
         epollCtlMethodHandle = NativeUtil.methodHandle(symbolLookup,
@@ -145,7 +145,7 @@ public final class WinNative implements Native {
             // should never happen
             throw new FrameworkException(ExceptionType.NATIVE, "Failed to initialize constants", throwable);
         }
-        log.info("Initializing WinNative cost : {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
+        log.info("Initializing Native successfully, platform : {}, time consuming : {} ms", NativeUtil.osName(), TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
     }
 
     /**
@@ -301,13 +301,13 @@ public final class WinNative implements Native {
     }
 
     @Override
-    public int recv(Socket socket, MemorySegment data, int len) {
-        return recv(socket.longValue(), data, len);
+    public long recv(Socket socket, MemorySegment data, long len) {
+        return recv(socket.longValue(), data, (int) len);
     }
 
     @Override
-    public int send(Socket socket, MemorySegment data, int len) {
-        return send(socket.longValue(), data, len);
+    public long send(Socket socket, MemorySegment data, long len) {
+        return send(socket.longValue(), data, (int) len);
     }
 
     @Override

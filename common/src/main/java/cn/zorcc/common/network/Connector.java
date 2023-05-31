@@ -5,8 +5,6 @@ package cn.zorcc.common.network;
  */
 public interface Connector {
 
-    void shouldCancel(Socket socket);
-
     void shouldClose(Socket socket);
 
     void shouldRead(Acceptor acceptor);

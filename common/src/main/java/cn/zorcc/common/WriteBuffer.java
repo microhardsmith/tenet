@@ -16,7 +16,7 @@ public final class WriteBuffer implements AutoCloseable {
     private MemorySegment segment;
     private long writeIndex;
 
-    public WriteBuffer(int size) {
+    public WriteBuffer(long size) {
         this.arena = Arena.openConfined();
         this.segment = arena.allocateArray(ValueLayout.JAVA_BYTE, size);
         this.writeIndex = 0L;

@@ -3,10 +3,7 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.wheel.Job;
 import lombok.extern.slf4j.Slf4j;
-
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  *   Acceptor for Tcp protocol
@@ -14,13 +11,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Slf4j
 public class TcpConnector implements Connector {
     private static final Native n = Native.n;
-    private final AtomicBoolean race = new AtomicBoolean(false);
-    @Override
-    public void shouldCancel(Socket socket) {
-        if(race.compareAndSet(false, true)) {
-            shouldClose(socket);
-        }
-    }
 
     @Override
     public void shouldClose(Socket socket) {
@@ -34,16 +24,12 @@ public class TcpConnector implements Connector {
 
     @Override
     public void shouldWrite(Acceptor acceptor) {
-        if(race.compareAndSet(false, true)) {
-            int errOpt = n.getErrOpt(acceptor.socket());
-            if(errOpt == 0) {
-                // whether cancel succeed or fail will not matter, race will make sure only one succeed
-                acceptor.cancelTimeout();
-                acceptor.toChannel(new TcpProtocol());
-            }else {
-                log.error("Failed to establish tcp connection, errno : {}", n.errno());
-                acceptor.unbind();
-            }
+        int errOpt = n.getErrOpt(acceptor.socket());
+        if(errOpt == 0) {
+            acceptor.toChannel(new TcpProtocol());
+        }else {
+            log.error("Failed to establish tcp connection, errno : {}", n.errno());
+            acceptor.close();
         }
     }
 }

@@ -4,8 +4,8 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Loc;
-import cn.zorcc.common.wheel.Job;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
@@ -16,12 +16,12 @@ public class Acceptor {
     private final Supplier<Handler> handlerSupplier;
     private final Connector connector;
     private final Worker worker;
-    private final Job cancelJob;
     private final Remote remote;
     private final Loc loc;
     private final AtomicInteger state = new AtomicInteger(Native.REGISTER_NONE);
+    private final AtomicBoolean race = new AtomicBoolean(false);
 
-    public Acceptor(Socket socket, Supplier<Codec> codecSupplier, Supplier<Handler> handlerSupplier, Connector connector, Worker worker, Remote remote, Loc loc, Job cancelJob) {
+    public Acceptor(Socket socket, Supplier<Codec> codecSupplier, Supplier<Handler> handlerSupplier, Connector connector, Worker worker, Remote remote, Loc loc) {
         this.socket = socket;
         this.codecSupplier = codecSupplier;
         this.handlerSupplier = handlerSupplier;
@@ -29,7 +29,6 @@ public class Acceptor {
         this.worker = worker;
         this.remote = remote;
         this.loc = loc;
-        this.cancelJob = cancelJob;
     }
 
     public Socket socket() {
@@ -48,41 +47,39 @@ public class Acceptor {
         return state;
     }
 
-    public void cancelTimeout() {
-        if(cancelJob != null) {
-            cancelJob.cancel();
-        }
-    }
-
     /**
      *   Upgrade current Acceptor to a new created Channel
      *   Note that this function should only be invoked by its connector in shouldRead() or shouldWrite() to replace current Acceptor.
      */
     public void toChannel(Protocol protocol) {
-        Codec codec = codecSupplier.get();
-        Handler handler = handlerSupplier.get();
-        Channel channel = new Channel(socket, state, codec, handler, protocol, remote, loc, worker);
-        worker.state().socketMap().put(socket, channel);
-        int from = state.getAndSet(Native.REGISTER_READ);
-        if(from != Native.REGISTER_READ) {
-            n.ctl(worker.state().mux(), socket, from, Native.REGISTER_READ);
+        if(race.compareAndSet(false, true)) {
+            Codec codec = codecSupplier.get();
+            Handler handler = handlerSupplier.get();
+            Channel channel = new Channel(socket, state, codec, handler, protocol, remote, loc, worker);
+            worker.state().socketMap().put(socket, channel);
+            int from = state.getAndSet(Native.REGISTER_READ);
+            if(from != Native.REGISTER_READ) {
+                n.ctl(worker.state().mux(), socket, from, Native.REGISTER_READ);
+            }
+            handler.onConnected(channel);
+            channel.writerThread().start();
         }
-        handler.onConnected(channel);
-        channel.writerThread().start();
     }
 
     /**
-     *   unbind current Acceptor with worker
+     *   Close current acceptor, release it from the worker and clean up
      */
-    public void unbind() {
-        if (worker.state().socketMap().remove(socket, this)) {
-            int current = state.getAndSet(Native.REGISTER_NONE);
-            if(current > 0) {
-                n.ctl(worker.state().mux(), socket, current, Native.REGISTER_NONE);
+    public void close() {
+        if(race.compareAndSet(false, true)) {
+            if (worker.state().socketMap().remove(socket, this)) {
+                int current = state.getAndSet(Native.REGISTER_NONE);
+                if(current > 0) {
+                    n.ctl(worker.state().mux(), socket, current, Native.REGISTER_NONE);
+                }
+                connector.shouldClose(socket);
+            }else {
+                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
-            connector.shouldClose(socket);
-        }else {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 

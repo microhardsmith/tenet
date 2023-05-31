@@ -14,7 +14,7 @@ import java.lang.foreign.ValueLayout;
 public final class ReadBuffer implements AutoCloseable {
     private final Arena arena;
     private final MemorySegment segment;
-    private final int len;
+    private final long len;
     /**
      *   当前已读取的index
      */
@@ -27,7 +27,7 @@ public final class ReadBuffer implements AutoCloseable {
     /**
      *   用于构建新的空白的readBuffer
      */
-    public ReadBuffer(int size) {
+    public ReadBuffer(long size) {
         this.arena = Arena.openConfined();
         this.segment = arena.allocateArray(ValueLayout.JAVA_BYTE, size);
         this.len = size;
@@ -41,7 +41,7 @@ public final class ReadBuffer implements AutoCloseable {
     public ReadBuffer(Arena arena, MemorySegment segment) {
         this.arena = arena;
         this.segment = segment;
-        this.len = (int) segment.byteSize();
+        this.len = segment.byteSize();
         this.readIndex = 0L;
         this.writeIndex = segment.byteSize();
     }
@@ -148,7 +148,7 @@ public final class ReadBuffer implements AutoCloseable {
         return null;
     }
 
-    public int len() {
+    public long len() {
         return len;
     }
 

@@ -22,6 +22,11 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class Openssl {
     /**
+     *   Environment variable that must be configured when launching the application
+     */
+    public static final String CRYPTO_LIB = "tenet.crypto";
+    public static final String SSL_LIB = "tenet.ssl";
+    /**
      *   There two variable is hard-coded definition from ssl.h, since SSL_CTX_set_mode and SSL_CTX_clear_mode are macros, we can't directly use it
      */
     private static final int SSL_CTRL_MODE = 33;
@@ -52,10 +57,8 @@ public class Openssl {
 
     static {
         long nano = Clock.nano();
-        crypto = NativeUtil.loadLibraryFromResource(NativeUtil.cryptoLib());
-        // ssl library depends on crypto, so crypto must be loaded first
-        ssl = NativeUtil.loadLibraryFromResource(NativeUtil.sslLib());
-        log.info("Load Openssl library cost : {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
+        crypto = NativeUtil.loadLibrary(CRYPTO_LIB);
+        ssl = NativeUtil.loadLibrary(SSL_LIB);
         try{
             MethodHandle majorVersionMethod = NativeUtil.methodHandle(crypto, "OPENSSL_version_major", FunctionDescriptor.of(ValueLayout.JAVA_INT));
             MethodHandle minorVersionMethod = NativeUtil.methodHandle(crypto, "OPENSSL_version_minor", FunctionDescriptor.of(ValueLayout.JAVA_INT));
@@ -85,7 +88,7 @@ public class Openssl {
         sslCtxFreeMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         sslGetErrMethod = NativeUtil.methodHandle(ssl, "SSL_get_error", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         sslErrPrintMethod = NativeUtil.methodHandle(crypto, "ERR_print_errors_fp", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-        log.info("Initializing Openssl cost : {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
+        log.info("Initializing OpenSSL successfully, version : {}, time consuming : {} ms", version, TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
     }
 
     public static String version() {

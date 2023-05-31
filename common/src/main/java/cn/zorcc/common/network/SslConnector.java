@@ -6,7 +6,6 @@ import cn.zorcc.common.exception.FrameworkException;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.MemorySegment;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
@@ -17,19 +16,11 @@ public class SslConnector implements Connector {
     private static final int WANT_WRITE = 2;
     private final boolean clientSide;
     private final MemorySegment ssl;
-    private final AtomicBoolean race = new AtomicBoolean(false);
     private final AtomicInteger status = new AtomicInteger(INITIAL);
 
     public SslConnector(boolean clientSide, MemorySegment ssl) {
         this.clientSide = clientSide;
         this.ssl = ssl;
-    }
-
-    @Override
-    public void shouldCancel(Socket socket) {
-        if(race.compareAndSet(false, true)) {
-            shouldClose(socket);
-        }
     }
 
     @Override
@@ -40,14 +31,9 @@ public class SslConnector implements Connector {
 
     @Override
     public void shouldRead(Acceptor acceptor) {
-        int current = acceptor.state().getAndUpdate(i -> i ^ Native.REGISTER_READ);
-        if((current & Native.REGISTER_READ) != 0) {
-            n.ctl(acceptor.worker().state().mux(), acceptor.socket(), current, current ^ Native.REGISTER_READ);
-        }else {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-        }
         int currentStatus = status.get();
         if (currentStatus == WANT_READ) {
+            unregisterState(acceptor, Native.REGISTER_READ);
             doHandshake(acceptor);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -56,27 +42,33 @@ public class SslConnector implements Connector {
 
     @Override
     public void shouldWrite(Acceptor acceptor) {
-        int current = acceptor.state().getAndUpdate(i -> i ^ Native.REGISTER_WRITE);
-        if((current & Native.REGISTER_WRITE) != 0) {
-            n.ctl(acceptor.worker().state().mux(), acceptor.socket(), current, current ^ Native.REGISTER_WRITE);
-        }else {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-        }
         int currentStatus = status.get();
         if (currentStatus == INITIAL) {
+            unregisterState(acceptor, Native.REGISTER_WRITE);
             Socket socket = acceptor.socket();
             int errOpt = n.getErrOpt(acceptor.socket());
             if (errOpt == 0) {
-                // whether cancel succeed or fail will not matter, race will make sure only one succeed
-                acceptor.cancelTimeout();
                 Openssl.sslSetFd(ssl, socket.intValue());
                 doHandshake(acceptor);
             } else {
                 log.error("Failed to establish ssl connection, errno : {}", n.errno());
-                acceptor.unbind();
+                acceptor.close();
             }
         }else if (currentStatus == WANT_WRITE) {
+            unregisterState(acceptor, Native.REGISTER_WRITE);
             doHandshake(acceptor);
+        }else {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        }
+    }
+
+    /**
+     *   Unregister read or write state from current acceptor
+     */
+    private void unregisterState(Acceptor acceptor, int state) {
+        int current = acceptor.state().getAndUpdate(i -> i ^ state);
+        if((current & state) != 0) {
+            n.ctl(acceptor.worker().state().mux(), acceptor.socket(), current, current ^ state);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
@@ -105,7 +97,7 @@ public class SslConnector implements Connector {
                 }
             }else {
                 log.error("Failed to perform ssl handshake, err : {}", err);
-                acceptor.unbind();
+                acceptor.close();
             }
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);

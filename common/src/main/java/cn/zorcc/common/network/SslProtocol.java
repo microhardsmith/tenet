@@ -62,16 +62,17 @@ public class SslProtocol implements Protocol {
                 shouldUnpark = true;
             }
             if((state & RECV_WANT_TO_WRITE) == 0) {
-                int r = Openssl.sslRead(ssl, readBuffer.segment(), readBuffer.len());
+                int r = Openssl.sslRead(ssl, readBuffer.segment(), (int) readBuffer.len());
                 if(r <= 0) {
                     int err = Openssl.sslGetErr(ssl, r);
                     if(err == Constants.SSL_ERROR_WANT_WRITE) {
                         state &= RECV_WANT_TO_WRITE;
                     }else if(err == Constants.SSL_ERROR_ZERO_RETURN) {
                         performShutdown(channel);
+                    }else if(err == Constants.SSL_ERROR_SYSCALL) {
+                        doClose(channel);
                     }else if(err != Constants.SSL_ERROR_WANT_READ) {
-                        throw new FrameworkException(ExceptionType.NETWORK, "err read : " + err);
-                        // TODO log.error("SSL read failed with err : {}", err);
+                        throw new FrameworkException(ExceptionType.NETWORK, "SSL read failed with err : %d".formatted(err));
                     }
                 }else {
                     readBuffer.setWriteIndex(r);
@@ -136,7 +137,8 @@ public class SslProtocol implements Protocol {
                 }else if(err == Constants.SSL_ERROR_WANT_READ) {
                     state &= SEND_WANT_TO_READ;
                 }else {
-                    log.error("SSL write failed with err : {}", err);
+                    doClose(channel);
+                    return ;
                 }
             }else if(r < len){
                 // only write a part of the segment, wait for next loop
@@ -208,6 +210,7 @@ public class SslProtocol implements Protocol {
                 }
                 Openssl.sslFree(ssl);
                 n.closeSocket(socket);
+                channel.handler().onClose(channel);
             }
         }finally {
             lock.unlock();

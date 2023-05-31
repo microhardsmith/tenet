@@ -83,12 +83,12 @@ public interface Native {
     /**
      *   Recv data from remote socket, return the actual bytes received TODO 8 bytes len and result
      */
-    int recv(Socket socket, MemorySegment data, int len);
+    long recv(Socket socket, MemorySegment data, long len);
 
     /**
      *   Send data to remote socket, return the actual bytes sent
      */
-    int send(Socket socket, MemorySegment data, int len);
+    long send(Socket socket, MemorySegment data, long len);
 
     /**
      *   Target socket's err opt, should return 0 if there is no error
@@ -167,6 +167,11 @@ public interface Native {
         }
         return value;
     }
+
+    /**
+     *   Network library environment variable
+     */
+    String LIB = "tenet.lib";
 
     /**
      *   Global native network library

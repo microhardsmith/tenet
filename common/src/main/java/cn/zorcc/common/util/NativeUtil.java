@@ -3,13 +3,14 @@ package cn.zorcc.common.util;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.network.Native;
+import cn.zorcc.common.network.Openssl;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -28,7 +29,7 @@ public final class NativeUtil {
     private static final int CPU_CORES = Runtime.getRuntime().availableProcessors();
     private static final Linker linker = Linker.nativeLinker();
     /**
-     *   动态链接库缓存,避免重复加载
+     *   Global dynamic library cache to avoid repeated loading
      */
     private static final Map<String, SymbolLookup> cache = new ConcurrentHashMap<>();
     private static final VarHandle byteHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_BYTE);
@@ -39,11 +40,11 @@ public final class NativeUtil {
     private static final MemorySegment stderr;
     static {
         try{
-            SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.netLib());
+            SymbolLookup symbolLookup = NativeUtil.loadLibrary(Native.LIB);
             MethodHandle stdoutHandle = NativeUtil.methodHandle(symbolLookup, "g_stdout", FunctionDescriptor.of(ValueLayout.ADDRESS));
             stdout = (MemorySegment) stdoutHandle.invokeExact();
             MethodHandle stderrHandle = NativeUtil.methodHandle(symbolLookup, "g_stderr", FunctionDescriptor.of(ValueLayout.ADDRESS));
-            stderr = (MemorySegment) stdoutHandle.invokeExact();
+            stderr = (MemorySegment) stderrHandle.invokeExact();
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Unable to load stdout and stderr", throwable);
         }
@@ -61,6 +62,10 @@ public final class NativeUtil {
         return stderr;
     }
 
+    public static String osName() {
+        return OS_NAME;
+    }
+
     public static boolean isLinux() {
         return LINUX;
     }
@@ -73,64 +78,28 @@ public final class NativeUtil {
         return MACOS;
     }
 
+    public static String libSuffix() {
+        if(WINDOWS) {
+            return ".dll";
+        }else if(LINUX) {
+            return ".so";
+        }else if(MACOS) {
+            return ".dylib";
+        }else {
+            throw new FrameworkException(ExceptionType.NATIVE, "Unrecognized operating system");
+        }
+    }
+
     /**
-     *   获取当前系统CPU核心数
+     *   Return current CPU cores
+     *   Note that usually a physical core could carry two threads at the same time, the return value is actually the logical core numbers.
      */
     public static int getCpuCores() {
         return CPU_CORES;
     }
 
     /**
-     *   获取当前操作系统对应的net动态链接库路径
-     */
-    public static String netLib() {
-        if(LINUX) {
-            return "/lib/lib_linux.so";
-        }else if(WINDOWS) {
-            return "/lib/lib_win.dll";
-        }else if(MACOS) {
-            return "/lib/lib_macos.dylib";
-        }else {
-            throw new FrameworkException(ExceptionType.NATIVE, "Unsupported operating system : %s".formatted(OS_NAME));
-        }
-    }
-
-    /**
-     *   获取当前操作系统对应的crypto动态链接库路径
-     */
-    public static String cryptoLib() {
-        if(LINUX) {
-            return "/ssl/libcrypto.so";
-        }else if(WINDOWS) {
-            return "/ssl/libcrypto-3-x64.dll";
-        }else if(MACOS) {
-            return "/ssl/libcrypto.3.dylib";
-        }else {
-            throw new FrameworkException(ExceptionType.NATIVE, "Unsupported operating system : %s".formatted(OS_NAME));
-        }
-    }
-
-    /**
-     *   获取当前操作系统对应的ssl动态链接库路径
-     */
-    public static String sslLib() {
-        if(LINUX) {
-            return "/ssl/libssl.so";
-        }else if(WINDOWS) {
-            return "/ssl/libssl-3-x64.dll";
-        }else if(MACOS) {
-            return "/ssl/libssl.3.dylib";
-        }else {
-            throw new FrameworkException(ExceptionType.NATIVE, "Unsupported operating system : %s".formatted(OS_NAME));
-        }
-    }
-
-    /**
-     * 从C动态库中获取指定函数的MethodHandle
-     * @param lookup 函数库地址
-     * @param methodName 函数名称
-     * @param functionDescriptor 函数参数描述
-     * @return 对应MethodHandle
+     *  Load function from dynamic library
      */
     public static MethodHandle methodHandle(SymbolLookup lookup, String methodName, FunctionDescriptor functionDescriptor) {
         MemorySegment methodPointer = lookup.find(methodName)
@@ -139,27 +108,28 @@ public final class NativeUtil {
     }
 
     /**
-     *  从当前的common模块下resource中加载动态链接库
+     *  Load a native library by environment variable, if system library was not found in environment variables, will try to copy a duplicate from resource to the tmp folder
+     *  for operating system to load. Note that this mechanism would be significantly slower than directly loading and it's not recommended
      */
-    public static SymbolLookup loadLibraryFromResource(String resourcePath) {
-        return loadLibraryFromResource(resourcePath, null);
-    }
-
-    /**
-     * 从指定Class下的resource文件夹路径加载动态链接库 必须在platform thread下进行操作,因为拷贝文件可能阻塞
-     * @param resourcePath 动态链接库路径
-     * @param clazz 需要加载资源的检索类,如果指定为null则从common项目下加载
-     * @return 指定库对应SymbolLookup
-     */
-    public static SymbolLookup loadLibraryFromResource(String resourcePath, Class<?> clazz) {
-        return cache.computeIfAbsent(resourcePath, k -> {
-            Path path = FileUtil.toTmp(k, Constants.TMP_LIB, clazz);
+    public static SymbolLookup loadLibrary(String identifier) {
+        return cache.computeIfAbsent(identifier, i -> {
+            String path = System.getProperty(i);
+            if(path == null || path.isEmpty()) {
+                String libSuffix = libSuffix();
+                String resourcePath = switch (identifier) {
+                    case Native.LIB -> "libtenet" + libSuffix;
+                    case Openssl.CRYPTO_LIB -> "libcrypto" + libSuffix;
+                    case Openssl.SSL_LIB -> "libssl" + libSuffix;
+                    default -> throw new FrameworkException(ExceptionType.NATIVE, "Environment variable not found : %s".formatted(identifier));
+                };
+                path = FileUtil.toTmp(resourcePath);
+            }
             return SymbolLookup.libraryLookup(path, SegmentScope.global());
         });
     }
 
     /**
-     *  从操作系统已加载的动态链接库中获取函数索引,例如strlen
+     *  Load function from libc, such as strlen
      */
     public static MethodHandle nativeMethodHandle(String methodName, FunctionDescriptor functionDescriptor) {
         return linker.downcallHandle(linker.defaultLookup()
@@ -168,9 +138,6 @@ public final class NativeUtil {
                 functionDescriptor);
     }
 
-    /**
-     *  检查MemorySegment是否为空指针
-     */
     public static boolean checkNullPointer(MemorySegment memorySegment) {
         return memorySegment == null || memorySegment.address() == 0L;
     }
@@ -182,58 +149,34 @@ public final class NativeUtil {
         return (byte) byteHandle.get(memorySegment, index);
     }
 
-    /**
-     *  向MemorySegment中设定byte值
-     */
     public static void setByte(MemorySegment memorySegment, long index, byte value) {
         byteHandle.set(memorySegment, index, value);
     }
 
-    /**
-     *  从MemorySegment中获取指定index的short值
-     */
     public static short getShort(MemorySegment memorySegment, long index) {
         return (short) shortHandle.get(memorySegment, index);
     }
 
-    /**
-     *  向MemorySegment中设定short值
-     */
     public static void setShort(MemorySegment memorySegment, long index, short value) {
         shortHandle.set(memorySegment, index, value);
     }
 
-    /**
-     *  从MemorySegment中获取指定index的int值
-     */
     public static int getInt(MemorySegment memorySegment, long index) {
         return (int) intHandle.get(memorySegment, index);
     }
 
-    /**
-     *  向MemorySegment中设定int值
-     */
     public static void setInt(MemorySegment memorySegment, long index, int value) {
         intHandle.set(memorySegment, index, value);
     }
 
-    /**
-     *  从MemorySegment中获取指定index的long值
-     */
     public static long getLong(MemorySegment memorySegment, long index) {
         return (long) longHandle.get(memorySegment, index);
     }
 
-    /**
-     *  向MemorySegment中设定long值
-     */
     public static void setLong(MemorySegment memorySegment, long index, long value) {
         longHandle.set(memorySegment, index, value);
     }
 
-    /**
-     *   分配C风格的字符串
-     */
     public static MemorySegment allocateStr(Arena arena, String str) {
         byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
         MemorySegment memorySegment = arena.allocateArray(ValueLayout.JAVA_BYTE, bytes.length + 1);
@@ -257,9 +200,6 @@ public final class NativeUtil {
         return memorySegment;
     }
 
-    /**
-     *   获取C风格的字符串
-     */
     public static String getStr(MemorySegment memorySegment) {
         int size = (int) memorySegment.byteSize();
         byte[] bytes = new byte[size];

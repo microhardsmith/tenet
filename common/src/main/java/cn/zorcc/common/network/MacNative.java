@@ -210,12 +210,12 @@ public class MacNative implements Native {
     }
 
     @Override
-    public int recv(Socket socket, MemorySegment data, int len) {
+    public long recv(Socket socket, MemorySegment data, long len) {
         return recv(socket.intValue(), data, len);
     }
 
     @Override
-    public int send(Socket socket, MemorySegment data, int len) {
+    public long send(Socket socket, MemorySegment data, long len) {
         return send(socket.intValue(), data, len);
     }
 
@@ -252,7 +252,7 @@ public class MacNative implements Native {
 
     static {
         long nano = Clock.nano();
-        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.netLib());
+        SymbolLookup symbolLookup = NativeUtil.loadLibrary(Native.LIB);
         kqueueMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_kqueue", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         keventCtlMethodHandle = NativeUtil.methodHandle(symbolLookup,
@@ -286,9 +286,9 @@ public class MacNative implements Native {
         listenMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_listen", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         recvMethodHandle = NativeUtil.methodHandle(symbolLookup,
-                "m_recv", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+                "m_recv", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
         sendMethodHandle = NativeUtil.methodHandle(symbolLookup,
-                "m_send", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+                "m_send", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
         closeMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_close", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         shutdownWriteMethodHandle = NativeUtil.methodHandle(symbolLookup,
@@ -307,7 +307,7 @@ public class MacNative implements Native {
             // should never happen
             throw new FrameworkException(ExceptionType.NATIVE, "Failed to initialize constants", throwable);
         }
-        log.info("Initializing MacNative cost : {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
+        log.info("Initializing Native successfully, platform : {}, time consuming : {} ms", NativeUtil.osName(), TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
     }
 
     /**
@@ -489,9 +489,9 @@ public class MacNative implements Native {
     /**
      *  corresponding to `ssize_t m_recv(int socket, void* buf, size_t len)`
      */
-    public int recv(int socket, MemorySegment buf, int len) {
+    public long recv(int socket, MemorySegment buf, long len) {
         try{
-            return (int) recvMethodHandle.invokeExact(socket, buf, len);
+            return (long) recvMethodHandle.invokeExact(socket, buf, len);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking recv()", throwable);
         }
@@ -500,9 +500,9 @@ public class MacNative implements Native {
     /**
      *  corresponding to `ssize_t m_send(int socket, void* buf, size_t len)`
      */
-    public int send(int socket, MemorySegment buf, int len) {
+    public long send(int socket, MemorySegment buf, long len) {
         try{
-            return (int) sendMethodHandle.invokeExact(socket, buf, len);
+            return (long) sendMethodHandle.invokeExact(socket, buf, len);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking recv()", throwable);
         }

@@ -5,6 +5,7 @@ import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.network.Native;
 import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.FunctionDescriptor;
@@ -32,7 +33,7 @@ public class ConsoleLogEventHandler implements EventHandler<LogEvent> {
     private static final MemorySegment stderr = NativeUtil.stderr();
 
     public ConsoleLogEventHandler(LogConfig logConfig) {
-        SymbolLookup symbolLookup = NativeUtil.loadLibraryFromResource(NativeUtil.netLib());
+        SymbolLookup symbolLookup = NativeUtil.loadLibrary(Native.LIB);
         this.print = NativeUtil.methodHandle(symbolLookup, "g_print", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         this.consumer = parseLogFormat(logConfig);
         // Console builder should have a larger size than logEvent
