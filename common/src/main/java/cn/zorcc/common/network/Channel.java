@@ -22,38 +22,33 @@ public final class Channel {
     private final Protocol protocol;
     private final Worker worker;
     /**
-     *   writer virtual thread
+     *   Writer virtual thread
      */
     private final Thread writerThread;
     /**
-     *   only exist for client-side channel, for server-side channel would be null
-     */
-    private final Remote remote;
-    /**
-     *   representing remote server address
+     *   Representing remote server address
      */
     private final Loc loc;
     /**
-     *   current read buffer temp zone, visible only for its worker
+     *   Current read buffer temp zone, visible only for its worker
      */
     private WriteBuffer tempBuffer;
     /**
-     *   writer task queue
+     *   Writer task queue
      */
     private final TransferQueue<Object> queue = new LinkedTransferQueue<>();
     /**
-     *   whether shutdown method has been called, this shutdownFlag is different from protocol's
+     *   Whether shutdown method has been called, this shutdownFlag is different from protocol's
      *   after shutdown method called, the protocol doShutdown() will be called by writerThread
      */
     private final AtomicBoolean shutdownFlag = new AtomicBoolean(false);
 
-    public Channel(Socket socket, AtomicInteger state, Codec codec, Handler handler, Protocol protocol, Remote remote, Loc loc, Worker worker) {
+    public Channel(Socket socket, AtomicInteger state, Codec codec, Handler handler, Protocol protocol, Loc loc, Worker worker) {
         this.socket = socket;
         this.state = state;
         this.codec = codec;
         this.handler = handler;
         this.protocol = protocol;
-        this.remote = remote;
         this.loc = loc;
         this.worker = worker;
         this.writerThread = ThreadUtil.virtual("Ch@" + socket.hashCode(), () -> {
@@ -101,10 +96,6 @@ public final class Channel {
         return worker;
     }
 
-    public Remote remote() {
-        return remote;
-    }
-
     public Loc loc() {
         return loc;
     }
@@ -113,6 +104,9 @@ public final class Channel {
         return writerThread;
     }
 
+    /**
+     *   Indicate if current channel is available
+     */
     public boolean available() {
         return protocol().available();
     }

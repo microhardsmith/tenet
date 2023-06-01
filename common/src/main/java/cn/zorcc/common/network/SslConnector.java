@@ -96,7 +96,7 @@ public class SslConnector implements Connector {
                     n.ctl(acceptor.worker().state().mux(), acceptor.socket(), current, current + Native.REGISTER_READ);
                 }
             }else {
-                log.error("Failed to perform ssl handshake, err : {}", err);
+                log.error("Failed to perform ssl handshake, ssl err : {}", err);
                 acceptor.close();
             }
         }else {

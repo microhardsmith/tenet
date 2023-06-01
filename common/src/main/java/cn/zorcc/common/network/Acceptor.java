@@ -7,27 +7,24 @@ import cn.zorcc.common.pojo.Loc;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Supplier;
 
-public class Acceptor {
+public final class Acceptor {
     private static final Native n = Native.n;
     private final Socket socket;
-    private final Supplier<Codec> codecSupplier;
-    private final Supplier<Handler> handlerSupplier;
+    private final Codec codec;
+    private final Handler handler;
     private final Connector connector;
     private final Worker worker;
-    private final Remote remote;
     private final Loc loc;
     private final AtomicInteger state = new AtomicInteger(Native.REGISTER_NONE);
     private final AtomicBoolean race = new AtomicBoolean(false);
 
-    public Acceptor(Socket socket, Supplier<Codec> codecSupplier, Supplier<Handler> handlerSupplier, Connector connector, Worker worker, Remote remote, Loc loc) {
+    public Acceptor(Socket socket, Codec codec, Handler handler, Connector connector, Worker worker, Loc loc) {
         this.socket = socket;
-        this.codecSupplier = codecSupplier;
-        this.handlerSupplier = handlerSupplier;
+        this.codec = codec;
+        this.handler = handler;
         this.connector = connector;
         this.worker = worker;
-        this.remote = remote;
         this.loc = loc;
     }
 
@@ -53,9 +50,7 @@ public class Acceptor {
      */
     public void toChannel(Protocol protocol) {
         if(race.compareAndSet(false, true)) {
-            Codec codec = codecSupplier.get();
-            Handler handler = handlerSupplier.get();
-            Channel channel = new Channel(socket, state, codec, handler, protocol, remote, loc, worker);
+            Channel channel = new Channel(socket, state, codec, handler, protocol, loc, worker);
             worker.state().socketMap().put(socket, channel);
             int from = state.getAndSet(Native.REGISTER_READ);
             if(from != Native.REGISTER_READ) {

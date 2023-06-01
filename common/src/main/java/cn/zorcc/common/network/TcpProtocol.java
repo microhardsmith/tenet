@@ -113,7 +113,7 @@ public final class TcpProtocol implements Protocol {
                 n.ctl(workerState.mux(), socket, current, Native.REGISTER_NONE);
             }
             n.closeSocket(socket);
-            channel.handler().onClose(channel);
+            channel.handler().onRemoved(channel);
         }
     }
 }

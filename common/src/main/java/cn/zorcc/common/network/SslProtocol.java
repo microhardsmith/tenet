@@ -210,7 +210,7 @@ public class SslProtocol implements Protocol {
                 }
                 Openssl.sslFree(ssl);
                 n.closeSocket(socket);
-                channel.handler().onClose(channel);
+                channel.handler().onRemoved(channel);
             }
         }finally {
             lock.unlock();

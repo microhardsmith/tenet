@@ -173,47 +173,35 @@ public class Net implements LifeCycle {
 
     /**
      *   Launch a client connect operation for remote server
-     *   After connection is established, a newly created channel will be bound with current Remote instance
-     *   if connect was successful or there is no need to connect, 0 would be returned, else errno would be returned
-     *   Note that even if 0 is returned doesn't mean that the connection is successfully established, it might be pending errors, you could only recognize a established connection by onConnected() method
      */
-    public int connect(Remote remote, Supplier<Codec> codecSupplier, Supplier<Handler> handlerSupplier, Supplier<Connector> connectorSupplier, long timeout, TimeUnit timeUnit) {
-        final int maximum = remote.getMaximum();
-        int current = remote.connectCounter().getAndUpdate(i -> Math.min(i + 1, maximum));
-        if(current < maximum) {
-            Loc loc = remote.loc();
-            Socket socket = n.createSocket(config);
-            Worker worker = nextWorker();
-            Connector connector = connectorSupplier.get();
-            Acceptor acceptor = new Acceptor(socket, codecSupplier, handlerSupplier, connector, worker, remote, loc);
-            try(Arena arena = Arena.openConfined()) {
-                MemorySegment sockAddr = n.createSockAddr(loc, arena);
-                if(n.connect(socket, sockAddr) == 0) {
-                    // connection successfully established
+    public void connect(Loc loc, Codec codec, Handler handler, Supplier<Connector> connectorSupplier, long timeout, TimeUnit timeUnit) {
+        Socket socket = n.createSocket(config);
+        Worker worker = nextWorker();
+        Connector connector = connectorSupplier.get();
+        Acceptor acceptor = new Acceptor(socket, codec, handler, connector, worker, loc);
+        try(Arena arena = Arena.openConfined()) {
+            MemorySegment sockAddr = n.createSockAddr(loc, arena);
+            if(n.connect(socket, sockAddr) == 0) {
+                // connection successfully established
+                mount(acceptor);
+            }else {
+                int errno = n.errno();
+                if (errno == n.connectBlockCode()) {
+                    // connection is still in-process
                     mount(acceptor);
+                    wheel.addJob(acceptor::close, timeout, timeUnit);
                 }else {
-                    int errno = n.errno();
-                    if (errno == n.connectBlockCode()) {
-                        // connection is still in-process
-                        mount(acceptor);
-                        wheel.addJob(acceptor::close, timeout, timeUnit);
-                    }else {
-                        return errno;
-                    }
+                    throw new FrameworkException(ExceptionType.NETWORK, "Failed to connect, errno : %d".formatted(errno));
                 }
-                return 0;
             }
-        }else {
-            // current connection count is already equal to maximum, no need to perform another connect
-            return 0;
         }
     }
 
     /**
      *   Launch a client connect operation for remote server, using default timeout and time-unit
      */
-    public int connect(Remote remote, Supplier<Codec> codecSupplier, Supplier<Handler> handlerSupplier, Supplier<Connector> connectorSupplier) {
-        return connect(remote, codecSupplier, handlerSupplier, connectorSupplier, DEFAULT_CONNECT_TIMEOUT, DEFAULT_TIME_UNIT);
+    public void connect(Loc loc, Codec codec, Handler handler, Supplier<Connector> connectorSupplier) {
+        connect(loc, codec, handler, connectorSupplier, DEFAULT_CONNECT_TIMEOUT, DEFAULT_TIME_UNIT);
     }
 
     /**
@@ -223,8 +211,10 @@ public class Net implements LifeCycle {
         Socket socket = clientSocket.socket();
         Loc loc = clientSocket.loc();
         Worker worker = nextWorker();
+        Codec codec = codecSupplier.get();
+        Handler handler = handlerSupplier.get();
         Connector connector = connectorSupplier.get();
-        Acceptor acceptor = new Acceptor(socket, codecSupplier, handlerSupplier, connector, worker, null, loc);
+        Acceptor acceptor = new Acceptor(socket, codec, handler, connector, worker, loc);
         mount(acceptor);
     }
 

@@ -41,7 +41,7 @@ public class HttpTestHandler implements Handler {
     }
 
     @Override
-    public void onClose(Channel channel) {
+    public void onRemoved(Channel channel) {
         log.info("Http connection closed");
     }
 }
