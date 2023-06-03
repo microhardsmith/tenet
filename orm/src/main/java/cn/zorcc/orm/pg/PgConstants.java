@@ -2,10 +2,32 @@ package cn.zorcc.orm.pg;
 
 import io.netty.buffer.ByteBuf;
 
+import java.util.Map;
+
 /**
  * 存储postgresql使用的一些常量
  */
 public class PgConstants {
+    public static final Map<Byte, String> ERR_MAP = Map.ofEntries(
+            Map.entry((byte) 'S', "Severity"),
+            Map.entry((byte) 'V', "Severity"),
+            Map.entry((byte) 'C', "Code"),
+            Map.entry((byte) 'M', "Message"),
+            Map.entry((byte) 'D', "Detail"),
+            Map.entry((byte) 'H', "Hint"),
+            Map.entry((byte) 'P', "Position"),
+            Map.entry((byte) 'p', "Internal Position"),
+            Map.entry((byte) 'q', "Internal Query"),
+            Map.entry((byte) 'W', "Where"),
+            Map.entry((byte) 's', "Schema name"),
+            Map.entry((byte) 't', "Table name"),
+            Map.entry((byte) 'c', "Column name"),
+            Map.entry((byte) 'd', "Data type name"),
+            Map.entry((byte) 'n', "Constraint name"),
+            Map.entry((byte) 'F', "File"),
+            Map.entry((byte) 'L', "Line"),
+            Map.entry((byte) 'R', "Routine"));
+
     public static final String ERR_MSG = "Postgresql state corrupted";
     public static final String SSL_PREFERRED = "preferred";
     public static final String SSL_VERIFY_CA = "verify-ca";
@@ -14,13 +36,15 @@ public class PgConstants {
 
     public static final byte TRANSACTION_IDLE = 'I';
     public static final byte TRANSACTION_ON = 'T';
-    public static final byte TRANSACTION_ERROR = 'E';
+    public static final byte TRANSACTION_FAIL = 'E';
 
     public static final String NONE = "None";
     public static final char CODE = 'C';
     public static final char MESSAGE = 'M';
     public static final byte AUTH = 'R';
-    public static final byte ERR = 'E';
+    public static final byte EMPTY_QUERY_RESPONSE = 'I';
+    public static final byte NOTICE_RESPONSE = 'N';
+    public static final byte ERROR_RESPONSE = 'E';
     public static final byte SSL_OK = 'S';
     public static final byte SSL_DISABLE = 'N';
     public static final int AUTH_OK = 0;
@@ -55,6 +79,7 @@ public class PgConstants {
     public static final byte BIND = 'B';
     public static final byte EXECUTE = 'E';
     public static final byte CLOSE = 'C';
+    public static final byte CLOSE_COMPLETE = '3';
     public static final byte NO_DATA = 'n';
     public static final byte PARAMETER_STATUE = 'S';
     public static final byte TERMINATE = 'X';
@@ -64,6 +89,7 @@ public class PgConstants {
     public static final String CLIENT_ENCODING = "client_encoding";
     public static final String UTF_8 = "UTF-8";
     public static final String APPLICATION_NAME = "application_name";
+    public static final String DEFAULT_APPLICATION_NAME = "tenet_pg_client";
     public static final String DATE_STYLE = "DateStyle";
     public static final String ISO = "ISO";
     public static final String SEARCH_PATH = "search_path";

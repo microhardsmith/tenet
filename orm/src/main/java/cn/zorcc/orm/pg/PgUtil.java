@@ -141,7 +141,7 @@ public class PgUtil {
         channel.writeAndFlush(byteBuf).addListener((ChannelFutureListener) future -> {
             if (!future.isSuccess()) {
                 terminate(channel);
-                throw new FrameworkException(ExceptionType.ORM, Constants.DB_CONNECTION_ERR, future.cause());
+                throw new FrameworkException(ExceptionType.POSTGRESQL, Constants.DB_CONNECTION_ERR, future.cause());
             } else if (runnable != null) {
                 runnable.run();
             }
@@ -177,7 +177,7 @@ public class PgUtil {
      */
     public static void toHex(byte[] data, byte[] hex, int offset) {
         if (offset + (data.length << 1) > hex.length) {
-            throw new FrameworkException(ExceptionType.ORM, "Not enough space for hex");
+            throw new FrameworkException(ExceptionType.POSTGRESQL, "Not enough space for hex");
         }
         for (byte datum : data) {
             int v = datum & 0xFF;
@@ -256,25 +256,25 @@ public class PgUtil {
         switch (dataType) {
             case BOOL -> {
                 if(len != 1) {
-                    throw new FrameworkException(ExceptionType.ORM, PgConstants.ERR_MSG);
+                    throw new FrameworkException(ExceptionType.POSTGRESQL, PgConstants.ERR_MSG);
                 }
                 return byteBuf.readBoolean();
             }
             case INT2 -> {
                 if(len != 2) {
-                    throw new FrameworkException(ExceptionType.ORM, PgConstants.ERR_MSG);
+                    throw new FrameworkException(ExceptionType.POSTGRESQL, PgConstants.ERR_MSG);
                 }
                 return byteBuf.readShort();
             }
             case INT4 -> {
                 if(len != 4) {
-                    throw new FrameworkException(ExceptionType.ORM, PgConstants.ERR_MSG);
+                    throw new FrameworkException(ExceptionType.POSTGRESQL, PgConstants.ERR_MSG);
                 }
                 return byteBuf.readInt();
             }
             case INT8 -> {
                 if(len != 8) {
-                    throw new FrameworkException(ExceptionType.ORM, PgConstants.ERR_MSG);
+                    throw new FrameworkException(ExceptionType.POSTGRESQL, PgConstants.ERR_MSG);
                 }
                 return byteBuf.readLong();
             }
@@ -283,13 +283,13 @@ public class PgUtil {
             }
             case FLOAT4 -> {
                 if(len != 4) {
-                    throw new FrameworkException(ExceptionType.ORM, PgConstants.ERR_MSG);
+                    throw new FrameworkException(ExceptionType.POSTGRESQL, PgConstants.ERR_MSG);
                 }
                 return byteBuf.readFloat();
             }
             case FLOAT8 -> {
                 if(len != 8) {
-                    throw new FrameworkException(ExceptionType.ORM, PgConstants.ERR_MSG);
+                    throw new FrameworkException(ExceptionType.POSTGRESQL, PgConstants.ERR_MSG);
                 }
                 return byteBuf.readDouble();
             }
@@ -298,26 +298,26 @@ public class PgUtil {
             }
             case MONEY -> {
                 if(len != 8) {
-                    throw new FrameworkException(ExceptionType.ORM, PgConstants.ERR_MSG);
+                    throw new FrameworkException(ExceptionType.POSTGRESQL, PgConstants.ERR_MSG);
                 }
                 return BigDecimal.valueOf(byteBuf.readLong()).divide(Constants.HUNDRED, 2, RoundingMode.UNNECESSARY);
             }
             case DATE -> {
                 if(len != 4) {
-                    throw new FrameworkException(ExceptionType.ORM, PgConstants.ERR_MSG);
+                    throw new FrameworkException(ExceptionType.POSTGRESQL, PgConstants.ERR_MSG);
                 }
                 int i = byteBuf.readInt();
                 return baseLocalDate.plus(i, ChronoUnit.DAYS);
             }
             case TIME -> {
                 if(len != 8) {
-                    throw new FrameworkException(ExceptionType.ORM, PgConstants.ERR_MSG);
+                    throw new FrameworkException(ExceptionType.POSTGRESQL, PgConstants.ERR_MSG);
                 }
                 return LocalTime.ofNanoOfDay(byteBuf.readLong() * 1000);
             }
             case TIMETZ -> {
                 if(len != 12) {
-                    throw new FrameworkException(ExceptionType.ORM, PgConstants.ERR_MSG);
+                    throw new FrameworkException(ExceptionType.POSTGRESQL, PgConstants.ERR_MSG);
                 }
                 long day = byteBuf.readLong();
                 int seconds = byteBuf.readInt();
@@ -325,26 +325,26 @@ public class PgUtil {
             }
             case TIMESTAMP -> {
                 if(len != 8) {
-                    throw new FrameworkException(ExceptionType.ORM, PgConstants.ERR_MSG);
+                    throw new FrameworkException(ExceptionType.POSTGRESQL, PgConstants.ERR_MSG);
                 }
                 return baseLocalDateTime.plus(byteBuf.readLong(), ChronoUnit.MICROS);
             }
             case TIMESTAMPTZ -> {
                 if(len != 8) {
-                    throw new FrameworkException(ExceptionType.ORM, PgConstants.ERR_MSG);
+                    throw new FrameworkException(ExceptionType.POSTGRESQL, PgConstants.ERR_MSG);
                 }
                 LocalDateTime localDateTime = baseLocalDateTime.plus(byteBuf.readLong(), ChronoUnit.MICROS);
                 return OffsetDateTime.of(localDateTime, ZoneOffset.UTC);
             }
             case UUID -> {
                 if(len != 16) {
-                    throw new FrameworkException(ExceptionType.ORM, PgConstants.ERR_MSG);
+                    throw new FrameworkException(ExceptionType.POSTGRESQL, PgConstants.ERR_MSG);
                 }
                 long mostSignificantBytes = byteBuf.readLong();
                 long leastSignificantBytes = byteBuf.readLong();
                 return new UUID(mostSignificantBytes, leastSignificantBytes);
             }
-            default -> throw new FrameworkException(ExceptionType.ORM, Constants.UNSUPPORTED);
+            default -> throw new FrameworkException(ExceptionType.POSTGRESQL, Constants.UNSUPPORTED);
         }
     }
 
@@ -355,7 +355,7 @@ public class PgUtil {
         switch (dataType) {
             case BOOL -> {
                 if(len != 1) {
-                    throw new FrameworkException(ExceptionType.ORM, PgConstants.ERR_MSG);
+                    throw new FrameworkException(ExceptionType.POSTGRESQL, PgConstants.ERR_MSG);
                 }
                 return byteBuf.readByte() == PgConstants.BOOL_TRUE ? Boolean.TRUE : Boolean.FALSE;
             }
@@ -403,7 +403,7 @@ public class PgUtil {
             case UUID -> {
                 return UUID.fromString(readString(byteBuf, len));
             }
-            default -> throw new FrameworkException(ExceptionType.ORM, Constants.UNSUPPORTED);
+            default -> throw new FrameworkException(ExceptionType.POSTGRESQL, Constants.UNSUPPORTED);
         }
     }
 

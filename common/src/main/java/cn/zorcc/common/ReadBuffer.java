@@ -7,6 +7,7 @@ import cn.zorcc.common.util.NativeUtil;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.charset.StandardCharsets;
 
 /**
  *   读直接内存缓冲区,非线程安全
@@ -48,6 +49,13 @@ public final class ReadBuffer implements AutoCloseable {
 
     public long available() {
         return writeIndex - readIndex;
+    }
+
+    public void setReadIndex(long index) {
+        if(index < 0 || index > writeIndex) {
+            throw new FrameworkException(ExceptionType.NATIVE, "ReadIndex out of bound");
+        }
+        readIndex = index;
     }
 
     public void setWriteIndex(long index) {
@@ -130,14 +138,16 @@ public final class ReadBuffer implements AutoCloseable {
                 currentIndex += 1;
             }
         }
+        readIndex = writeIndex;
         return null;
     }
 
     public byte[] readUntil(byte sep1, byte sep2) {
         long currentIndex = readIndex;
-        while (currentIndex < writeIndex) {
+        long maxIndex = writeIndex - 1;
+        while (currentIndex < maxIndex) {
             byte b = NativeUtil.getByte(segment, currentIndex);
-            if(b == sep1 && currentIndex + 1 < writeIndex && NativeUtil.getByte(segment, currentIndex + 1) == sep2) {
+            if(b == sep1 && NativeUtil.getByte(segment, currentIndex + 1) == sep2) {
                 byte[] result = currentIndex == readIndex ? Constants.EMPTY_BYTES : segment.asSlice(readIndex, currentIndex - readIndex).toArray(ValueLayout.JAVA_BYTE);
                 readIndex = currentIndex + 2;
                 return result;
@@ -145,7 +155,19 @@ public final class ReadBuffer implements AutoCloseable {
                 currentIndex += 1;
             }
         }
+        readIndex = maxIndex;
         return null;
+    }
+
+    /**
+     *   Read a C style string from current readBuffer
+     */
+    public String readCStr() {
+        byte[] bytes = readUntil(Constants.NUT);
+        if(bytes == null || bytes.length == 0) {
+            return null;
+        }
+        return new String(bytes, StandardCharsets.UTF_8);
     }
 
     public long len() {

@@ -17,7 +17,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class Channel {
     private final Socket socket;
     private final AtomicInteger state;
-    private final Codec codec;
+    private final Encoder encoder;
+    private final Decoder decoder;
     private final Handler handler;
     private final Protocol protocol;
     private final Worker worker;
@@ -43,11 +44,12 @@ public final class Channel {
      */
     private final AtomicBoolean shutdownFlag = new AtomicBoolean(false);
 
-    public Channel(Socket socket, AtomicInteger state, Codec codec, Handler handler, Protocol protocol, Loc loc, Worker worker) {
+    public Channel(Socket socket, AtomicInteger state, Encoder e, Decoder d, Handler h, Protocol protocol, Loc loc, Worker worker) {
         this.socket = socket;
         this.state = state;
-        this.codec = codec;
-        this.handler = handler;
+        this.encoder = e;
+        this.decoder = d;
+        this.handler = h;
         this.protocol = protocol;
         this.loc = loc;
         this.worker = worker;
@@ -61,12 +63,12 @@ public final class Channel {
                         currentThread.interrupt();
                     }else {
                         try(WriteBuffer writeBuffer = new WriteBuffer(Net.WRITE_BUFFER_SIZE)) {
-                            codec.encode(writeBuffer, msg);
+                            encoder.encode(writeBuffer, msg);
                             protocol.doWrite(this, writeBuffer);
                         }
                     }
                 }
-            }catch (InterruptedException e) {
+            }catch (InterruptedException i) {
                 Thread.currentThread().interrupt();
             }
         });
@@ -78,10 +80,6 @@ public final class Channel {
 
     public AtomicInteger state() {
         return state;
-    }
-
-    public Codec codec() {
-        return codec;
     }
 
     public Handler handler() {
@@ -102,13 +100,6 @@ public final class Channel {
 
     public Thread writerThread() {
         return writerThread;
-    }
-
-    /**
-     *   Indicate if current channel is available
-     */
-    public boolean available() {
-        return protocol().available();
     }
 
     /**
@@ -146,7 +137,7 @@ public final class Channel {
      *   the actual onRecv method should create a new virtual thread to handle the actual blocking business logic
      */
     private void tryRead(ReadBuffer buffer) {
-        Object result = codec.decode(buffer);
+        Object result = decoder.decode(buffer);
         if(result != null) {
             handler.onRecv(this, result);
         }

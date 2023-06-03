@@ -4,7 +4,7 @@ import cn.zorcc.common.config.CacheConfig;
 import cn.zorcc.common.config.ClusterConfig;
 import cn.zorcc.common.config.CommonConfig;
 import cn.zorcc.common.config.ToMintConfig;
-import cn.zorcc.orm.DatabaseConfig;
+import cn.zorcc.orm.PgConfig;
 import lombok.Data;
 
 /**
@@ -19,7 +19,7 @@ public class AppConfig {
     /**
      * 数据库配置
      */
-    private DatabaseConfig database = new DatabaseConfig();
+    private PgConfig database = new PgConfig();
     /**
      * app连接mint配置
      */

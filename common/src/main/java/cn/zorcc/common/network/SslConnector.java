@@ -47,10 +47,15 @@ public class SslConnector implements Connector {
             unregisterState(acceptor, Native.REGISTER_WRITE);
             Socket socket = acceptor.socket();
             int errOpt = n.getErrOpt(acceptor.socket());
-            if (errOpt == 0) {
-                Openssl.sslSetFd(ssl, socket.intValue());
-                doHandshake(acceptor);
-            } else {
+            if(errOpt == 0) {
+                int r = Openssl.sslSetFd(ssl, socket.intValue());
+                if(r == 1) {
+                    doHandshake(acceptor);
+                }else {
+                    log.error("Failed to set fd for ssl, err : {}", Openssl.sslGetErr(ssl, r));
+                    acceptor.close();
+                }
+            }else {
                 log.error("Failed to establish ssl connection, errno : {}", n.errno());
                 acceptor.close();
             }

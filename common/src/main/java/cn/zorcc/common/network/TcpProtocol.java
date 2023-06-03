@@ -21,23 +21,14 @@ import java.util.concurrent.locks.LockSupport;
 public final class TcpProtocol implements Protocol {
     private static final Native n = Native.n;
     /**
-     *   when Protocol is created, the channel is available by default, the availability changed when channel was shutdown or closed
-     */
-    private final AtomicBoolean availableFlag = new AtomicBoolean(true);
-    /**
-     *   shutdownFlag is to make sure that doShutdown() method will only be invoked once, by any user thread
+     *   Make sure that doShutdown() method will only be invoked once, by any user thread
      */
     private final AtomicBoolean shutdownFlag = new AtomicBoolean(false);
     /**
-     *   closeFlag is to make sure that doClose() method will only be invoked once, by worker or by wheel
+     *   Make sure that doClose() method will only be invoked once, by worker or by wheel
      *   there is no need to cancel the timeout wheelJob manually since there are no side effects
      */
     private final AtomicBoolean closeFlag = new AtomicBoolean(false);
-
-    @Override
-    public boolean available() {
-        return availableFlag.get();
-    }
 
     @Override
     public void canRead(Channel channel, ReadBuffer readBuffer) {
@@ -94,8 +85,8 @@ public final class TcpProtocol implements Protocol {
     @Override
     public void doShutdown(Channel channel, long timeout, TimeUnit timeUnit) {
         if(shutdownFlag.compareAndSet(false ,true)) {
-            availableFlag.set(false);
             n.shutdownWrite(channel.socket());
+            channel.handler().onRemoved(channel);
             Wheel.wheel().addJob(() -> doClose(channel), timeout, timeUnit);
         }
     }
@@ -103,8 +94,10 @@ public final class TcpProtocol implements Protocol {
     @Override
     public void doClose(Channel channel) {
         if(closeFlag.compareAndSet(false, true)) {
-            availableFlag.set(false);
-            channel.writerThread().interrupt();
+            if(shutdownFlag.compareAndSet(false, true)) {
+                channel.handler().onRemoved(channel);
+                channel.writerThread().interrupt();
+            }
             Socket socket = channel.socket();
             NetworkState workerState = channel.worker().state();
             workerState.socketMap().remove(socket, channel);
@@ -113,7 +106,6 @@ public final class TcpProtocol implements Protocol {
                 n.ctl(workerState.mux(), socket, current, Native.REGISTER_NONE);
             }
             n.closeSocket(socket);
-            channel.handler().onRemoved(channel);
         }
     }
 }

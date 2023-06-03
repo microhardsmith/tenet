@@ -7,7 +7,6 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.*;
 import cn.zorcc.common.util.NativeUtil;
-import cn.zorcc.orm.DatabaseConfig;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.MemorySegment;
@@ -16,26 +15,18 @@ import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
 public class PgConnector implements Connector {
-    /**
-     *   Temp buffer size for containing the read content
-     */
-    private static final long BUFFER_SIZE = 8192;
     private static final Native n = Native.n;
-    private final DatabaseConfig databaseConfig;
+    private final Net net;
+    private static final int INITIAL = 0;
+    private static final int SSL_UNWRITTEN = 1;
+    private static final int SSL_WAIT = 2;
+    private static final int SSL_WANT_READ = 3;
+    private static final int SSL_WANT_WRITE = 4;
+    private final AtomicInteger status = new AtomicInteger(INITIAL);
     private final AtomicReference<MemorySegment> sslReference = new AtomicReference<>(NativeUtil.NULL_POINTER);
-    private static final int TCP_SEND_WANT_WRITE = 1 << 2;
-    private static final int SSL_RECV_WANT_WRITE = 1 << 3;
-    private static final int SSL_SEND_WANT_READ = 1 << 4;
-    private static final int SSL_SEND_WANT_WRITE = 1 << 5;
-    private final AtomicInteger rwStatus = new AtomicInteger(0);
-
-    private static final int INITIAL = 1;
-    private static final int AWAIT_SSL = 2;
-    private final AtomicInteger dataStatus = new AtomicInteger(INITIAL);
-    private final AtomicReference<WriteBuffer> unreadBuffer = new AtomicReference<>(null);
-    private final AtomicReference<WriteBuffer> unwrittenBuffer = new AtomicReference<>(null);
-    public PgConnector(DatabaseConfig databaseConfig) {
-        this.databaseConfig = databaseConfig;
+    private final AtomicReference<WriteBuffer> unwritten = new AtomicReference<>(null);
+    public PgConnector(Net net) {
+        this.net = net;
     }
 
     @Override
@@ -49,182 +40,107 @@ public class PgConnector implements Connector {
 
     @Override
     public void shouldRead(Acceptor acceptor) {
-        int i = rwStatus.get();
-        if((i & SSL_SEND_WANT_READ) != 0) {
-            rwStatus.set(i ^ SSL_SEND_WANT_READ);
-            doWriteSsl(acceptor, sslReference.get(), unwrittenBuffer.getAndSet(null));
-        }else if((i & SSL_RECV_WANT_WRITE) == 0) {
-            doRead(acceptor);
+        final int i = status.get();
+        if(i == SSL_WAIT) {
+            try(ReadBuffer readBuffer = new ReadBuffer(1L)) {
+                if (n.recv(acceptor.socket(), readBuffer.segment(), 1L) < 1) {
+                    log.error("Unable to read, errno : {}", n.errno());
+                    acceptor.close();
+                }
+                byte b = readBuffer.readByte();
+                if(b == PgConstants.SSL_OK) {
+                    MemorySegment ssl = net.newSsl();
+                    int r = Openssl.sslSetFd(ssl, acceptor.socket().intValue());
+                    if(r == 0) {
+                        log.error("Failed to set fd for ssl, err : {}", Openssl.sslGetErr(ssl, r));
+                        acceptor.close();
+                    }else {
+                        sslReference.set(ssl);
+                        doSslConnect(acceptor, ssl);
+                    }
+                }else if(b == PgConstants.SSL_DISABLE) {
+                    acceptor.toChannel(new TcpProtocol());
+                }else {
+                    log.error("Unable to process SSL initialize msg, byte : {}", b);
+                    acceptor.close();
+                }
+            }
+        }else if(i == SSL_WANT_READ) {
+            doSslConnect(acceptor, sslReference.get());
         }
     }
 
     @Override
     public void shouldWrite(Acceptor acceptor) {
-        if(acceptor.state().compareAndSet(Native.REGISTER_READ_WRITE, Native.REGISTER_READ)) {
-            NetworkState workerState = acceptor.worker().state();
-            n.ctl(workerState.mux(), acceptor.socket(), Native.REGISTER_READ_WRITE, Native.REGISTER_READ);
-        }else {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-        }
-        if(dataStatus.get() == INITIAL) {
-            processInitial(acceptor);
-        }
-        int i = rwStatus.get();
-        if((i & TCP_SEND_WANT_WRITE) != 0) {
-            rwStatus.set(i ^ TCP_SEND_WANT_WRITE);
-            doWriteTcp(acceptor, unwrittenBuffer.getAndSet(null));
-        }else if((i & SSL_RECV_WANT_WRITE) != 0) {
-            rwStatus.set(i ^ SSL_RECV_WANT_WRITE);
-        }else if((i & SSL_SEND_WANT_WRITE) != 0) {
-            rwStatus.set(i ^ SSL_SEND_WANT_WRITE);
-            doWriteSsl(acceptor, sslReference.get(), unwrittenBuffer.getAndSet(null));
-        }
-    }
-
-    private void processInitial(Acceptor acceptor) {
-        int errOpt = n.getErrOpt(acceptor.socket());
-        if(errOpt == 0) {
-            dataStatus.set(AWAIT_SSL);
-            WriteBuffer writeBuffer = new WriteBuffer(8);
-            writeBuffer.writeInt(8);
-            writeBuffer.writeInt(80877103);
-            doWrite(acceptor, writeBuffer);
-        }else {
-            log.error("Failed to establish postgresql connection, errno : {}", n.errno());
-            acceptor.close();
-        }
-    }
-
-    private void doRead(Acceptor acceptor) {
-        MemorySegment ssl = sslReference.get();
-        if(NativeUtil.checkNullPointer(ssl)) {
-            doReadTcp(acceptor);
-        }else {
-            doReadSsl(acceptor, ssl);
-        }
-    }
-
-    private void doReadTcp(Acceptor acceptor) {
-        try(ReadBuffer readBuffer = new ReadBuffer(BUFFER_SIZE)) {
-            long bytes = n.recv(acceptor.socket(), readBuffer.segment(), BUFFER_SIZE);
-            if(bytes > 0) {
-                readBuffer.setWriteIndex(bytes);
-                handle(acceptor, readBuffer);
-            }else if(bytes == 0) {
+        final int i = status.get();
+        if(i == INITIAL) {
+            Socket socket = acceptor.socket();
+            int errOpt = n.getErrOpt(socket);
+            if(errOpt == 0) {
+                long len = 8L;
+                WriteBuffer writeBuffer = new WriteBuffer(len);
+                writeBuffer.writeInt(8);
+                writeBuffer.writeInt(PgConstants.SSL_CODE);
+                write(acceptor, writeBuffer);
+            }else {
+                log.error("Unable to write, errno : {}", n.errno());
                 acceptor.close();
+            }
+        }else if(i == SSL_UNWRITTEN) {
+            write(acceptor, unwritten.getAndSet(null));
+        }else if(i == SSL_WANT_WRITE) {
+            doSslConnect(acceptor, sslReference.get());
+        }
+    }
+
+    private void doSslConnect(Acceptor acceptor, MemorySegment ssl) {
+        int c = Openssl.sslConnect(ssl);
+        if(c == 1) {
+            acceptor.toChannel(new SslProtocol(ssl));
+        }else {
+            int err = Openssl.sslGetErr(ssl, c);
+            if(err == Constants.SSL_ERROR_WANT_READ) {
+                status.set(SSL_WANT_READ);
+            }else if(err == Constants.SSL_ERROR_WANT_WRITE) {
+                status.set(SSL_WANT_WRITE);
+                int current = acceptor.state().getAndUpdate(i -> (i & Native.REGISTER_WRITE) == 0 ? i + Native.REGISTER_WRITE : i);
+                if((current & Native.REGISTER_WRITE) == 0) {
+                    n.ctl(acceptor.worker().state().mux(), acceptor.socket(), current, current + Native.REGISTER_READ);
+                }
+            }else {
+                log.error("Failed to perform ssl handshake, ssl err : {}", err);
+                acceptor.close();
+            }
+        }
+    }
+
+    private void write(Acceptor acceptor, WriteBuffer writeBuffer) {
+        MemorySegment segment = writeBuffer.segment();
+        long len = segment.byteSize();
+        long bytes = n.send(acceptor.socket(), segment, len);
+        if(bytes == -1) {
+            int errno = n.errno();
+            if(errno == n.sendBlockCode()) {
+                status.set(SSL_UNWRITTEN);
+                unwritten.set(writeBuffer);
+            }else {
+                log.error("Failed to establish postgresql connection, errno : {}", errno);
+                acceptor.close();
+            }
+        }else if(bytes < len) {
+            writeBuffer.truncate(bytes);
+            write(acceptor, writeBuffer);
+        }else {
+            writeBuffer.close();
+            status.set(SSL_WAIT);
+            if (acceptor.state().compareAndSet(Native.REGISTER_WRITE, Native.REGISTER_READ)) {
+                NetworkState workerState = acceptor.worker().state();
+                n.ctl(workerState.mux(), acceptor.socket(), Native.REGISTER_WRITE, Native.REGISTER_READ);
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
         }
     }
 
-    private void doReadSsl(Acceptor acceptor, MemorySegment ssl) {
-        try(ReadBuffer readBuffer = new ReadBuffer(BUFFER_SIZE)) {
-            int r = Openssl.sslRead(ssl, readBuffer.segment(), (int) BUFFER_SIZE);
-            if(r > 0) {
-                readBuffer.setWriteIndex(r);
-                handle(acceptor, readBuffer);
-            }else {
-                int err = Openssl.sslGetErr(ssl, r);
-                if(err == Constants.SSL_ERROR_WANT_WRITE) {
-                    rwStatus.updateAndGet(i -> i & SSL_RECV_WANT_WRITE);
-                    if(acceptor.state().compareAndSet(Native.REGISTER_READ, Native.REGISTER_READ_WRITE)) {
-                        NetworkState workerState = acceptor.worker().state();
-                        n.ctl(workerState.mux(), acceptor.socket(), Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
-                    }
-                }else if(err == Constants.SSL_ERROR_SYSCALL || err == Constants.SSL_ERROR_ZERO_RETURN) {
-                    acceptor.close();
-                }else if(err != Constants.SSL_ERROR_WANT_READ) {
-                    throw new FrameworkException(ExceptionType.NETWORK, "SSL read failed with err : %d".formatted(err));
-                }
-            }
-        }
-    }
 
-    private void doWrite(Acceptor acceptor, WriteBuffer writeBuffer) {
-        MemorySegment ssl = sslReference.get();
-        if(NativeUtil.checkNullPointer(ssl)) {
-            doWriteTcp(acceptor, writeBuffer);
-        }else {
-            doWriteSsl(acceptor, ssl, writeBuffer);
-        }
-    }
-
-    private void doWriteTcp(Acceptor acceptor, WriteBuffer writeBuffer) {
-        MemorySegment segment = writeBuffer.segment();
-        long len = segment.byteSize();
-        long bytes = n.send(acceptor.socket(), segment, len);
-        if(bytes == -1L) {
-            int errno = n.errno();
-            if(errno == n.sendBlockCode()) {
-                rwStatus.updateAndGet(i -> i & TCP_SEND_WANT_WRITE);
-                unwrittenBuffer.set(writeBuffer);
-                if(acceptor.state().compareAndSet(Native.REGISTER_READ, Native.REGISTER_READ_WRITE)) {
-                    NetworkState workerState = acceptor.worker().state();
-                    n.ctl(workerState.mux(), acceptor.socket(), Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
-                }
-            }else {
-                acceptor.close();
-            }
-        }else if(bytes < len) {
-            writeBuffer.truncate(bytes);
-            doWriteTcp(acceptor, writeBuffer);
-        }else {
-            writeBuffer.close();
-        }
-    }
-
-    private void doWriteSsl(Acceptor acceptor, MemorySegment ssl, WriteBuffer writeBuffer) {
-        MemorySegment segment = writeBuffer.segment();
-        int len = (int) segment.byteSize();
-        int r = Openssl.sslWrite(ssl, segment, len);
-        if(r <= 0) {
-            int err = Openssl.sslGetErr(ssl, r);
-            if(err == Constants.SSL_ERROR_WANT_WRITE) {
-                rwStatus.updateAndGet(i -> i & SSL_SEND_WANT_WRITE);
-                unwrittenBuffer.set(writeBuffer);
-                if(acceptor.state().compareAndSet(Native.REGISTER_READ, Native.REGISTER_READ_WRITE)) {
-                    NetworkState workerState = acceptor.worker().state();
-                    n.ctl(workerState.mux(), acceptor.socket(), Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
-                }
-            }else if(err == Constants.SSL_ERROR_WANT_READ) {
-                rwStatus.updateAndGet(i -> i & SSL_SEND_WANT_READ);
-                unwrittenBuffer.set(writeBuffer);
-            }else {
-                acceptor.close();
-            }
-        }else if(r < len) {
-            writeBuffer.truncate(r);
-            doWriteSsl(acceptor, ssl, writeBuffer);
-        }else {
-            writeBuffer.close();
-        }
-    }
-
-    private void handle(Acceptor acceptor, ReadBuffer readBuffer) {
-        WriteBuffer unread = unreadBuffer.getAndSet(null);
-        if(unread != null) {
-            unread.write(readBuffer.remaining());
-            try(ReadBuffer buffer = unread.toReadBuffer()) {
-                onReadBuffer(acceptor, buffer);
-            }
-        }else {
-            onReadBuffer(acceptor, readBuffer);
-        }
-    }
-
-    private void onReadBuffer(Acceptor acceptor, ReadBuffer readBuffer) {
-        switch (dataStatus.get()) {
-            case AWAIT_SSL -> processSsl(acceptor, readBuffer);
-        }
-        if(readBuffer.remains()) {
-            WriteBuffer writeBuffer = new WriteBuffer(BUFFER_SIZE);
-            writeBuffer.write(readBuffer.remaining());
-            unreadBuffer.set(writeBuffer);
-        }
-    }
-
-    private void processSsl(Acceptor acceptor, ReadBuffer readBuffer) {
-
-    }
 }

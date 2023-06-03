@@ -3,7 +3,8 @@ package cn.zorcc.log;
 import cn.zorcc.common.Clock;
 import cn.zorcc.common.network.Net;
 import cn.zorcc.common.network.NetworkConfig;
-import cn.zorcc.common.network.http.HttpCodec;
+import cn.zorcc.common.network.http.HttpDecoder;
+import cn.zorcc.common.network.http.HttpEncoder;
 import cn.zorcc.common.util.ThreadUtil;
 import cn.zorcc.common.wheel.Wheel;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +29,7 @@ public class NetTest {
         LoggerConsumer loggerConsumer = new LoggerConsumer();
         loggerConsumer.init();
         Runtime.getRuntime().addShutdownHook(Thread.ofVirtual().unstarted(loggerConsumer::shutdown));
-        Net net = new Net(HttpCodec::new, HttpTestHandler::new);
+        Net net = new Net(HttpEncoder::new, HttpDecoder::new, HttpTestHandler::new);
         Runtime.getRuntime().addShutdownHook(ThreadUtil.virtual("shutdown", net::shutdown));
         net.init();
     }
@@ -42,7 +43,7 @@ public class NetTest {
         networkConfig.setEnableSsl(true);
         networkConfig.setPublicKeyFile("C:/openresty-1.21.4.1-win64/conf/zorcc.cn+1.pem");
         networkConfig.setPrivateKeyFile("C:/openresty-1.21.4.1-win64/conf/zorcc.cn+1-key.pem");
-        Net net = new Net(HttpCodec::new, HttpTestHandler::new, networkConfig);
+        Net net = new Net(HttpEncoder::new, HttpDecoder::new, HttpTestHandler::new, networkConfig);
         Runtime.getRuntime().addShutdownHook(ThreadUtil.virtual("shutdown", net::shutdown));
         net.init();
     }

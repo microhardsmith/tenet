@@ -12,10 +12,6 @@ import java.util.concurrent.TimeUnit;
 public interface Protocol {
 
     /**
-     *   if current channel is available (could recv, send and not shutdown)
-     */
-    boolean available();
-    /**
      *   Indicates that worker can now read from this channel
      *   This method will only be invoked in worker thread
      */

@@ -7,6 +7,7 @@ import cn.zorcc.common.util.NativeUtil;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.charset.StandardCharsets;
 
 /**
  *   写直接内存缓冲区,非线程安全
@@ -20,6 +21,10 @@ public final class WriteBuffer implements AutoCloseable {
         this.arena = Arena.openConfined();
         this.segment = arena.allocateArray(ValueLayout.JAVA_BYTE, size);
         this.writeIndex = 0L;
+    }
+
+    public long writeIndex() {
+        return writeIndex;
     }
 
     public void writeByte(byte b) {
@@ -70,6 +75,16 @@ public final class WriteBuffer implements AutoCloseable {
         writeIndex = nextIndex;
     }
 
+    public void writeCStr(String str) {
+        byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
+        long nextIndex = ensureCapacity(bytes.length + 1);
+        for(int i = 0; i < bytes.length; i++) {
+            NativeUtil.setByte(segment, writeIndex + i, bytes[i]);
+        }
+        NativeUtil.setByte(segment, writeIndex + bytes.length, Constants.NUT);
+        writeIndex = nextIndex;
+    }
+
     public void write(MemorySegment memorySegment) {
         if(memorySegment != null) {
             long len = memorySegment.byteSize();
@@ -79,6 +94,13 @@ public final class WriteBuffer implements AutoCloseable {
         }else {
             throw new FrameworkException(ExceptionType.NATIVE, "Writing null segment");
         }
+    }
+
+    public void setInt(long index, int value) {
+        if(index + 4 > writeIndex) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
+        }
+        NativeUtil.setInt(segment, index, value);
     }
 
     /**

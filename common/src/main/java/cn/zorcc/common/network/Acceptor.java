@@ -11,7 +11,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class Acceptor {
     private static final Native n = Native.n;
     private final Socket socket;
-    private final Codec codec;
+    private final Encoder encoder;
+    private final Decoder decoder;
     private final Handler handler;
     private final Connector connector;
     private final Worker worker;
@@ -19,9 +20,10 @@ public final class Acceptor {
     private final AtomicInteger state = new AtomicInteger(Native.REGISTER_NONE);
     private final AtomicBoolean race = new AtomicBoolean(false);
 
-    public Acceptor(Socket socket, Codec codec, Handler handler, Connector connector, Worker worker, Loc loc) {
+    public Acceptor(Socket socket, Encoder encoder, Decoder decoder, Handler handler, Connector connector, Worker worker, Loc loc) {
         this.socket = socket;
-        this.codec = codec;
+        this.encoder = encoder;
+        this.decoder = decoder;
         this.handler = handler;
         this.connector = connector;
         this.worker = worker;
@@ -50,7 +52,7 @@ public final class Acceptor {
      */
     public void toChannel(Protocol protocol) {
         if(race.compareAndSet(false, true)) {
-            Channel channel = new Channel(socket, state, codec, handler, protocol, loc, worker);
+            Channel channel = new Channel(socket, state, encoder, decoder, handler, protocol, loc, worker);
             worker.state().socketMap().put(socket, channel);
             int from = state.getAndSet(Native.REGISTER_READ);
             if(from != Native.REGISTER_READ) {

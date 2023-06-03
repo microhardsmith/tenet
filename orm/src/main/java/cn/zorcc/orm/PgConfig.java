@@ -6,7 +6,7 @@ import cn.zorcc.orm.pg.PgConstants;
 import lombok.Data;
 
 @Data
-public class DatabaseConfig {
+public class PgConfig {
     /**
      * 是否需要连接数据库
      */

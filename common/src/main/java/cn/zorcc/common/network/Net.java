@@ -54,20 +54,22 @@ public class Net implements LifeCycle {
     private final Master master;
     private final Worker[] workers;
     private final AtomicLong counter = new AtomicLong(0L);
-    private final Supplier<Codec> codecSupplier;
+    private final Supplier<Encoder> encoderSupplier;
+    private final Supplier<Decoder> decoderSupplier;
     private final Supplier<Handler> handlerSupplier;
     private final Supplier<Connector> connectorSupplier;
     private final MemorySegment sslClientCtx;
     private final MemorySegment sslServerCtx;
 
-    public Net(Supplier<Codec> codecSupplier, Supplier<Handler> handlerSupplier, NetworkConfig config) {
+    public Net(Supplier<Encoder> e, Supplier<Decoder> d, Supplier<Handler> h, NetworkConfig config) {
         if(!instanceFlag.compareAndSet(false, true)) {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.SINGLETON_MSG);
         }
         validateNetworkConfig(config);
         this.config = config;
-        this.codecSupplier = codecSupplier;
-        this.handlerSupplier = handlerSupplier;
+        this.encoderSupplier = e;
+        this.decoderSupplier = d;
+        this.handlerSupplier = h;
         this.sslClientCtx = Openssl.sslCtxNew(Openssl.tlsClientMethod());
         Openssl.configureCtx(sslClientCtx);
         Openssl.setVerify(sslClientCtx, Constants.SSL_VERIFY_PEER, NativeUtil.NULL_POINTER);
@@ -111,12 +113,16 @@ public class Net implements LifeCycle {
     /**
      *   Create Net instance using default NetworkConfig
      */
-    public Net(Supplier<Codec> codecSupplier, Supplier<Handler> handlerSupplier) {
-        this(codecSupplier, handlerSupplier, new NetworkConfig());
+    public Net(Supplier<Encoder> e, Supplier<Decoder> d, Supplier<Handler> h) {
+        this(e, d, h, new NetworkConfig());
     }
 
-    public Supplier<Codec> codecSupplier() {
-        return codecSupplier;
+    public Supplier<Encoder> encoderSupplier() {
+        return encoderSupplier;
+    }
+
+    public Supplier<Decoder> decoderSupplier() {
+        return decoderSupplier;
     }
 
     public Supplier<Handler> handlerSupplier() {
@@ -174,11 +180,11 @@ public class Net implements LifeCycle {
     /**
      *   Launch a client connect operation for remote server
      */
-    public void connect(Loc loc, Codec codec, Handler handler, Supplier<Connector> connectorSupplier, long timeout, TimeUnit timeUnit) {
+    public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Supplier<Connector> connectorSupplier, long timeout, TimeUnit timeUnit) {
         Socket socket = n.createSocket(config);
         Worker worker = nextWorker();
         Connector connector = connectorSupplier.get();
-        Acceptor acceptor = new Acceptor(socket, codec, handler, connector, worker, loc);
+        Acceptor acceptor = new Acceptor(socket, encoder, decoder, handler, connector, worker, loc);
         try(Arena arena = Arena.openConfined()) {
             MemorySegment sockAddr = n.createSockAddr(loc, arena);
             if(n.connect(socket, sockAddr) == 0) {
@@ -200,8 +206,8 @@ public class Net implements LifeCycle {
     /**
      *   Launch a client connect operation for remote server, using default timeout and time-unit
      */
-    public void connect(Loc loc, Codec codec, Handler handler, Supplier<Connector> connectorSupplier) {
-        connect(loc, codec, handler, connectorSupplier, DEFAULT_CONNECT_TIMEOUT, DEFAULT_TIME_UNIT);
+    public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Supplier<Connector> connectorSupplier) {
+        connect(loc, encoder, decoder, handler, connectorSupplier, DEFAULT_CONNECT_TIMEOUT, DEFAULT_TIME_UNIT);
     }
 
     /**
@@ -211,10 +217,11 @@ public class Net implements LifeCycle {
         Socket socket = clientSocket.socket();
         Loc loc = clientSocket.loc();
         Worker worker = nextWorker();
-        Codec codec = codecSupplier.get();
+        Encoder encoder = encoderSupplier.get();
+        Decoder decoder = decoderSupplier.get();
         Handler handler = handlerSupplier.get();
         Connector connector = connectorSupplier.get();
-        Acceptor acceptor = new Acceptor(socket, codec, handler, connector, worker, loc);
+        Acceptor acceptor = new Acceptor(socket, encoder, decoder, handler, connector, worker, loc);
         mount(acceptor);
     }
 

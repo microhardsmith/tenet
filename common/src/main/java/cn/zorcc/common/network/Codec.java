@@ -14,11 +14,11 @@ public interface Codec {
      *   Encode a specific object into a memory-segment
      *   This function runs in worker thread
      */
-    void encode(WriteBuffer buffer, Object o);
+    void encode(WriteBuffer writeBuffer, Object o);
 
     /**
-     *   Decode a memory-segment into a object, could be null
-     *   if after decoding, readBuffer's readerIndex is not equal to writeIndex, that means there is data remains in the socket, will be retrieved in the next loop
+     *   Decode a memory-segment into a object, could return null indicates the readBuffer is not big enough for reading
+     *   if after decoding, readBuffer's readerIndex is not equal to writeIndex, that means there are some data remaining in the socket, then they will be retrieved in the next loop
      *   This function runs in worker thread
      */
     Object decode(ReadBuffer readBuffer);

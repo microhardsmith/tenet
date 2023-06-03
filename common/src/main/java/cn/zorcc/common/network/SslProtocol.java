@@ -22,7 +22,6 @@ import java.util.concurrent.locks.ReentrantLock;
 public class SslProtocol implements Protocol {
     private static final Native n = Native.n;
     private final MemorySegment ssl;
-    private final AtomicBoolean availableFlag = new AtomicBoolean(true);
     private final AtomicBoolean shutdownFlag = new AtomicBoolean(false);
     private final AtomicBoolean closeFlag = new AtomicBoolean(false);
     private final Lock lock = new ReentrantLock();
@@ -35,11 +34,6 @@ public class SslProtocol implements Protocol {
 
     public SslProtocol(MemorySegment ssl) {
         this.ssl = ssl;
-    }
-
-    @Override
-    public boolean available() {
-        return availableFlag.get();
     }
 
     /**
@@ -159,8 +153,8 @@ public class SslProtocol implements Protocol {
         lock.lock();
         try{
             if(shutdownFlag.compareAndSet(false, true)) {
-                availableFlag.set(false);
                 performShutdown(channel);
+                channel.handler().onRemoved(channel);
                 Wheel.wheel().addJob(() -> doClose(channel), timeout, timeUnit);
             }
         }finally {
@@ -197,8 +191,10 @@ public class SslProtocol implements Protocol {
         lock.lock();
         try{
             if(closeFlag.compareAndSet(false, true)) {
-                availableFlag.set(false);
-                channel.writerThread().interrupt();
+                if(shutdownFlag.compareAndSet(false, true)) {
+                    channel.handler().onRemoved(channel);
+                    channel.writerThread().interrupt();
+                }
                 Socket socket = channel.socket();
                 NetworkState workerState = channel.worker().state();
                 workerState.socketMap().remove(socket);
