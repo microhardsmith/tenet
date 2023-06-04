@@ -53,6 +53,7 @@
 
     <lombok.version>1.18.26</lombok.version>
     <slf4j.version>2.0.6</slf4j.version>
+    <scram.version>2.1</scram.version>
     <netty.version>4.1.86.Final</netty.version>
     <jctools.version>4.0.1</jctools.version>
     <jackson.version>2.14.1</jackson.version>

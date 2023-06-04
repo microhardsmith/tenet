@@ -82,6 +82,7 @@ public class PgConstants {
     public static final byte CLOSE_COMPLETE = '3';
     public static final byte NO_DATA = 'n';
     public static final byte PARAMETER_STATUE = 'S';
+    public static final byte FLUSH = 'H';
     public static final byte TERMINATE = 'X';
 
     public static final String USER = "user";

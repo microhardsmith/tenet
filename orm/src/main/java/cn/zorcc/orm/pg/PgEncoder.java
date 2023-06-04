@@ -18,10 +18,73 @@ public class PgEncoder implements Encoder {
             case PgStartUpMsg pgStartUpMsg -> encodePgStartUpMsg(writeBuffer, pgStartUpMsg);
             case PgAuthSaslInitialResponseMsg pgAuthSaslInitialResponseMsg -> encodeSaslInitialResponseMsg(writeBuffer, pgAuthSaslInitialResponseMsg);
             case PgAuthSaslResponseMsg pgAuthSaslResponseMsg -> encodeSaslResponseMsg(writeBuffer, pgAuthSaslResponseMsg);
+            case PgQueryMsg pgQueryMsg -> encodeQueryMsg(writeBuffer, pgQueryMsg);
+            case PgPasswordMsg pgPasswordMsg -> encodePasswordMsg(writeBuffer, pgPasswordMsg);
+            case PgParseMsg pgParseMsg -> encodeParseMsg(writeBuffer, pgParseMsg);
+            case PgDescribeMsg pgDescribeMsg -> encodeDescribeMsg(writeBuffer, pgDescribeMsg);
+            case PgFlushMsg pgFlushMsg -> encodePgFlushMsg(writeBuffer);
+            case PgExecuteMsg pgExecuteMsg -> encodePgExecuteMsg(writeBuffer, pgExecuteMsg);
             case PgSyncMsg pgSyncMsg -> encodePgSyncMsg(writeBuffer);
             case PgTerminateMsg pgTerminateMsg -> encodePgTerminateMsg(writeBuffer);
             default -> throw new FrameworkException(ExceptionType.POSTGRESQL, Constants.UNREACHED);
         }
+    }
+
+    private void encodeDescribeMsg(WriteBuffer writeBuffer, PgDescribeMsg pgDescribeMsg) {
+        writeBuffer.writeByte(PgConstants.DESCRIBE);
+        long currentIndex = writeBuffer.writeIndex();
+        writeBuffer.writeInt(Integer.MAX_VALUE);
+        writeBuffer.writeByte(pgDescribeMsg.type());
+        writeBuffer.writeCStr(pgDescribeMsg.name());
+        writeBuffer.setInt(currentIndex, (int) (writeBuffer.writeIndex() - currentIndex));
+    }
+
+    private void encodePgExecuteMsg(WriteBuffer writeBuffer, PgExecuteMsg pgExecuteMsg) {
+        writeBuffer.writeByte(PgConstants.EXECUTE);
+        long currentIndex = writeBuffer.writeIndex();
+        writeBuffer.writeInt(Integer.MAX_VALUE);
+        writeBuffer.writeCStr(pgExecuteMsg.portal());
+        writeBuffer.writeInt(pgExecuteMsg.maxRowsToReturn());
+        writeBuffer.setInt(currentIndex, (int) (writeBuffer.writeIndex() - currentIndex));
+    }
+
+    private void encodePgFlushMsg(WriteBuffer writeBuffer) {
+        writeBuffer.writeByte(PgConstants.FLUSH);
+        writeBuffer.writeInt(4);
+    }
+
+    private void encodeParseMsg(WriteBuffer writeBuffer, PgParseMsg pgParseMsg) {
+        writeBuffer.writeByte(PgConstants.PARSE);
+        long currentIndex = writeBuffer.writeIndex();
+        writeBuffer.writeInt(Integer.MAX_VALUE);
+        writeBuffer.writeCStr(pgParseMsg.name());
+        writeBuffer.writeCStr(pgParseMsg.sql());
+        short len = pgParseMsg.len();
+        writeBuffer.writeShort(len);
+        if(len > 0) {
+            for (int oid : pgParseMsg.objectIds()) {
+                writeBuffer.writeInt(oid);
+            }
+        }
+        writeBuffer.setInt(currentIndex, (int) (writeBuffer.writeIndex() - currentIndex));
+    }
+
+    private void encodePasswordMsg(WriteBuffer writeBuffer, PgPasswordMsg pgPasswordMsg) {
+        String password = pgPasswordMsg.password();
+        writeBuffer.writeByte(PgConstants.PASSWORD);
+        long currentIndex = writeBuffer.writeIndex();
+        writeBuffer.writeInt(Integer.MAX_VALUE);
+        writeBuffer.writeCStr(password);
+        writeBuffer.setInt(currentIndex, (int) (writeBuffer.writeIndex() - currentIndex));
+    }
+
+    private void encodeQueryMsg(WriteBuffer writeBuffer, PgQueryMsg pgQueryMsg) {
+        String sql = pgQueryMsg.sql();
+        writeBuffer.writeByte(PgConstants.QUERY);
+        long currentIndex = writeBuffer.writeIndex();
+        writeBuffer.writeInt(Integer.MAX_VALUE);
+        writeBuffer.writeCStr(sql);
+        writeBuffer.setInt(currentIndex, (int) (writeBuffer.writeIndex() - currentIndex));
     }
 
     private void encodePgTerminateMsg(WriteBuffer writeBuffer) {
@@ -36,7 +99,8 @@ public class PgEncoder implements Encoder {
 
     private void encodePgStartUpMsg(WriteBuffer buffer, PgStartUpMsg pgStartUpMsg) {
         PgConfig pgConfig = pgStartUpMsg.pgConfig();
-        buffer.writeInt(0);
+        long currentIndex = buffer.writeIndex();
+        buffer.writeInt(Integer.MAX_VALUE);
         buffer.writeInt(3 << 16);
         buffer.writeCStr(PgConstants.USER);
         buffer.writeCStr(pgConfig.getUsername());
@@ -56,14 +120,15 @@ public class PgEncoder implements Encoder {
         buffer.writeCStr(PgConstants.FLOAT_PRECISION);
         buffer.writeCStr(PgConstants.DEFAULT_FLOAT_PRECISION);
         buffer.writeByte(Constants.NUT);
-        buffer.setInt(0L, (int) buffer.writeIndex());
+        buffer.setInt(currentIndex, (int) (buffer.writeIndex() - currentIndex));
     }
 
     private void encodeSaslInitialResponseMsg(WriteBuffer writeBuffer, PgAuthSaslInitialResponseMsg saslInitialMsg) {
         String mechanism = saslInitialMsg.mechanism();
         String clientFirstMsg = saslInitialMsg.clientFirstMsg();
         writeBuffer.writeByte(PgConstants.SASL_RESPONSE);
-        writeBuffer.writeInt(0);
+        long currentIndex = writeBuffer.writeIndex();
+        writeBuffer.writeInt(Integer.MAX_VALUE);
         writeBuffer.writeCStr(mechanism);
         if(clientFirstMsg == null || clientFirstMsg.isEmpty()) {
             writeBuffer.writeInt(-1);
@@ -72,7 +137,7 @@ public class PgEncoder implements Encoder {
             writeBuffer.writeInt(bytes.length);
             writeBuffer.writeBytes(bytes);
         }
-        writeBuffer.setInt(1L, (int) writeBuffer.writeIndex() - 1);
+        writeBuffer.setInt(currentIndex, (int) (writeBuffer.writeIndex() - currentIndex));
     }
 
     private void encodeSaslResponseMsg(WriteBuffer writeBuffer, PgAuthSaslResponseMsg saslResponseMsg) {

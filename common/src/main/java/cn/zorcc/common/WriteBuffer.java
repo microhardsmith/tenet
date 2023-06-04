@@ -34,6 +34,9 @@ public final class WriteBuffer implements AutoCloseable {
     }
 
     public void writeBytes(byte... bytes) {
+        if(bytes.length == 0) {
+            return ;
+        }
         long nextIndex = ensureCapacity(bytes.length);
         for(int i = 0; i < bytes.length; i++) {
             NativeUtil.setByte(segment, writeIndex + i, bytes[i]);
