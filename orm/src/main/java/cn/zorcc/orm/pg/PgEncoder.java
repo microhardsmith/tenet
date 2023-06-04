@@ -10,21 +10,32 @@ import cn.zorcc.orm.PgConfig;
 import java.nio.charset.StandardCharsets;
 
 public class PgEncoder implements Encoder {
-    private final PgConfig pgConfig;
 
-    public PgEncoder(PgConfig pgConfig) {
-        this.pgConfig = pgConfig;
-    }
+    @SuppressWarnings("unused")
     @Override
     public void encode(WriteBuffer writeBuffer, Object o) {
         switch (o) {
-            case PgStartUpMsg ignored -> encodePgStartUpMsg(writeBuffer);
-            case PgAuthSaslInitialMsg saslInitialMsg -> encodeSaslInitialMsg(writeBuffer, saslInitialMsg);
+            case PgStartUpMsg pgStartUpMsg -> encodePgStartUpMsg(writeBuffer, pgStartUpMsg);
+            case PgAuthSaslInitialResponseMsg pgAuthSaslInitialResponseMsg -> encodeSaslInitialResponseMsg(writeBuffer, pgAuthSaslInitialResponseMsg);
+            case PgAuthSaslResponseMsg pgAuthSaslResponseMsg -> encodeSaslResponseMsg(writeBuffer, pgAuthSaslResponseMsg);
+            case PgSyncMsg pgSyncMsg -> encodePgSyncMsg(writeBuffer);
+            case PgTerminateMsg pgTerminateMsg -> encodePgTerminateMsg(writeBuffer);
             default -> throw new FrameworkException(ExceptionType.POSTGRESQL, Constants.UNREACHED);
         }
     }
 
-    private void encodePgStartUpMsg(WriteBuffer buffer) {
+    private void encodePgTerminateMsg(WriteBuffer writeBuffer) {
+        writeBuffer.writeByte(PgConstants.TERMINATE);
+        writeBuffer.writeInt(4);
+    }
+
+    private void encodePgSyncMsg(WriteBuffer writeBuffer) {
+        writeBuffer.writeByte(PgConstants.SYNC);
+        writeBuffer.writeInt(4);
+    }
+
+    private void encodePgStartUpMsg(WriteBuffer buffer, PgStartUpMsg pgStartUpMsg) {
+        PgConfig pgConfig = pgStartUpMsg.pgConfig();
         buffer.writeInt(0);
         buffer.writeInt(3 << 16);
         buffer.writeCStr(PgConstants.USER);
@@ -48,7 +59,7 @@ public class PgEncoder implements Encoder {
         buffer.setInt(0L, (int) buffer.writeIndex());
     }
 
-    private void encodeSaslInitialMsg(WriteBuffer writeBuffer, PgAuthSaslInitialMsg saslInitialMsg) {
+    private void encodeSaslInitialResponseMsg(WriteBuffer writeBuffer, PgAuthSaslInitialResponseMsg saslInitialMsg) {
         String mechanism = saslInitialMsg.mechanism();
         String clientFirstMsg = saslInitialMsg.clientFirstMsg();
         writeBuffer.writeByte(PgConstants.SASL_RESPONSE);
@@ -62,5 +73,13 @@ public class PgEncoder implements Encoder {
             writeBuffer.writeBytes(bytes);
         }
         writeBuffer.setInt(1L, (int) writeBuffer.writeIndex() - 1);
+    }
+
+    private void encodeSaslResponseMsg(WriteBuffer writeBuffer, PgAuthSaslResponseMsg saslResponseMsg) {
+        int len = saslResponseMsg.len();
+        byte[] bytes = saslResponseMsg.bytes();
+        writeBuffer.writeByte(PgConstants.SASL_RESPONSE);
+        writeBuffer.writeInt(4 + len);
+        writeBuffer.writeBytes(bytes);
     }
 }

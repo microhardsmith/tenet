@@ -39,3 +39,6 @@ hs_err_pid*
 #log files
 *.log
 
+#macOS
+*.DS_Store
+

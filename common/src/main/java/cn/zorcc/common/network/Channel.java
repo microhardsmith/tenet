@@ -1,6 +1,7 @@
 package cn.zorcc.common.network;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.Mix;
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
@@ -8,6 +9,7 @@ import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.ThreadUtil;
 
+import java.util.List;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TransferQueue;
@@ -58,13 +60,24 @@ public final class Channel {
             try{
                 while (!currentThread.isInterrupted()) {
                     Object msg = queue.take();
-                    if(msg instanceof Shutdown(long timeout, TimeUnit timeUnit)) {
-                        protocol.doShutdown(this, timeout, timeUnit);
-                        currentThread.interrupt();
-                    }else {
-                        try(WriteBuffer writeBuffer = new WriteBuffer(Net.WRITE_BUFFER_SIZE)) {
-                            encoder.encode(writeBuffer, msg);
-                            protocol.doWrite(this, writeBuffer);
+                    switch (msg) {
+                        case Shutdown(long timeout, TimeUnit timeUnit) -> {
+                            protocol.doShutdown(this, timeout, timeUnit);
+                            currentThread.interrupt();
+                        }
+                        case Mix(Object[] objects) -> {
+                            try(WriteBuffer writeBuffer = new WriteBuffer(Net.WRITE_BUFFER_SIZE)) {
+                                for (Object o : objects) {
+                                    encoder.encode(writeBuffer, o);
+                                }
+                                protocol.doWrite(this, writeBuffer);
+                            }
+                        }
+                        default -> {
+                            try(WriteBuffer writeBuffer = new WriteBuffer(Net.WRITE_BUFFER_SIZE)) {
+                                encoder.encode(writeBuffer, msg);
+                                protocol.doWrite(this, writeBuffer);
+                            }
                         }
                     }
                 }

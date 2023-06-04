@@ -1,5 +1,9 @@
 package cn.zorcc.orm.pg;
 
-public record PgStartUpMsg() {
+import cn.zorcc.orm.PgConfig;
+
+public record PgStartUpMsg(
+        PgConfig pgConfig
+) {
 
 }

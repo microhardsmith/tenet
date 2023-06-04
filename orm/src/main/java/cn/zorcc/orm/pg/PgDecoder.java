@@ -64,10 +64,15 @@ public class PgDecoder implements Decoder {
                 return decodeStatusResponseMsg(readBuffer, msgLength, true);
             }
             case PgConstants.CLOSE_COMPLETE -> {
-
+                return decodeCloseCompleteMsg(msgLength);
             }
             default -> throw new FrameworkException(ExceptionType.POSTGRESQL, "Unrecognized postgresql message type");
         }
+    }
+
+    private Object decodeCloseCompleteMsg(int msgLength) {
+        checkLength(msgLength, 4);
+        return PgCloseCompleteMsg.INSTANCE;
     }
 
     private Object decodeEmptyQueryResponse(int msgLength) {

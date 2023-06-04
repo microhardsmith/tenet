@@ -1,6 +1,6 @@
 package cn.zorcc.orm.pg;
 
-public record PgAuthSaslInitialMsg(
+public record PgAuthSaslInitialResponseMsg(
         String mechanism,
         String clientFirstMsg
 ) {

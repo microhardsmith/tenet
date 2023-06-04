@@ -1,24 +1,18 @@
 package cn.zorcc.orm;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.orm.pg.PgConstants;
 import lombok.Data;
 
 @Data
 public class PgConfig {
-    /**
-     * 是否需要连接数据库
-     */
-    private boolean enabled = true;
+    private static final Loc DEFAULT_LOC = new Loc("127.0.0.1", 5432);
     /**
      * 数据库地址
      */
-    private String ip = "127.0.0.1";
-    /**
-     * 数据库端口
-     */
-    private Integer port = 5432;
+    private Loc loc = DEFAULT_LOC;
     /**
      * 数据库用户名
      */
