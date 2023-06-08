@@ -6,12 +6,9 @@ import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.wheel.Wheel;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.MemorySegment;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -20,15 +17,6 @@ import java.util.concurrent.locks.LockSupport;
 @Slf4j
 public final class TcpProtocol implements Protocol {
     private static final Native n = Native.n;
-    /**
-     *   Make sure that doShutdown() method will only be invoked once, by any user thread
-     */
-    private final AtomicBoolean shutdownFlag = new AtomicBoolean(false);
-    /**
-     *   Make sure that doClose() method will only be invoked once, by worker or by wheel
-     *   there is no need to cancel the timeout wheelJob manually since there are no side effects
-     */
-    private final AtomicBoolean closeFlag = new AtomicBoolean(false);
 
     @Override
     public void canRead(Channel channel, ReadBuffer readBuffer) {
@@ -37,7 +25,7 @@ public final class TcpProtocol implements Protocol {
             readBuffer.setWriteIndex(readableBytes);
             channel.onReadBuffer(readBuffer);
         }else if(readableBytes == 0) {
-            doClose(channel);
+            channel.close();
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, "Unable to recv, errno : %d".formatted(n.errno()));
         }
@@ -46,7 +34,7 @@ public final class TcpProtocol implements Protocol {
     @Override
     public void canWrite(Channel channel) {
         if(channel.state().compareAndSet(Native.REGISTER_READ_WRITE, Native.REGISTER_READ)) {
-            n.ctl(channel.worker().state().mux(), channel.socket(), Native.REGISTER_READ_WRITE, Native.REGISTER_READ);
+            n.ctl(channel.worker().mux(), channel.socket(), Native.REGISTER_READ_WRITE, Native.REGISTER_READ);
             LockSupport.unpark(channel.writerThread());
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -65,15 +53,14 @@ public final class TcpProtocol implements Protocol {
             if(errno == n.sendBlockCode()) {
                 // current TCP write buffer is full, wait until writable again
                 if(channel.state().compareAndSet(Native.REGISTER_READ, Native.REGISTER_READ_WRITE)) {
-                    NetworkState workerState = channel.worker().state();
-                    n.ctl(workerState.mux(), socket, Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
+                    n.ctl(channel.worker().mux(), socket, Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
                     LockSupport.park();
                     doWrite(channel, writeBuffer);
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
                 }
             }else {
-                doClose(channel);
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to write, errno : %d".formatted(errno));
             }
         }else if(bytes < len){
             // only write a part of the segment, wait for next loop
@@ -83,29 +70,12 @@ public final class TcpProtocol implements Protocol {
     }
 
     @Override
-    public void doShutdown(Channel channel, long timeout, TimeUnit timeUnit) {
-        if(shutdownFlag.compareAndSet(false ,true)) {
-            n.shutdownWrite(channel.socket());
-            channel.handler().onRemoved(channel);
-            Wheel.wheel().addJob(() -> doClose(channel), timeout, timeUnit);
-        }
+    public void doShutdown(Channel channel) {
+        n.shutdownWrite(channel.socket());
     }
 
     @Override
     public void doClose(Channel channel) {
-        if(closeFlag.compareAndSet(false, true)) {
-            if(shutdownFlag.compareAndSet(false, true)) {
-                channel.handler().onRemoved(channel);
-                channel.writerThread().interrupt();
-            }
-            Socket socket = channel.socket();
-            NetworkState workerState = channel.worker().state();
-            workerState.socketMap().remove(socket, channel);
-            int current = channel.state().getAndSet(Native.REGISTER_NONE);
-            if(current > 0) {
-                n.ctl(workerState.mux(), socket, current, Native.REGISTER_NONE);
-            }
-            n.closeSocket(socket);
-        }
+        n.closeSocket(channel.socket());
     }
 }

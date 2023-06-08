@@ -5,13 +5,11 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Channel;
 import cn.zorcc.common.network.Handler;
-import cn.zorcc.common.util.ThreadUtil;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 public class PgHandler implements Handler {
@@ -24,7 +22,7 @@ public class PgHandler implements Handler {
 
     @Override
     public void onConnected(Channel channel) {
-        pgManager.registerConn(new PgConn(available, msgQueue));
+        pgManager.registerConn(new PgConn(pgManager, channel, available, msgQueue));
         channel.send(new PgStartUpMsg(pgManager.pgConfig()));
     }
 

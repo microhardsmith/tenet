@@ -8,15 +8,15 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.ThreadUtil;
+import cn.zorcc.common.wheel.Wheel;
 
-import java.util.List;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TransferQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class Channel {
+    private static final Native n = Native.n;
     private final Socket socket;
     private final AtomicInteger state;
     private final Encoder encoder;
@@ -40,11 +40,6 @@ public final class Channel {
      *   Writer task queue
      */
     private final TransferQueue<Object> queue = new LinkedTransferQueue<>();
-    /**
-     *   Whether shutdown method has been called, this shutdownFlag is different from protocol's
-     *   after shutdown method called, the protocol doShutdown() will be called by writerThread
-     */
-    private final AtomicBoolean shutdownFlag = new AtomicBoolean(false);
 
     public Channel(Socket socket, AtomicInteger state, Encoder e, Decoder d, Handler h, Protocol protocol, Loc loc, Worker worker) {
         this.socket = socket;
@@ -62,7 +57,8 @@ public final class Channel {
                     Object msg = queue.take();
                     switch (msg) {
                         case Shutdown(long timeout, TimeUnit timeUnit) -> {
-                            protocol.doShutdown(this, timeout, timeUnit);
+                            protocol.doShutdown(this);
+                            Wheel.wheel().addJob(() -> worker.submitTask(new Task(Task.TaskType.CLOSE_CHANNEL, null, this, null)), timeout, timeUnit);
                             currentThread.interrupt();
                         }
                         case Mix(Object[] objects) -> {
@@ -119,7 +115,6 @@ public final class Channel {
      *   Deal with incoming ReadBuffer, should only be accessed in its worker-thread
      */
     public void onReadBuffer(ReadBuffer buffer) {
-        assert Worker.inWorkerThread();
         if(this.tempBuffer != null) {
             // last time readBuffer read is not complete
             this.tempBuffer.write(buffer.remaining());
@@ -172,13 +167,11 @@ public final class Channel {
      *   Shutdown current channel's write side, this method could be invoked from any thread
      *   Note that shutdown current channel doesn't block the recv operation, the other side will recv 0 and close the socket
      *   in fact, socket will only be closed when worker thread recv EOF from remote peer
+     *   Calling shutdown for multiple times doesn't matter since writerThread will exit when handling the first shutdown signal
      */
     public void shutdown(Shutdown shutdown) {
-        // make sure the shutdown method will be only called once
-        if(shutdownFlag.compareAndSet(false, true)) {
-            if (!queue.offer(shutdown)) {
-                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-            }
+        if (!queue.offer(shutdown)) {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
@@ -187,5 +180,27 @@ public final class Channel {
      */
     public void shutdown() {
         shutdown(Shutdown.DEFAULT);
+    }
+
+    /**
+     *   Close current channel, release it from the worker and clean up
+     */
+    public void close() {
+        if(Thread.currentThread() != worker.thread()) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Not in worker thread");
+        }
+        if(worker.socketMap().remove(socket, this)) {
+            // There is no side-effect if the writerThread has been interrupted by shutdown method
+            writerThread.interrupt();
+            int current = state.getAndSet(Native.REGISTER_NONE);
+            if(current > 0) {
+                n.ctl(worker.mux(), socket, current, Native.REGISTER_NONE);
+            }
+            protocol.doClose(this);
+            handler.onRemoved(this);
+            if (worker.counter().decrementAndGet() == 0L) {
+                worker.submitTask(new Task(Task.TaskType.POSSIBLE_SHUTDOWN, null, null, null));
+            }
+        }
     }
 }

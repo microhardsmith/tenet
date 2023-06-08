@@ -6,14 +6,11 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Net;
 import cn.zorcc.common.pojo.Loc;
-import cn.zorcc.common.util.ThreadUtil;
 import cn.zorcc.orm.PgConfig;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TransferQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  *   The main postgresql manager for handling all incoming msg
@@ -22,7 +19,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class PgManager implements LifeCycle {
     private final Net net;
     private final PgConfig pgConfig;
-    private final BlockingQueue<PgConn> connPool = new LinkedTransferQueue<>();
+    private final TransferQueue<PgConn> connPool = new LinkedTransferQueue<>();
+
     public PgManager(Net net, PgConfig pgConfig) {
         this.net = net;
         this.pgConfig = pgConfig;
@@ -37,6 +35,17 @@ public final class PgManager implements LifeCycle {
             throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
         }
     }
+
+    public PgConn get() {
+        try {
+            return connPool.take();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new FrameworkException(ExceptionType.POSTGRESQL, "thread interrupt", e);
+        }
+    }
+
+
 
     @Override
     public void init() {

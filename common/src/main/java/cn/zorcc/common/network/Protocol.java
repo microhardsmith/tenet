@@ -3,8 +3,6 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
 
-import java.util.concurrent.TimeUnit;
-
 /**
  *   Network protocol interface, protocol determines the operation that master and worker will perform on the target channel
  *   Default will be TcpProtocol, if using TLS, then SslProtocol could be used.
@@ -35,13 +33,11 @@ public interface Protocol {
      *   Note that shutdown current channel doesn't block the recv operation, remote peer will recv EOF and close the socket
      *   shutdown is not much irrelevant to close operation, since shutdown and recv EOF could both happen at any time
      */
-    void doShutdown(Channel channel, long timeout, TimeUnit timeUnit);
+    void doShutdown(Channel channel);
 
     /**
      *   Perform the actual close operation, this method is a internal procedure made for convenience
-     *   in fact, there should be two scenarios where doClose() would be invoked:
-     *   1. a normally shutdown() was called (PS: could be from both sides) and the worker thread read EOF from peer, then doClose() would be invoked to release the fd
-     *   2. after a doShutdown() called, the remote peer is still not willing to close the connection, which is abnormal and could be an attack, the WheelJob will close the fd anyway after a timeout
+     *   Actual close operation should only be invoked in worker thread
      */
     void doClose(Channel channel);
 }

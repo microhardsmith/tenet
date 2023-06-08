@@ -13,8 +13,8 @@ public class TcpConnector implements Connector {
     private static final Native n = Native.n;
 
     @Override
-    public void shouldClose(Socket socket) {
-        n.closeSocket(socket);
+    public void doClose(Acceptor acceptor) {
+        n.closeSocket(acceptor.socket());
     }
 
     @Override

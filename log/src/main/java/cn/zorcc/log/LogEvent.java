@@ -25,5 +25,9 @@ public record LogEvent (
      *  used for flush
      */
     public static final LogEvent flushEvent = new LogEvent(true, Long.MIN_VALUE, null, null, null, null, null, null);
+    /**
+     *  used for shutdown
+     */
+    public static final LogEvent shutdownEvent = new LogEvent(false, Long.MIN_VALUE, null, null, null, null, null, null);
 
 }

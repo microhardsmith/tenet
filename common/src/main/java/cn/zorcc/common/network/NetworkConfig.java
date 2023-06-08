@@ -53,4 +53,12 @@ public class NetworkConfig {
      *  多路复用事件数组长度
      */
     private Integer maxEvents = 64;
+    /**
+     *  多路复用单次超时时间，单位毫秒
+     */
+    private Integer muxTimeout = 25;
+    /**
+     *  优雅停机超时时间,单位秒
+     */
+    private Long shutdownTimeout = 10L;
 }

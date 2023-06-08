@@ -1,5 +1,6 @@
 package cn.zorcc.common.network;
 
+import cn.zorcc.common.Clock;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.LifeCycle;
 import cn.zorcc.common.enums.ExceptionType;
@@ -7,6 +8,7 @@ import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.ConfigUtil;
 import cn.zorcc.common.util.NativeUtil;
+import cn.zorcc.common.util.ThreadUtil;
 import cn.zorcc.common.wheel.Wheel;
 import lombok.extern.slf4j.Slf4j;
 
@@ -49,9 +51,8 @@ public class Net implements LifeCycle {
 
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
     private static final Native n = Native.n;
-    private static final Wheel wheel = Wheel.wheel();
+
     private final NetworkConfig config;
-    private final Master master;
     private final Worker[] workers;
     private final AtomicLong counter = new AtomicLong(0L);
     private final Supplier<Encoder> encoderSupplier;
@@ -60,6 +61,11 @@ public class Net implements LifeCycle {
     private final Supplier<Connector> connectorSupplier;
     private final MemorySegment sslClientCtx;
     private final MemorySegment sslServerCtx;
+    private final Socket socket;
+    private final Mux mux;
+    private final MemorySegment events;
+    private final Thread thread;
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
     public Net(Supplier<Encoder> e, Supplier<Decoder> d, Supplier<Handler> h, NetworkConfig config) {
         if(!instanceFlag.compareAndSet(false, true)) {
@@ -103,11 +109,46 @@ public class Net implements LifeCycle {
             this.sslServerCtx = null;
             this.connectorSupplier = TcpConnector::new;
         }
-        this.master = new Master(this);
         this.workers = new Worker[config.getWorkerCount()];
         for(int sequence = 0; sequence < workers.length; sequence++) {
-            workers[sequence] = new Worker(this, sequence);
+            workers[sequence] = new Worker(config, sequence);
         }
+        this.socket = n.createSocket();
+        n.configureSocket(config, socket);
+        this.mux = n.createMux();
+        this.events = n.createEventsArray(config);
+        this.thread = ThreadUtil.platform("Net", () -> {
+            int maxEvents = config.getMaxEvents();
+            Timeout timeout = Timeout.of(config.getMuxTimeout());
+            Thread currentThread = Thread.currentThread();
+            try{
+                log.debug("Initializing Net master");
+                n.bindAndListen(config, socket);
+                n.ctl(mux, socket, Native.REGISTER_NONE, Native.REGISTER_READ);
+                while (!currentThread.isInterrupted()) {
+                    int count = n.multiplexingWait(mux, events, maxEvents, timeout);
+                    if(count == -1) {
+                        log.error("Mux wait failed with errno : {}", n.errno());
+                        continue;
+                    }
+                    for(int index = 0; index < count; ++index) {
+                        ClientSocket clientSocket = n.waitForAccept(config, socket, events, index);
+                        Socket socket = clientSocket.socket();
+                        Loc loc = clientSocket.loc();
+                        Worker worker = nextWorker();
+                        Encoder encoder = encoderSupplier.get();
+                        Decoder decoder = decoderSupplier.get();
+                        Handler handler = handlerSupplier.get();
+                        Connector connector = connectorSupplier.get();
+                        Acceptor acceptor = new Acceptor(socket, encoder, decoder, handler, connector, worker, loc);
+                        mount(acceptor);
+                    }
+                }
+            } finally {
+                log.debug("Exiting Net master");
+                n.exitMux(mux);
+            }
+        });
     }
 
     /**
@@ -163,13 +204,6 @@ public class Net implements LifeCycle {
     }
 
     /**
-     *   return current network master
-     */
-    public Master master() {
-        return master;
-    }
-
-    /**
      *   perform round-robin worker selection for worker
      */
     public Worker nextWorker() {
@@ -181,7 +215,8 @@ public class Net implements LifeCycle {
      *   Launch a client connect operation for remote server
      */
     public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Supplier<Connector> connectorSupplier, long timeout, TimeUnit timeUnit) {
-        Socket socket = n.createSocket(config);
+        Socket socket = n.createSocket();
+        n.configureSocket(config, socket);
         Worker worker = nextWorker();
         Connector connector = connectorSupplier.get();
         Acceptor acceptor = new Acceptor(socket, encoder, decoder, handler, connector, worker, loc);
@@ -195,7 +230,7 @@ public class Net implements LifeCycle {
                 if (errno == n.connectBlockCode()) {
                     // connection is still in-process
                     mount(acceptor);
-                    wheel.addJob(acceptor::close, timeout, timeUnit);
+                    Wheel.wheel().addJob(() -> worker.submitTask(new Task(Task.TaskType.CLOSE_ACCEPTOR, acceptor, null, null)), timeout, timeUnit);
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, "Failed to connect, errno : %d".formatted(errno));
                 }
@@ -211,28 +246,12 @@ public class Net implements LifeCycle {
     }
 
     /**
-     *   distribute a client socket accepted by master to a target worker, this method should only be used internally
-     */
-    public void distribute(ClientSocket clientSocket) {
-        Socket socket = clientSocket.socket();
-        Loc loc = clientSocket.loc();
-        Worker worker = nextWorker();
-        Encoder encoder = encoderSupplier.get();
-        Decoder decoder = decoderSupplier.get();
-        Handler handler = handlerSupplier.get();
-        Connector connector = connectorSupplier.get();
-        Acceptor acceptor = new Acceptor(socket, encoder, decoder, handler, connector, worker, loc);
-        mount(acceptor);
-    }
-
-    /**
      *   Mount target acceptor to its worker thread for write events to happen
      */
     private void mount(Acceptor acceptor) {
-        NetworkState workerState = acceptor.worker().state();
-        workerState.socketMap().put(acceptor.socket(), acceptor);
+        acceptor.worker().submitTask(new Task(Task.TaskType.ADD_ACCEPTOR, acceptor, null, null));
         if (acceptor.state().compareAndSet(Native.REGISTER_NONE, Native.REGISTER_WRITE)) {
-            n.ctl(workerState.mux(), acceptor.socket(), Native.REGISTER_NONE, Native.REGISTER_WRITE);
+            n.ctl(acceptor.worker().mux(), acceptor.socket(), Native.REGISTER_NONE, Native.REGISTER_WRITE);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
@@ -240,18 +259,31 @@ public class Net implements LifeCycle {
 
     @Override
     public void init() {
-        master.init();
-        for (Worker worker : workers) {
-            worker.init();
+        if(running.compareAndSet(false, true)) {
+            for (Worker worker : workers) {
+                worker.start();
+            }
+            thread.start();
         }
     }
 
     @Override
     public void shutdown() {
-        master.shutdown();
-        for (Worker worker : workers) {
-            worker.shutdown();
+        try{
+            log.debug("Shutting down Net now ...");
+            long nano = Clock.nano();
+            thread.interrupt();
+            thread.join();
+            for (Worker worker : workers) {
+                worker.submitTask(new Task(Task.TaskType.GRACEFUL_SHUTDOWN, null, null, new Shutdown(config.getShutdownTimeout(), TimeUnit.SECONDS)));
+            }
+            for(Worker worker : workers) {
+                worker.thread().join();
+            }
+            n.exit();
+            log.debug("Exiting Net gracefully, cost : {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
+        }catch (InterruptedException e) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Shutting down Net failed because of thread interruption");
         }
-        n.exit();
     }
 }

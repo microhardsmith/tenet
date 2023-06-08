@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -34,7 +35,6 @@ public class MacNative implements Native {
     private static final long keventSize = keventLayout.byteSize();
     private static final long identOffset = keventLayout.byteOffset(MemoryLayout.PathElement.groupElement("ident"));
     private static final long filterOffset = keventLayout.byteOffset(MemoryLayout.PathElement.groupElement("filter"));
-    private static final long flagsOffset = keventLayout.byteOffset(MemoryLayout.PathElement.groupElement("flags"));
 
 
     /**
@@ -107,13 +107,18 @@ public class MacNative implements Native {
     }
 
     @Override
-    public Socket createSocket(NetworkConfig config) {
+    public Socket createSocket() {
         int socketFd = check(socketCreate(), "create socket");
+        return new Socket(socketFd);
+    }
+
+    @Override
+    public void configureSocket(NetworkConfig config, Socket socket) {
+        int socketFd = socket.intValue();
         check(setReuseAddr(socketFd, config.getReuseAddr() ? 1 : 0), "set SO_REUSE_ADDR");
         check(setKeepAlive(socketFd, config.getKeepAlive() ? 1 : 0), "set SO_KEEPALIVE");
         check(setTcpNoDelay(socketFd, config.getTcpNoDelay() ? 1 : 0), "set TCP_NODELAY");
         check(setNonBlocking(socketFd), "set NON_BLOCKING");
-        return new Socket(socketFd);
     }
 
     @Override
@@ -149,34 +154,29 @@ public class MacNative implements Native {
     }
 
     @Override
-    public int multiplexingWait(NetworkState state, int maxEvents) {
-        return keventWait(state.mux().kqfd(), state.events(), maxEvents, NativeUtil.NULL_POINTER);
+    public int multiplexingWait(Mux mux, MemorySegment events, int maxEvents, Timeout timeout) {
+        return keventWait(mux.kqfd(), events, maxEvents, timeout.ptr());
     }
 
     @Override
-    public void waitForAccept(NetworkState state, int index, Net net) {
-        MemorySegment events = state.events();
-        Socket serverSocket = net.master().socket();
+    public ClientSocket waitForAccept(NetworkConfig config, Socket serverSocket, MemorySegment events, int index) {
         short filter = NativeUtil.getShort(events, index * keventSize + filterOffset);
         int ident = (int) NativeUtil.getLong(events, index * keventSize + identOffset);
         if(ident == serverSocket.intValue() && filter == Constants.EVFILT_READ) {
-            // current server socket receive connection
-            ClientSocket clientSocket = accept(net.config(), serverSocket);
-            net.distribute(clientSocket);
+            return accept(config, serverSocket);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
     @Override
-    public void waitForData(NetworkState state, int index, ReadBuffer readBuffer) {
-        MemorySegment events = state.events();
+    public void waitForData(Map<Socket, Object> socketMap, ReadBuffer readBuffer, MemorySegment events, int index) {
         short filter = NativeUtil.getShort(events, index * keventSize + filterOffset);
         Socket socket = new Socket(NativeUtil.getInt(events, index * keventSize + identOffset));
         if(filter == Constants.EVFILT_READ) {
-            state.shouldRead(socket, readBuffer);
+            Native.shouldRead(socketMap, socket, readBuffer);
         }else if(filter == Constants.EVFILT_WRITE) {
-            state.shouldWrite(socket);
+            Native.shouldWrite(socketMap, socket);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }

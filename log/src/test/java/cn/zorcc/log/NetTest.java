@@ -17,8 +17,8 @@ public class NetTest {
     public static void main(String[] args) {
         long nano = Clock.nano();
 
-        //testTcp();
-        testSsl();
+        testTcp();
+        //testSsl();
 
         long jvmTime = ManagementFactory.getRuntimeMXBean().getUptime();
         log.info("Starting now, causing {} ms, jvm started for {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)), jvmTime);
@@ -28,9 +28,11 @@ public class NetTest {
         Wheel.wheel().init();
         LoggerConsumer loggerConsumer = new LoggerConsumer();
         loggerConsumer.init();
-        Runtime.getRuntime().addShutdownHook(Thread.ofVirtual().unstarted(loggerConsumer::shutdown));
         Net net = new Net(HttpEncoder::new, HttpDecoder::new, HttpTestHandler::new);
-        Runtime.getRuntime().addShutdownHook(ThreadUtil.virtual("shutdown", net::shutdown));
+        Runtime.getRuntime().addShutdownHook(ThreadUtil.virtual("shutdown", () -> {
+            net.shutdown();
+            loggerConsumer.shutdown();
+        }));
         net.init();
     }
 
@@ -38,13 +40,15 @@ public class NetTest {
         Wheel.wheel().init();
         LoggerConsumer loggerConsumer = new LoggerConsumer();
         loggerConsumer.init();
-        Runtime.getRuntime().addShutdownHook(Thread.ofVirtual().unstarted(loggerConsumer::shutdown));
         NetworkConfig networkConfig = new NetworkConfig();
         networkConfig.setEnableSsl(true);
         networkConfig.setPublicKeyFile("C:/openresty-1.21.4.1-win64/conf/zorcc.cn+1.pem");
         networkConfig.setPrivateKeyFile("C:/openresty-1.21.4.1-win64/conf/zorcc.cn+1-key.pem");
         Net net = new Net(HttpEncoder::new, HttpDecoder::new, HttpTestHandler::new, networkConfig);
-        Runtime.getRuntime().addShutdownHook(ThreadUtil.virtual("shutdown", net::shutdown));
+        Runtime.getRuntime().addShutdownHook(ThreadUtil.virtual("shutdown", () -> {
+            net.shutdown();
+            loggerConsumer.shutdown();
+        }));
         net.init();
     }
 }

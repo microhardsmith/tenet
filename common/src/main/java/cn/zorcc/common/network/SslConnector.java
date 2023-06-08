@@ -24,9 +24,9 @@ public class SslConnector implements Connector {
     }
 
     @Override
-    public void shouldClose(Socket socket) {
+    public void doClose(Acceptor acceptor) {
         Openssl.sslFree(ssl);
-        n.closeSocket(socket);
+        n.closeSocket(acceptor.socket());
     }
 
     @Override
@@ -73,7 +73,7 @@ public class SslConnector implements Connector {
     private void unregisterState(Acceptor acceptor, int state) {
         int current = acceptor.state().getAndUpdate(i -> i ^ state);
         if((current & state) != 0) {
-            n.ctl(acceptor.worker().state().mux(), acceptor.socket(), current, current ^ state);
+            n.ctl(acceptor.worker().mux(), acceptor.socket(), current, current ^ state);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
@@ -92,13 +92,13 @@ public class SslConnector implements Connector {
                 status.set(WANT_READ);
                 int current = acceptor.state().getAndUpdate(i -> (i & Native.REGISTER_READ) == 0 ? i + Native.REGISTER_READ : i);
                 if((current & Native.REGISTER_READ) == 0) {
-                    n.ctl(acceptor.worker().state().mux(), acceptor.socket(), current, current + Native.REGISTER_READ);
+                    n.ctl(acceptor.worker().mux(), acceptor.socket(), current, current + Native.REGISTER_READ);
                 }
             }else if(err == Constants.SSL_ERROR_WANT_WRITE) {
                 status.set(WANT_WRITE);
                 int current = acceptor.state().getAndUpdate(i -> (i & Native.REGISTER_WRITE) == 0 ? i + Native.REGISTER_WRITE : i);
                 if((current & Native.REGISTER_WRITE) == 0) {
-                    n.ctl(acceptor.worker().state().mux(), acceptor.socket(), current, current + Native.REGISTER_READ);
+                    n.ctl(acceptor.worker().mux(), acceptor.socket(), current, current + Native.REGISTER_READ);
                 }
             }else {
                 log.error("Failed to perform ssl handshake, ssl err : {}", err);

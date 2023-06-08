@@ -52,6 +52,9 @@ public final class LoggerConsumer implements LifeCycle {
                 try{
                     while (!currentThread.isInterrupted()) {
                         LogEvent logEvent = queue.take();
+                        if(logEvent == LogEvent.shutdownEvent) {
+                            break;
+                        }
                         for (EventHandler<LogEvent> handler : handlers) {
                             handler.handle(logEvent);
                         }
@@ -72,13 +75,20 @@ public final class LoggerConsumer implements LifeCycle {
 
     @Override
     public void shutdown() {
-        consumerThread.interrupt();
-        for (EventHandler<LogEvent> handler : handlers) {
-            // handle a flush event for the last time
-            handler.handle(LogEvent.flushEvent);
-            if(handler instanceof FileLogEventHandler fileLogEventHandler) {
-                fileLogEventHandler.closeStream();
+        try{
+            if (!queue.offer(LogEvent.shutdownEvent)) {
+                throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED);
             }
+            consumerThread.join();
+            for (EventHandler<LogEvent> handler : handlers) {
+                // handle a flush event for the last time
+                handler.handle(LogEvent.flushEvent);
+                if(handler instanceof FileLogEventHandler fileLogEventHandler) {
+                    fileLogEventHandler.closeStream();
+                }
+            }
+        }catch (InterruptedException e) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Shutting down Log failed because of thread interruption");
         }
     }
 }

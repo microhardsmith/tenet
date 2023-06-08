@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -115,13 +116,18 @@ public class LinuxNative implements Native {
     }
 
     @Override
-    public Socket createSocket(NetworkConfig config) {
+    public Socket createSocket() {
         int socketFd = check(socketCreate(), "create socket");
+        return new Socket(socketFd);
+    }
+
+    @Override
+    public void configureSocket(NetworkConfig config, Socket socket) {
+        int socketFd = socket.intValue();
         check(setReuseAddr(socketFd, config.getReuseAddr() ? 1 : 0), "set SO_REUSE_ADDR");
         check(setKeepAlive(socketFd, config.getKeepAlive() ? 1 : 0), "set SO_KEEPALIVE");
         check(setTcpNoDelay(socketFd, config.getTcpNoDelay() ? 1 : 0), "set TCP_NODELAY");
         check(setNonBlocking(socketFd), "set NON_BLOCKING");
-        return new Socket(socketFd);
     }
 
     @Override
@@ -166,34 +172,29 @@ public class LinuxNative implements Native {
     }
 
     @Override
-    public int multiplexingWait(NetworkState state, int maxEvents) {
-        return epollWait(state.mux().epfd(), state.events(), maxEvents, -1);
+    public int multiplexingWait(Mux mux, MemorySegment events, int maxEvents, Timeout timeout) {
+        return epollWait(mux.epfd(), events, maxEvents, timeout.val());
     }
 
     @Override
-    public void waitForAccept(NetworkState state, int index, Net net) {
-        MemorySegment events = state.events();
-        Socket serverSocket = net.master().socket();
+    public ClientSocket waitForAccept(NetworkConfig config, Socket serverSocket, MemorySegment events, int index) {
         int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
         int socket = NativeUtil.getInt(events, index * eventSize + dataOffset + fdOffset);
         if(socket == serverSocket.intValue() && (event & Constants.EPOLL_IN) != 0) {
-            // current server socket receive connection
-            ClientSocket clientSocket = accept(net.config(), serverSocket);
-            net.distribute(clientSocket);
+            return accept(config, serverSocket);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
     @Override
-    public void waitForData(NetworkState state, int index, ReadBuffer readBuffer) {
-        MemorySegment events = state.events();
+    public void waitForData(Map<Socket, Object> socketMap, ReadBuffer readBuffer, MemorySegment events, int index) {
         int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
         Socket socket = new Socket(NativeUtil.getInt(events, index * eventSize + dataOffset + fdOffset));
         if((event & (Constants.EPOLL_IN | Constants.EPOLL_ERR | Constants.EPOLL_HUP | Constants.EPOLL_RDHUP)) != 0) {
-            state.shouldRead(socket, readBuffer);
+            Native.shouldRead(socketMap, socket, readBuffer);
         }else if((event & Constants.EPOLL_OUT) != 0) {
-            state.shouldWrite(socket);
+            Native.shouldWrite(socketMap, socket);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
@@ -213,7 +214,6 @@ public class LinuxNative implements Native {
             if(socketFd == -1) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Failed to accept client socket, errno : {}", errno());
             }
-            Socket clientSocket = new Socket(socketFd);
             check(setReuseAddr(socketFd, config.getReuseAddr() ? 1 : 0), "set SO_REUSE_ADDR");
             check(setKeepAlive(socketFd, config.getKeepAlive() ? 1 : 0), "set SO_KEEPALIVE");
             check(setTcpNoDelay(socketFd, config.getTcpNoDelay() ? 1 : 0), "set TCP_NODELAY");
@@ -222,7 +222,7 @@ public class LinuxNative implements Native {
                 throw new FrameworkException(ExceptionType.NETWORK, "Failed to get client socket's remote address, errno : {}", errno());
             }
             Loc loc = new Loc(NativeUtil.getStr(address), intPort(port(clientAddr)));
-            return new ClientSocket(clientSocket, loc);
+            return new ClientSocket(new Socket(socketFd), loc);
         }
     }
 

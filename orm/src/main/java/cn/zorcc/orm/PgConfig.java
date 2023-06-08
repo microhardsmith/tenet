@@ -30,11 +30,7 @@ public class PgConfig {
      */
     private String currentSchema = "public";
     /**
-     * 数据库最小空闲连接数,配置小于0则默认与maximumIdle相同,hikari官方建议与maximumIdle相同
-     */
-    private Integer minimumIdle = -1;
-    /**
-     * 数据库最大连接池数量,建议设置数: (核心数 * 2) + 有效硬盘数
+     * 数据库连接池数量,建议设置数: (核心数 * 2) + 有效硬盘数
      */
     private Integer maximumIdle = NativeUtil.getCpuCores() * 2 + 4;
     /**
@@ -85,4 +81,5 @@ public class PgConfig {
      * 单次sql执行超时时间,单位毫秒
      */
     private Integer executionTimeout = 4000;
+    private Long shutdownTimeout = 3000L;
 }

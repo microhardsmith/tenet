@@ -5,12 +5,9 @@ import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.wheel.Wheel;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.MemorySegment;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
@@ -22,8 +19,6 @@ import java.util.concurrent.locks.ReentrantLock;
 public class SslProtocol implements Protocol {
     private static final Native n = Native.n;
     private final MemorySegment ssl;
-    private final AtomicBoolean shutdownFlag = new AtomicBoolean(false);
-    private final AtomicBoolean closeFlag = new AtomicBoolean(false);
     private final Lock lock = new ReentrantLock();
     private int state = 0;
     private static final int RECV_WANT_TO_WRITE = 1;
@@ -64,7 +59,7 @@ public class SslProtocol implements Protocol {
                     }else if(err == Constants.SSL_ERROR_ZERO_RETURN) {
                         performShutdown(channel);
                     }else if(err == Constants.SSL_ERROR_SYSCALL) {
-                        doClose(channel);
+                        channel.close();
                     }else if(err != Constants.SSL_ERROR_WANT_READ) {
                         throw new FrameworkException(ExceptionType.NETWORK, "SSL read failed with err : %d".formatted(err));
                     }
@@ -98,8 +93,7 @@ public class SslProtocol implements Protocol {
                 state ^= RECV_WANT_TO_WRITE;
             }
             if(channel.state().compareAndSet(Native.REGISTER_READ_WRITE, Native.REGISTER_READ)) {
-                NetworkState workerState = channel.worker().state();
-                n.ctl(workerState.mux(), channel.socket(), Native.REGISTER_READ_WRITE, Native.REGISTER_READ);
+                n.ctl(channel.worker().mux(), channel.socket(), Native.REGISTER_READ_WRITE, Native.REGISTER_READ);
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
@@ -125,14 +119,12 @@ public class SslProtocol implements Protocol {
                 if(err == Constants.SSL_ERROR_WANT_WRITE) {
                     state &= SEND_WANT_TO_WRITE;
                     if(channel.state().compareAndSet(Native.REGISTER_READ, Native.REGISTER_READ_WRITE)) {
-                        NetworkState workerState = channel.worker().state();
-                        n.ctl(workerState.mux(), channel.socket(), Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
+                        n.ctl(channel.worker().mux(), channel.socket(), Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
                     }
                 }else if(err == Constants.SSL_ERROR_WANT_READ) {
                     state &= SEND_WANT_TO_READ;
                 }else {
-                    doClose(channel);
-                    return ;
+                    throw new FrameworkException(ExceptionType.NETWORK, "Failed to write, ssl err : %d".formatted(err));
                 }
             }else if(r < len){
                 // only write a part of the segment, wait for next loop
@@ -149,23 +141,15 @@ public class SslProtocol implements Protocol {
     }
 
     @Override
-    public void doShutdown(Channel channel, long timeout, TimeUnit timeUnit) {
+    public void doShutdown(Channel channel) {
         lock.lock();
         try{
-            if(shutdownFlag.compareAndSet(false, true)) {
-                performShutdown(channel);
-                channel.handler().onRemoved(channel);
-                Wheel.wheel().addJob(() -> doClose(channel), timeout, timeUnit);
-            }
+            performShutdown(channel);
         }finally {
             lock.unlock();
         }
     }
 
-    /**
-     *   Perform the SSL shutdown operation
-     *
-     */
     private void performShutdown(Channel channel) {
         int r = Openssl.sslShutdown(ssl);
         if(r < 0) {
@@ -175,41 +159,25 @@ public class SslProtocol implements Protocol {
             }else if(err == Constants.SSL_ERROR_WANT_WRITE) {
                 state &= SHUTDOWN_WANT_TO_WRITE;
                 if(channel.state().compareAndSet(Native.REGISTER_READ, Native.REGISTER_READ_WRITE)) {
-                    NetworkState workerState = channel.worker().state();
-                    n.ctl(workerState.mux(), channel.socket(), Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
+                    n.ctl(channel.worker().mux(), channel.socket(), Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
                 }
             }else {
                 log.error("SSL shutdown failed with err : {}", err);
             }
         }else if(r == 1) {
-            doClose(channel);
+            Worker worker = channel.worker();
+            if(Thread.currentThread() == worker.thread()) {
+                channel.close();
+            }else {
+                // In this case, the channel close operation might be delayed a little bit
+                worker.submitTask(new Task(Task.TaskType.CLOSE_CHANNEL, null, channel, null));
+            }
         }
     }
 
     @Override
     public void doClose(Channel channel) {
-        lock.lock();
-        try{
-            if(closeFlag.compareAndSet(false, true)) {
-                if(shutdownFlag.compareAndSet(false, true)) {
-                    channel.handler().onRemoved(channel);
-                    channel.writerThread().interrupt();
-                }
-                Socket socket = channel.socket();
-                NetworkState workerState = channel.worker().state();
-                workerState.socketMap().remove(socket);
-                int current = channel.state().getAndSet(Native.REGISTER_NONE);
-                if(current > 0) {
-                    n.ctl(workerState.mux(), socket, current, Native.REGISTER_NONE);
-                }else {
-                    throw new FrameworkException(ExceptionType.NETWORK, "Close state err");
-                }
-                Openssl.sslFree(ssl);
-                n.closeSocket(socket);
-                channel.handler().onRemoved(channel);
-            }
-        }finally {
-            lock.unlock();
-        }
+        Openssl.sslFree(ssl);
+        n.closeSocket(channel.socket());
     }
 }

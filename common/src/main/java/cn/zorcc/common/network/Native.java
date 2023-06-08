@@ -1,5 +1,6 @@
 package cn.zorcc.common.network;
 
+import cn.zorcc.common.Constants;
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
@@ -8,6 +9,7 @@ import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.util.Map;
 
 /**
  *   Platform native interface for Network operation
@@ -42,7 +44,12 @@ public interface Native {
     /**
      *   Create a socket, could be server socket or client socket
      */
-    Socket createSocket(NetworkConfig config);
+    Socket createSocket();
+
+    /**
+     *   Configure socket based on NetworkConfig
+     */
+    void configureSocket(NetworkConfig config, Socket socket);
 
     /**
      *   Bind and listen target port
@@ -57,18 +64,19 @@ public interface Native {
 
     /**
      *   Multiplexing wait for events, return the available events
+     *   Method will block for maximum timeout milliseconds, use -1 for epoll, NULL_PTR for kqueue to block infinitely
      */
-    int multiplexingWait(NetworkState state, int maxEvents);
+    int multiplexingWait(Mux mux, MemorySegment events, int maxEvents, Timeout timeout);
 
     /**
      *   Waiting for new connections, don't throw exception here because it would exit the loop thread
      */
-    void waitForAccept(NetworkState state, int index, Net net);
+    ClientSocket waitForAccept(NetworkConfig config, Socket serverSocket, MemorySegment events, int index);
 
     /**
      *   Waiting for data, don't throw exception here cause it would exit the loop thread
      */
-    void waitForData(NetworkState state, int index, ReadBuffer readBuffer);
+    void waitForData(Map<Socket, Object> socketMap, ReadBuffer readBuffer, MemorySegment events, int index);
 
     /**
      *   Connect socket with target socketAddr, return 0 if connection is successful, return -1 if error occurred
@@ -190,6 +198,24 @@ public interface Native {
             return new MacNative();
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, "Unsupported operating system");
+        }
+    }
+
+    static void shouldRead(Map<Socket, Object> socketMap, Socket socket, ReadBuffer readBuffer) {
+        switch (socketMap.get(socket)) {
+            case null -> {}
+            case Acceptor acceptor -> acceptor.connector().shouldRead(acceptor);
+            case Channel channel -> channel.protocol().canRead(channel, readBuffer);
+            default -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        }
+    }
+
+    static void shouldWrite(Map<Socket, Object> socketMap, Socket socket) {
+        switch (socketMap.get(socket)) {
+            case null -> {}
+            case Acceptor acceptor -> acceptor.connector().shouldWrite(acceptor);
+            case Channel channel -> channel.protocol().canWrite(channel);
+            default -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 }

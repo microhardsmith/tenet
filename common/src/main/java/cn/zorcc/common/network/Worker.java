@@ -1,51 +1,131 @@
 package cn.zorcc.common.network;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.LifeCycle;
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.ThreadUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.jctools.queues.atomic.MpscUnboundedAtomicArrayQueue;
 
 import java.lang.foreign.MemorySegment;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  *   Network worker
  */
 @Slf4j
-public final class Worker implements LifeCycle {
+public final class Worker {
     private final Native n = Native.n;
-    private final NetworkState state;
+    private static final int INITIAL = 0;
+    private static final int RUNNING = 1;
+    private static final int CLOSING = 2;
+    private static final int STOPPED = 3;
+    private final AtomicInteger state = new AtomicInteger(INITIAL);
+    private final Mux mux;
+    private final MemorySegment events;
+    private final Map<Socket, Object> socketMap = new HashMap<>(Net.MAP_SIZE);
+    private final Queue<Task> taskQueue = new MpscUnboundedAtomicArrayQueue<>(Constants.QUEUE_SIZE);
     private final Thread thread;
-    private final AtomicBoolean running = new AtomicBoolean(false);
+    /**
+     *   Representing the connections count mounted on current worker instance
+     */
+    private final AtomicLong counter = new AtomicLong(Constants.ZERO);
 
-    public Worker(Net net, int sequence) {
-        NetworkConfig config = net.config();
-        Mux mux = n.createMux();
-        MemorySegment eventsArray = n.createEventsArray(config);
-        this.state = new NetworkState(mux, eventsArray, new ConcurrentHashMap<>(Net.MAP_SIZE));
-        int maxEvents = config.getMaxEvents();
+    public Worker(NetworkConfig config, int sequence) {
+        this.mux = n.createMux();
+        this.events = n.createEventsArray(config);
+        final int maxEvents = config.getMaxEvents();
         this.thread = ThreadUtil.platform("Worker-" + sequence, () -> {
+            log.debug("Initializing Net worker, sequence : {}", sequence);
+            Timeout timeout = Timeout.of(config.getMuxTimeout());
             Thread currentThread = Thread.currentThread();
             try(ReadBufferArray readBufferArray = new ReadBufferArray(maxEvents)) {
                 while (!currentThread.isInterrupted()) {
-                    int count = n.multiplexingWait(state, maxEvents);
+                    final int count = n.multiplexingWait(mux, events, maxEvents, timeout);
                     if(count == -1) {
                         log.error("Mux wait failed with errno : {}", n.errno());
                         continue;
                     }
+                    for( ; ; ) {
+                        Task task = taskQueue.poll();
+                        if(task == null) {
+                            break;
+                        }else {
+                            handleTask(task);
+                        }
+                    }
                     for(int index = 0; index < count; ++index) {
-                        n.waitForData(state, index, readBufferArray.element(index));
+                        n.waitForData(socketMap, readBufferArray.element(index), events, index);
                     }
                 }
             }finally {
-                log.debug("Exiting network worker, sequence : {}", sequence);
-                n.exitMux(state.mux());
+                log.debug("Exiting Net worker, sequence : {}", sequence);
+                n.exitMux(mux);
             }
         });
+    }
+
+    public Mux mux() {
+        return mux;
+    }
+
+    public Map<Socket, Object> socketMap() {
+        return socketMap;
+    }
+
+    public AtomicLong counter() {
+        return counter;
+    }
+
+    /**
+     *   Processing worker tasks from taskQueue
+     */
+    private void handleTask(Task task) {
+        switch (task.type()) {
+            case ADD_ACCEPTOR -> {
+                Acceptor acceptor = task.acceptor();
+                socketMap.put(acceptor.socket(), acceptor);
+                counter.getAndIncrement();
+            }
+            case CLOSE_ACCEPTOR -> task.acceptor().close();
+            case CLOSE_CHANNEL -> task.channel().close();
+            case GRACEFUL_SHUTDOWN -> {
+                if(state.compareAndSet(RUNNING, CLOSING)) {
+                    Shutdown shutdown = task.shutdown();
+                    if(counter.get() == 0L) {
+                        state.set(STOPPED);
+                        thread.interrupt();
+                    }
+                    socketMap.values().forEach(o -> {
+                        if(o instanceof Acceptor acceptor) {
+                            acceptor.close();
+                        }else if(o instanceof Channel channel) {
+                            channel.shutdown(shutdown);
+                        }else {
+                            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+                        }
+                    });
+                }else {
+                    throw new FrameworkException(ExceptionType.NETWORK, "Worker is not running");
+                }
+            }
+            case POSSIBLE_SHUTDOWN -> {
+                if(state.compareAndSet(CLOSING, STOPPED)) {
+                    thread.interrupt();
+                }
+            }
+        }
+    }
+
+    public void submitTask(Task task) {
+        if (!taskQueue.offer(task)) {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        }
     }
 
     @SuppressWarnings("resource")
@@ -72,31 +152,13 @@ public final class Worker implements LifeCycle {
         }
     }
 
-    /**
-     *   Examine if current operation runs in the worker thread
-     *   TODO Could be removed after validation
-     */
-    public static boolean inWorkerThread() {
-        return Thread.currentThread().getName().startsWith("Worker-");
+    public Thread thread() {
+        return thread;
     }
 
-    public NetworkState state() {
-        return state;
-    }
-
-    @Override
-    public void init() {
-        if(running.compareAndSet(false, true)) {
+    public void start() {
+        if(state.compareAndSet(INITIAL, RUNNING)) {
             thread.start();
-        }else {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-        }
-    }
-
-    @Override
-    public void shutdown() {
-        if(running.compareAndSet(true, false)) {
-            thread.interrupt();
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }

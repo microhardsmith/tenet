@@ -30,12 +30,12 @@ public class PgConnector implements Connector {
     }
 
     @Override
-    public void shouldClose(Socket socket) {
+    public void doClose(Acceptor acceptor) {
         MemorySegment ssl = sslReference.getAndSet(null);
         if(!NativeUtil.checkNullPointer(ssl)) {
             Openssl.sslFree(ssl);
         }
-        n.closeSocket(socket);
+        n.closeSocket(acceptor.socket());
     }
 
     @Override
@@ -105,7 +105,7 @@ public class PgConnector implements Connector {
                 status.set(SSL_WANT_WRITE);
                 int current = acceptor.state().getAndUpdate(i -> (i & Native.REGISTER_WRITE) == 0 ? i + Native.REGISTER_WRITE : i);
                 if((current & Native.REGISTER_WRITE) == 0) {
-                    n.ctl(acceptor.worker().state().mux(), acceptor.socket(), current, current + Native.REGISTER_READ);
+                    n.ctl(acceptor.worker().mux(), acceptor.socket(), current, current + Native.REGISTER_READ);
                 }
             }else {
                 log.error("Failed to perform ssl handshake, ssl err : {}", err);
@@ -134,8 +134,7 @@ public class PgConnector implements Connector {
             writeBuffer.close();
             status.set(SSL_WAIT);
             if (acceptor.state().compareAndSet(Native.REGISTER_WRITE, Native.REGISTER_READ)) {
-                NetworkState workerState = acceptor.worker().state();
-                n.ctl(workerState.mux(), acceptor.socket(), Native.REGISTER_WRITE, Native.REGISTER_READ);
+                n.ctl(acceptor.worker().mux(), acceptor.socket(), Native.REGISTER_WRITE, Native.REGISTER_READ);
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
