@@ -179,7 +179,7 @@ public interface Native {
     /**
      *   Network library environment variable
      */
-    String LIB = "tenet.lib";
+    String LIB = "lib";
 
     /**
      *   Global native network library

@@ -13,6 +13,12 @@ public interface Handler {
     void onRecv(Channel channel, Object data);
 
     /**
+     *   Before channel got shutdown, this function would be invoked
+     *   Some goodbye message could be sent in this function to perform a graceful shutdown
+     */
+    void onShutdown(Channel channel);
+
+    /**
      *   After connection was shutdown or closed, this function would be invoked
      *   Note that you can't expect sending some data in this function
      */

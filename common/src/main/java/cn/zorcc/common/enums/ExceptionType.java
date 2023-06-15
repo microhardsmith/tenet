@@ -13,7 +13,7 @@ public enum ExceptionType {
     CACHE,
     NETWORK,
     JOB,
-    POSTGRESQL,
+    SQL,
     CLUSTER,
     AUTH,
     FILE,

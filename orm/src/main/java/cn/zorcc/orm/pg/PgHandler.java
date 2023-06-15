@@ -5,6 +5,8 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Channel;
 import cn.zorcc.common.network.Handler;
+import cn.zorcc.orm.frontend.PgStartUpMsg;
+import cn.zorcc.orm.frontend.PgTerminateMsg;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.BlockingQueue;
@@ -31,6 +33,11 @@ public class PgHandler implements Handler {
         if (!msgQueue.offer(data)) {
             throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
         }
+    }
+
+    @Override
+    public void onShutdown(Channel channel) {
+        channel.send(PgTerminateMsg.INSTANCE);
     }
 
     @Override

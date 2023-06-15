@@ -33,17 +33,11 @@
             <version>${project.version}</version>
         </dependency>
 
-        <dependency>
-            <groupId>cn.zorcc</groupId>
-            <artifactId>tenet-log</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <!-- netty -->
+        <!-- netty TODO to be removed -->
         <dependency>
             <groupId>io.netty</groupId>
-            <artifactId>netty-codec-http</artifactId>
-            <version>${netty.version}</version>
+            <artifactId>netty-all</artifactId>
+            <version>4.1.93.Final</version>
         </dependency>
     </dependencies>
 

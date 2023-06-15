@@ -107,33 +107,37 @@ public final class WriteBuffer implements AutoCloseable {
     }
 
     /**
-     *   获取当前已写入的segment
+     *   Return current written segment, from 0 ~ writeIndex
      */
     public MemorySegment segment() {
         return writeIndex == segment.byteSize() ? segment : segment.asSlice(0L, writeIndex);
     }
 
     /**
-     *   截断最开始的count个元素
+     *   Truncate count bytes at the beginning of the segment
      */
     public void truncate(long count) {
         if(count >= writeIndex) {
             throw new FrameworkException(ExceptionType.NATIVE, "Couldn't truncate after write index");
         }
-        long newWriteIndex = writeIndex - count;
-        segment = segment.asSlice(count, newWriteIndex);
-        writeIndex = newWriteIndex;
+        long size = segment.byteSize();
+        segment = segment.asSlice(count, size - count);
+        writeIndex = writeIndex - count;
     }
 
     /**
-     *   重置当前writeBuffer,不清除已写入的内容
+     *   Reset current writeBuffer, without wiping out what has been written
      */
     public void reset() {
         writeIndex = 0L;
     }
 
+    public boolean notEmpty() {
+        return writeIndex != 0L;
+    }
+
     /**
-     *   将当前WriteBuffer转化为ReadBuffer
+     *   Turn current writeBuffer into a new ReadBuffer
      */
     public ReadBuffer toReadBuffer() {
         return new ReadBuffer(arena, segment());

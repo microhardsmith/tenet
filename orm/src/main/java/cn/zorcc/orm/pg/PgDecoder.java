@@ -6,6 +6,7 @@ import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Decoder;
+import cn.zorcc.orm.backend.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -66,7 +67,7 @@ public class PgDecoder implements Decoder {
             case PgConstants.CLOSE_COMPLETE -> {
                 return decodeCloseCompleteMsg(msgLength);
             }
-            default -> throw new FrameworkException(ExceptionType.POSTGRESQL, "Unrecognized postgresql message type");
+            default -> throw new FrameworkException(ExceptionType.SQL, "Unrecognized postgresql message type");
         }
     }
 
@@ -162,7 +163,7 @@ public class PgDecoder implements Decoder {
             }
             case PgConstants.AUTH_MD5_PASSWORD -> {
                 checkLength(msgLength, 12);
-                return new PgAuthMd5Msg(readBuffer.readInt());
+                return new PgAuthMd5Msg(readBuffer.readBytes(4));
             }
             case PgConstants.AUTH_SASL_PASSWORD -> {
                 return decodeSaslPwdMsg(readBuffer, msgLength);
@@ -173,7 +174,7 @@ public class PgDecoder implements Decoder {
             case PgConstants.AUTH_SASL_FINAL -> {
                 return decodeSaslFinalMsg(readBuffer, msgLength);
             }
-            default -> throw new FrameworkException(ExceptionType.POSTGRESQL, "Unrecognized auth type");
+            default -> throw new FrameworkException(ExceptionType.SQL, "Unrecognized auth type");
         }
     }
 
@@ -222,17 +223,18 @@ public class PgDecoder implements Decoder {
 
     private Object decodeReadyMsg(ReadBuffer readBuffer, int msgLength) {
         checkLength(msgLength, 5);
-        return switch (readBuffer.readByte()) {
+        PgStatus pgStatus = switch (readBuffer.readByte()) {
             case PgConstants.TRANSACTION_IDLE -> PgStatus.IDLE;
             case PgConstants.TRANSACTION_ON -> PgStatus.TRANSACTION_ON;
             case PgConstants.TRANSACTION_FAIL -> PgStatus.TRANSACTION_FAIL;
-            default -> throw new FrameworkException(ExceptionType.POSTGRESQL, "Unrecognized postgresql transaction status indicator");
+            default -> throw new FrameworkException(ExceptionType.SQL, "Unrecognized postgresql transaction status indicator");
         };
+        return new PgReadyMsg(pgStatus);
     }
 
     private void checkLength(int actual, int expected) {
         if(actual != expected) {
-            throw new FrameworkException(ExceptionType.POSTGRESQL, "Msg length corrupted");
+            throw new FrameworkException(ExceptionType.SQL, "Msg length corrupted");
         }
     }
 }

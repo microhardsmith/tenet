@@ -24,8 +24,8 @@ public class Openssl {
     /**
      *   Environment variable that must be configured when launching the application
      */
-    public static final String CRYPTO_LIB = "tenet.crypto";
-    public static final String SSL_LIB = "tenet.ssl";
+    public static final String CRYPTO_LIB = "crypto";
+    public static final String SSL_LIB = "ssl";
     /**
      *   There two variable is hard-coded definition from ssl.h, since SSL_CTX_set_mode and SSL_CTX_clear_mode are macros, we can't directly use it
      */

@@ -34,12 +34,6 @@
 
         <dependency>
             <groupId>cn.zorcc</groupId>
-            <artifactId>tenet-log</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>cn.zorcc</groupId>
             <artifactId>tenet-http</artifactId>
             <version>${project.version}</version>
         </dependency>

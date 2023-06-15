@@ -52,7 +52,7 @@ public final class FieldAccess {
         MethodType constructorMethodType = isRecord ?
                 MethodType.methodType(void.class, allFields.stream().map(Field::getType).toArray(Class<?>[]::new)) :
                 MethodType.methodType(void.class);
-        MethodHandle constructor =ClassUtil.findConstructor(lookup, clazz, constructorMethodType);
+        MethodHandle constructor = ClassUtil.findConstructor(lookup, clazz, constructorMethodType);
         if(constructor == null) {
             throw new FrameworkException(ExceptionType.CONTEXT, "Unable to locate no-arg constructor for %s", clazz.getName());
         }

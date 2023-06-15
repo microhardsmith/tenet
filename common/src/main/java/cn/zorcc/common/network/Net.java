@@ -117,7 +117,11 @@ public class Net implements LifeCycle {
         n.configureSocket(config, socket);
         this.mux = n.createMux();
         this.events = n.createEventsArray(config);
-        this.thread = ThreadUtil.platform("Net", () -> {
+        this.thread = createMasterThread();
+    }
+
+    private Thread createMasterThread() {
+        return ThreadUtil.platform("Master", () -> {
             int maxEvents = config.getMaxEvents();
             Timeout timeout = Timeout.of(config.getMuxTimeout());
             Thread currentThread = Thread.currentThread();
@@ -230,7 +234,7 @@ public class Net implements LifeCycle {
                 if (errno == n.connectBlockCode()) {
                     // connection is still in-process
                     mount(acceptor);
-                    Wheel.wheel().addJob(() -> worker.submitTask(new Task(Task.TaskType.CLOSE_ACCEPTOR, acceptor, null, null)), timeout, timeUnit);
+                    Wheel.wheel().addJob(() -> worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_ACCEPTOR, acceptor, null, null)), timeout, timeUnit);
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, "Failed to connect, errno : %d".formatted(errno));
                 }
@@ -249,7 +253,7 @@ public class Net implements LifeCycle {
      *   Mount target acceptor to its worker thread for write events to happen
      */
     private void mount(Acceptor acceptor) {
-        acceptor.worker().submitTask(new Task(Task.TaskType.ADD_ACCEPTOR, acceptor, null, null));
+        acceptor.worker().submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.ADD_ACCEPTOR, acceptor, null, null));
         if (acceptor.state().compareAndSet(Native.REGISTER_NONE, Native.REGISTER_WRITE)) {
             n.ctl(acceptor.worker().mux(), acceptor.socket(), Native.REGISTER_NONE, Native.REGISTER_WRITE);
         }else {
@@ -270,15 +274,15 @@ public class Net implements LifeCycle {
     @Override
     public void shutdown() {
         try{
-            log.debug("Shutting down Net now ...");
             long nano = Clock.nano();
             thread.interrupt();
             thread.join();
             for (Worker worker : workers) {
-                worker.submitTask(new Task(Task.TaskType.GRACEFUL_SHUTDOWN, null, null, new Shutdown(config.getShutdownTimeout(), TimeUnit.SECONDS)));
+                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.GRACEFUL_SHUTDOWN, null, null, new Shutdown(config.getShutdownTimeout(), TimeUnit.SECONDS)));
             }
             for(Worker worker : workers) {
-                worker.thread().join();
+                worker.reader().join();
+                worker.writer().join();
             }
             n.exit();
             log.debug("Exiting Net gracefully, cost : {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));

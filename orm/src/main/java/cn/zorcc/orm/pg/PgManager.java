@@ -41,7 +41,7 @@ public final class PgManager implements LifeCycle {
             return connPool.take();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new FrameworkException(ExceptionType.POSTGRESQL, "thread interrupt", e);
+            throw new FrameworkException(ExceptionType.SQL, "thread interrupt", e);
         }
     }
 

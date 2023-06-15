@@ -1,18 +1,11 @@
 package cn.zorcc.common.network;
 
-import cn.zorcc.common.Constants;
-import cn.zorcc.common.Mix;
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Loc;
-import cn.zorcc.common.util.ThreadUtil;
-import cn.zorcc.common.wheel.Wheel;
 
-import java.util.concurrent.LinkedTransferQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TransferQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class Channel {
@@ -25,10 +18,6 @@ public final class Channel {
     private final Protocol protocol;
     private final Worker worker;
     /**
-     *   Writer virtual thread
-     */
-    private final Thread writerThread;
-    /**
      *   Representing remote server address
      */
     private final Loc loc;
@@ -36,10 +25,6 @@ public final class Channel {
      *   Current read buffer temp zone, visible only for its worker
      */
     private WriteBuffer tempBuffer;
-    /**
-     *   Writer task queue
-     */
-    private final TransferQueue<Object> queue = new LinkedTransferQueue<>();
 
     public Channel(Socket socket, AtomicInteger state, Encoder e, Decoder d, Handler h, Protocol protocol, Loc loc, Worker worker) {
         this.socket = socket;
@@ -50,37 +35,6 @@ public final class Channel {
         this.protocol = protocol;
         this.loc = loc;
         this.worker = worker;
-        this.writerThread = ThreadUtil.virtual("Ch@" + socket.hashCode(), () -> {
-            Thread currentThread = Thread.currentThread();
-            try{
-                while (!currentThread.isInterrupted()) {
-                    Object msg = queue.take();
-                    switch (msg) {
-                        case Shutdown(long timeout, TimeUnit timeUnit) -> {
-                            protocol.doShutdown(this);
-                            Wheel.wheel().addJob(() -> worker.submitTask(new Task(Task.TaskType.CLOSE_CHANNEL, null, this, null)), timeout, timeUnit);
-                            currentThread.interrupt();
-                        }
-                        case Mix(Object[] objects) -> {
-                            try(WriteBuffer writeBuffer = new WriteBuffer(Net.WRITE_BUFFER_SIZE)) {
-                                for (Object o : objects) {
-                                    encoder.encode(writeBuffer, o);
-                                }
-                                protocol.doWrite(this, writeBuffer);
-                            }
-                        }
-                        default -> {
-                            try(WriteBuffer writeBuffer = new WriteBuffer(Net.WRITE_BUFFER_SIZE)) {
-                                encoder.encode(writeBuffer, msg);
-                                protocol.doWrite(this, writeBuffer);
-                            }
-                        }
-                    }
-                }
-            }catch (InterruptedException i) {
-                Thread.currentThread().interrupt();
-            }
-        });
     }
 
     public Socket socket() {
@@ -107,33 +61,33 @@ public final class Channel {
         return loc;
     }
 
-    public Thread writerThread() {
-        return writerThread;
+    public Encoder encoder() {
+        return encoder;
     }
 
     /**
-     *   Deal with incoming ReadBuffer, should only be accessed in its worker-thread
+     *   Deal with incoming ReadBuffer, should only be accessed in reader thread
      */
     public void onReadBuffer(ReadBuffer buffer) {
-        if(this.tempBuffer != null) {
+        if(tempBuffer != null) {
             // last time readBuffer read is not complete
-            this.tempBuffer.write(buffer.remaining());
-            ReadBuffer readBuffer = this.tempBuffer.toReadBuffer();
+            tempBuffer.write(buffer.remaining());
+            ReadBuffer readBuffer = tempBuffer.toReadBuffer();
             tryRead(readBuffer);
             if(readBuffer.remains()) {
                 // still incomplete read
-                this.tempBuffer.truncate(readBuffer.readIndex());
+                tempBuffer.truncate(readBuffer.readIndex());
             }else {
                 // writeBuffer can now be released
-                this.tempBuffer.close();
-                this.tempBuffer = null;
+                tempBuffer.close();
+                tempBuffer = null;
             }
         }else {
             tryRead(buffer);
             if(buffer.remains()) {
                 // create a new writeBuffer to maintain the unreadable bytes
-                this.tempBuffer = new WriteBuffer(buffer.len());
-                this.tempBuffer.write(buffer.remaining());
+                tempBuffer = new WriteBuffer(buffer.len());
+                tempBuffer.write(buffer.remaining());
             }
         }
         // reset read buffer for reuse
@@ -157,10 +111,7 @@ public final class Channel {
      *   the caller should provide a timeout mechanism to ensure the msg is not dropped, such as retransmission timeout
      */
     public void send(Object msg) {
-        // non-blocking put operation
-        if (!queue.offer(msg)) {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-        }
+        worker.submitWriterTask(new WriterTask(this, msg));
     }
 
     /**
@@ -170,9 +121,8 @@ public final class Channel {
      *   Calling shutdown for multiple times doesn't matter since writerThread will exit when handling the first shutdown signal
      */
     public void shutdown(Shutdown shutdown) {
-        if (!queue.offer(shutdown)) {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-        }
+        handler.onShutdown(this);
+        worker.submitWriterTask(new WriterTask(this, shutdown));
     }
 
     /**
@@ -183,15 +133,15 @@ public final class Channel {
     }
 
     /**
-     *   Close current channel, release it from the worker and clean up
+     *   Close current channel, release it from the worker and clean up, could only be invoked from reader thread
      */
     public void close() {
-        if(Thread.currentThread() != worker.thread()) {
+        if(Thread.currentThread() != worker.reader()) {
             throw new FrameworkException(ExceptionType.NETWORK, "Not in worker thread");
         }
         if(worker.socketMap().remove(socket, this)) {
-            // There is no side-effect if the writerThread has been interrupted by shutdown method
-            writerThread.interrupt();
+            // Force close the sender instance
+            worker.submitWriterTask(new WriterTask(this, Boolean.FALSE));
             int current = state.getAndSet(Native.REGISTER_NONE);
             if(current > 0) {
                 n.ctl(worker.mux(), socket, current, Native.REGISTER_NONE);
@@ -199,7 +149,7 @@ public final class Channel {
             protocol.doClose(this);
             handler.onRemoved(this);
             if (worker.counter().decrementAndGet() == 0L) {
-                worker.submitTask(new Task(Task.TaskType.POSSIBLE_SHUTDOWN, null, null, null));
+                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.POSSIBLE_SHUTDOWN, null, null, null));
             }
         }
     }

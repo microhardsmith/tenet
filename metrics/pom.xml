@@ -29,12 +29,6 @@
             <version>${project.version}</version>
         </dependency>
 
-        <dependency>
-            <groupId>cn.zorcc</groupId>
-            <artifactId>tenet-log</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
         <!-- questdb -->
         <dependency>
             <groupId>org.questdb</groupId>

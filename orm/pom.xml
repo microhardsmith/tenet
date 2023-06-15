@@ -16,7 +16,7 @@
     <dependencies>
         <dependency>
             <groupId>cn.zorcc</groupId>
-            <artifactId>tenet-log</artifactId>
+            <artifactId>tenet-common</artifactId>
             <version>${project.version}</version>
         </dependency>
 

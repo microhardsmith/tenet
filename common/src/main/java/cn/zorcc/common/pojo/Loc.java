@@ -10,4 +10,8 @@ public record Loc (
         Integer port
 ) {
 
+    @Override
+    public String toString() {
+        return "[" + ip + ":" + port + "]";
+    }
 }

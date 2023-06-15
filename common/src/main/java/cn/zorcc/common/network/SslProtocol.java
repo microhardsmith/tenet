@@ -9,7 +9,6 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.MemorySegment;
 import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -39,7 +38,6 @@ public class SslProtocol implements Protocol {
      */
     @Override
     public void canRead(Channel channel, ReadBuffer readBuffer) {
-        boolean shouldUnpark = false;
         lock.lock();
         try {
             if((state & SHUTDOWN_WANT_TO_READ) != 0) {
@@ -48,7 +46,7 @@ public class SslProtocol implements Protocol {
             }
             if((state & SEND_WANT_TO_READ) != 0) {
                 state ^= SEND_WANT_TO_READ;
-                shouldUnpark = true;
+                channel.worker().submitWriterTask(new WriterTask(channel, Boolean.TRUE));
             }
             if((state & RECV_WANT_TO_WRITE) == 0) {
                 int r = Openssl.sslRead(ssl, readBuffer.segment(), (int) readBuffer.len());
@@ -58,10 +56,10 @@ public class SslProtocol implements Protocol {
                         state &= RECV_WANT_TO_WRITE;
                     }else if(err == Constants.SSL_ERROR_ZERO_RETURN) {
                         performShutdown(channel);
-                    }else if(err == Constants.SSL_ERROR_SYSCALL) {
-                        channel.close();
                     }else if(err != Constants.SSL_ERROR_WANT_READ) {
-                        throw new FrameworkException(ExceptionType.NETWORK, "SSL read failed with err : %d".formatted(err));
+                        // usually connection reset by peer
+                        log.debug("{} ssl recv err, ssl_err : {}", channel.loc(), err);
+                        channel.close();
                     }
                 }else {
                     readBuffer.setWriteIndex(r);
@@ -71,14 +69,10 @@ public class SslProtocol implements Protocol {
         }finally {
             lock.unlock();
         }
-        if(shouldUnpark) {
-            LockSupport.unpark(channel.writerThread());
-        }
     }
 
     @Override
     public void canWrite(Channel channel) {
-        boolean shouldUnpark = false;
         lock.lock();
         try {
             if((state & SHUTDOWN_WANT_TO_WRITE) != 0) {
@@ -87,7 +81,7 @@ public class SslProtocol implements Protocol {
             }
             if((state & SEND_WANT_TO_WRITE) != 0) {
                 state ^= SEND_WANT_TO_WRITE;
-                shouldUnpark = true;
+                channel.worker().submitWriterTask(new WriterTask(channel, Boolean.TRUE));
             }
             if((state & RECV_WANT_TO_WRITE) != 0) {
                 state ^= RECV_WANT_TO_WRITE;
@@ -100,21 +94,16 @@ public class SslProtocol implements Protocol {
         }finally {
             lock.unlock();
         }
-        if(shouldUnpark) {
-            LockSupport.unpark(channel.writerThread());
-        }
     }
 
     @Override
-    public void doWrite(Channel channel, WriteBuffer writeBuffer) {
+    public WriteStatus doWrite(Channel channel, WriteBuffer writeBuffer) {
         MemorySegment segment = writeBuffer.segment();
         int len = (int) segment.byteSize();
-        boolean shouldPark = false;
         lock.lock();
         try{
             int r = Openssl.sslWrite(ssl, segment, len);
             if(r <= 0) {
-                shouldPark = true;
                 int err = Openssl.sslGetErr(ssl, r);
                 if(err == Constants.SSL_ERROR_WANT_WRITE) {
                     state &= SEND_WANT_TO_WRITE;
@@ -124,19 +113,18 @@ public class SslProtocol implements Protocol {
                 }else if(err == Constants.SSL_ERROR_WANT_READ) {
                     state &= SEND_WANT_TO_READ;
                 }else {
-                    throw new FrameworkException(ExceptionType.NETWORK, "Failed to write, ssl err : %d".formatted(err));
+                    log.error("Failed to write, ssl err : {}", err);
+                    return WriteStatus.FAILURE;
                 }
+                return WriteStatus.PENDING;
             }else if(r < len){
                 // only write a part of the segment, wait for next loop
                 writeBuffer.truncate(r);
-                doWrite(channel, writeBuffer);
+                return doWrite(channel, writeBuffer);
             }
+            return WriteStatus.SUCCESS;
         }finally {
             lock.unlock();
-        }
-        if(shouldPark) {
-            LockSupport.park();
-            doWrite(channel, writeBuffer);
         }
     }
 
@@ -166,11 +154,11 @@ public class SslProtocol implements Protocol {
             }
         }else if(r == 1) {
             Worker worker = channel.worker();
-            if(Thread.currentThread() == worker.thread()) {
+            if(Thread.currentThread() == worker.reader()) {
                 channel.close();
             }else {
                 // In this case, the channel close operation might be delayed a little bit
-                worker.submitTask(new Task(Task.TaskType.CLOSE_CHANNEL, null, channel, null));
+                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, null, channel, null));
             }
         }
     }

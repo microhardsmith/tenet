@@ -6,6 +6,7 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Encoder;
 import cn.zorcc.orm.PgConfig;
+import cn.zorcc.orm.frontend.*;
 
 import java.nio.charset.StandardCharsets;
 
@@ -15,18 +16,18 @@ public class PgEncoder implements Encoder {
     @Override
     public void encode(WriteBuffer writeBuffer, Object o) {
         switch (o) {
-            case PgStartUpMsg pgStartUpMsg -> encodePgStartUpMsg(writeBuffer, pgStartUpMsg);
-            case PgAuthSaslInitialResponseMsg pgAuthSaslInitialResponseMsg -> encodeSaslInitialResponseMsg(writeBuffer, pgAuthSaslInitialResponseMsg);
-            case PgAuthSaslResponseMsg pgAuthSaslResponseMsg -> encodeSaslResponseMsg(writeBuffer, pgAuthSaslResponseMsg);
+            case PgStartUpMsg(PgConfig pgConfig) -> encodePgStartUpMsg(writeBuffer, pgConfig);
+            case PgAuthSaslInitialResponseMsg(String mechanism, String clientFirstMsg) -> encodeSaslInitialResponseMsg(writeBuffer, mechanism, clientFirstMsg);
+            case PgAuthSaslResponseMsg(String clientFinalMsg) -> encodeSaslResponseMsg(writeBuffer, clientFinalMsg);
             case PgQueryMsg pgQueryMsg -> encodeQueryMsg(writeBuffer, pgQueryMsg);
             case PgPasswordMsg pgPasswordMsg -> encodePasswordMsg(writeBuffer, pgPasswordMsg);
             case PgParseMsg pgParseMsg -> encodeParseMsg(writeBuffer, pgParseMsg);
             case PgDescribeMsg pgDescribeMsg -> encodeDescribeMsg(writeBuffer, pgDescribeMsg);
-            case PgFlushMsg pgFlushMsg -> encodePgFlushMsg(writeBuffer);
+            case PgFlushMsg() -> encodePgFlushMsg(writeBuffer);
             case PgExecuteMsg pgExecuteMsg -> encodePgExecuteMsg(writeBuffer, pgExecuteMsg);
-            case PgSyncMsg pgSyncMsg -> encodePgSyncMsg(writeBuffer);
-            case PgTerminateMsg pgTerminateMsg -> encodePgTerminateMsg(writeBuffer);
-            default -> throw new FrameworkException(ExceptionType.POSTGRESQL, Constants.UNREACHED);
+            case PgSyncMsg() -> encodePgSyncMsg(writeBuffer);
+            case PgTerminateMsg() -> encodePgTerminateMsg(writeBuffer);
+            default -> throw new FrameworkException(ExceptionType.SQL, Constants.UNREACHED);
         }
     }
 
@@ -97,8 +98,7 @@ public class PgEncoder implements Encoder {
         writeBuffer.writeInt(4);
     }
 
-    private void encodePgStartUpMsg(WriteBuffer buffer, PgStartUpMsg pgStartUpMsg) {
-        PgConfig pgConfig = pgStartUpMsg.pgConfig();
+    private void encodePgStartUpMsg(WriteBuffer buffer, PgConfig pgConfig) {
         long currentIndex = buffer.writeIndex();
         buffer.writeInt(Integer.MAX_VALUE);
         buffer.writeInt(3 << 16);
@@ -123,9 +123,7 @@ public class PgEncoder implements Encoder {
         buffer.setInt(currentIndex, (int) (buffer.writeIndex() - currentIndex));
     }
 
-    private void encodeSaslInitialResponseMsg(WriteBuffer writeBuffer, PgAuthSaslInitialResponseMsg saslInitialMsg) {
-        String mechanism = saslInitialMsg.mechanism();
-        String clientFirstMsg = saslInitialMsg.clientFirstMsg();
+    private void encodeSaslInitialResponseMsg(WriteBuffer writeBuffer, String mechanism, String clientFirstMsg) {
         writeBuffer.writeByte(PgConstants.SASL_RESPONSE);
         long currentIndex = writeBuffer.writeIndex();
         writeBuffer.writeInt(Integer.MAX_VALUE);
@@ -140,11 +138,10 @@ public class PgEncoder implements Encoder {
         writeBuffer.setInt(currentIndex, (int) (writeBuffer.writeIndex() - currentIndex));
     }
 
-    private void encodeSaslResponseMsg(WriteBuffer writeBuffer, PgAuthSaslResponseMsg saslResponseMsg) {
-        int len = saslResponseMsg.len();
-        byte[] bytes = saslResponseMsg.bytes();
+    private void encodeSaslResponseMsg(WriteBuffer writeBuffer, String clientFinalMsg) {
+        byte[] bytes = clientFinalMsg.getBytes(StandardCharsets.UTF_8);
         writeBuffer.writeByte(PgConstants.SASL_RESPONSE);
-        writeBuffer.writeInt(4 + len);
+        writeBuffer.writeInt(4 + bytes.length);
         writeBuffer.writeBytes(bytes);
     }
 }

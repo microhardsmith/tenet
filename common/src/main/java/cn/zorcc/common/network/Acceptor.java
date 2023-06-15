@@ -48,17 +48,17 @@ public final class Acceptor {
      *   Note that this function should only be invoked by its connector in shouldRead() or shouldWrite() to replace current Acceptor.
      */
     public void toChannel(Protocol protocol) {
-        if(Thread.currentThread() != worker.thread()) {
+        if(Thread.currentThread() != worker.reader()) {
             throw new FrameworkException(ExceptionType.NETWORK, "Not in worker thread");
         }
         Channel channel = new Channel(socket, state, encoder, decoder, handler, protocol, loc, worker);
         worker.socketMap().put(socket, channel);
+        worker.submitWriterTask(new WriterTask(channel, null));
         int from = state.getAndSet(Native.REGISTER_READ);
         if(from != Native.REGISTER_READ) {
             n.ctl(worker.mux(), socket, from, Native.REGISTER_READ);
         }
         handler.onConnected(channel);
-        channel.writerThread().start();
     }
 
     /**
@@ -66,7 +66,7 @@ public final class Acceptor {
      *   This method could be directly executed by connector, or scheduled by a wheel job to the taskQueue, only one would succeed
      */
     public void close() {
-        if(Thread.currentThread() != worker.thread()) {
+        if(Thread.currentThread() != worker.reader()) {
             throw new FrameworkException(ExceptionType.NETWORK, "Not in worker thread");
         }
         if(worker.socketMap().remove(socket, this)) {
@@ -76,7 +76,7 @@ public final class Acceptor {
             }
             connector.doClose(this);
             if (worker.counter().decrementAndGet() == 0L) {
-                worker.submitTask(new Task(Task.TaskType.POSSIBLE_SHUTDOWN, null, null, null));
+                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.POSSIBLE_SHUTDOWN, null, null, null));
             }
         }
     }

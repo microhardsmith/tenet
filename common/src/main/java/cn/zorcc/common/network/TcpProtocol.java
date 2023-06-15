@@ -9,7 +9,6 @@ import cn.zorcc.common.exception.FrameworkException;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.foreign.MemorySegment;
-import java.util.concurrent.locks.LockSupport;
 
 /**
  *   Tcp channel protocol, using system send and recv
@@ -24,10 +23,12 @@ public final class TcpProtocol implements Protocol {
         if(readableBytes > 0) {
             readBuffer.setWriteIndex(readableBytes);
             channel.onReadBuffer(readBuffer);
-        }else if(readableBytes == 0) {
-            channel.close();
         }else {
-            throw new FrameworkException(ExceptionType.NETWORK, "Unable to recv, errno : %d".formatted(n.errno()));
+            if(readableBytes < 0) {
+                // usually connection reset by peer
+                log.debug("{} tcp recv err, errno : {}", channel.loc(), n.errno());
+            }
+            channel.close();
         }
     }
 
@@ -35,14 +36,14 @@ public final class TcpProtocol implements Protocol {
     public void canWrite(Channel channel) {
         if(channel.state().compareAndSet(Native.REGISTER_READ_WRITE, Native.REGISTER_READ)) {
             n.ctl(channel.worker().mux(), channel.socket(), Native.REGISTER_READ_WRITE, Native.REGISTER_READ);
-            LockSupport.unpark(channel.writerThread());
+            channel.worker().submitWriterTask(new WriterTask(channel, Boolean.TRUE));
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
     @Override
-    public void doWrite(Channel channel, WriteBuffer writeBuffer) {
+    public WriteStatus doWrite(Channel channel, WriteBuffer writeBuffer) {
         Socket socket = channel.socket();
         MemorySegment segment = writeBuffer.segment();
         long len = segment.byteSize();
@@ -54,19 +55,20 @@ public final class TcpProtocol implements Protocol {
                 // current TCP write buffer is full, wait until writable again
                 if(channel.state().compareAndSet(Native.REGISTER_READ, Native.REGISTER_READ_WRITE)) {
                     n.ctl(channel.worker().mux(), socket, Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
-                    LockSupport.park();
-                    doWrite(channel, writeBuffer);
+                    return WriteStatus.PENDING;
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
                 }
             }else {
-                throw new FrameworkException(ExceptionType.NETWORK, "Failed to write, errno : %d".formatted(errno));
+                log.error("Failed to write, errno : {}", errno);
+                return WriteStatus.FAILURE;
             }
         }else if(bytes < len){
             // only write a part of the segment, wait for next loop
             writeBuffer.truncate(bytes);
-            doWrite(channel, writeBuffer);
+            return doWrite(channel, writeBuffer);
         }
+        return WriteStatus.SUCCESS;
     }
 
     @Override

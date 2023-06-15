@@ -27,7 +27,7 @@ public class Constants {
 
     public static final Clock SYSTEM_CLOCK = Clock.systemDefaultZone();
     public static final String TIME_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS";
-    public static final String TIME_RESOLVER = "cn.zorcc.log.DefaultTimeResolver";
+    public static final String TIME_RESOLVER = "cn.zorcc.common.log.DefaultTimeResolver";
     public static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern(TIME_FORMAT);
     public static final ZoneOffset LOCAL_ZONE_OFFSET = OffsetTime.now().getOffset();
 
@@ -195,8 +195,8 @@ public class Constants {
     public static final String NOT_LOGIN = "Current user not login";
     public static final String ALREADY_EXIST = "User already exist";
     public static final String DB_CONNECTION_ERR = "Can't send message to postgresql";
-    public static final Integer ONE = 1;
-    public static final Integer ZERO = 0;
+    public static final int ONE = 1;
+    public static final int ZERO = 0;
     public static final String AUTHORIZATION = "Authorization";
     public static final String BEARER = "Bearer ";
     public static final Integer BEARER_SIZE = BEARER.length();
