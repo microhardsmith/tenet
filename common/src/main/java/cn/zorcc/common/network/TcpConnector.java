@@ -6,7 +6,7 @@ import cn.zorcc.common.exception.FrameworkException;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- *   Acceptor for Tcp protocol
+ *   Connector for normal TCP connection
  */
 @Slf4j
 public class TcpConnector implements Connector {

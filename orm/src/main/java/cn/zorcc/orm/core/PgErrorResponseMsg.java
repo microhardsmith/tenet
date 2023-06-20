@@ -1,4 +1,4 @@
-package cn.zorcc.orm.pg;
+package cn.zorcc.orm.core;
 
 import cn.zorcc.common.Pair;
 

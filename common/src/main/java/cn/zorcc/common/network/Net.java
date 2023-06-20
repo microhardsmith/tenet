@@ -17,6 +17,8 @@ import java.lang.foreign.MemorySegment;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 /**
@@ -66,6 +68,7 @@ public class Net implements LifeCycle {
     private final MemorySegment events;
     private final Thread thread;
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private final Lock lock = new ReentrantLock();
 
     public Net(Supplier<Encoder> e, Supplier<Decoder> d, Supplier<Handler> h, NetworkConfig config) {
         if(!instanceFlag.compareAndSet(false, true)) {
@@ -91,16 +94,13 @@ public class Net implements LifeCycle {
             try(Arena arena = Arena.openConfined()) {
                 MemorySegment publicKey = NativeUtil.allocateStr(arena, config.getPublicKeyFile());
                 if (Openssl.setPublicKey(sslServerCtx, publicKey, Constants.SSL_FILETYPE_PEM) <= 0) {
-                    Openssl.sslErrPrint(NativeUtil.stderr());
                     throw new FrameworkException(ExceptionType.NETWORK, "SSL server public key err");
                 }
                 MemorySegment privateKey = NativeUtil.allocateStr(arena, config.getPrivateKeyFile());
                 if (Openssl.setPrivateKey(sslServerCtx, privateKey, Constants.SSL_FILETYPE_PEM) <= 0) {
-                    Openssl.sslErrPrint(NativeUtil.stderr());
                     throw new FrameworkException(ExceptionType.NETWORK, "SSL server private key err");
                 }
                 if (Openssl.checkPrivateKey(sslServerCtx) <= 0) {
-                    Openssl.sslErrPrint(NativeUtil.stderr());
                     throw new FrameworkException(ExceptionType.NETWORK, "SSL server private key and public key doesn't match");
                 }
             }
@@ -162,32 +162,16 @@ public class Net implements LifeCycle {
         this(e, d, h, new NetworkConfig());
     }
 
-    public Supplier<Encoder> encoderSupplier() {
-        return encoderSupplier;
-    }
-
-    public Supplier<Decoder> decoderSupplier() {
-        return decoderSupplier;
-    }
-
-    public Supplier<Handler> handlerSupplier() {
-        return handlerSupplier;
-    }
-
-    public Supplier<Connector> connectorSupplier() {
-        return connectorSupplier;
-    }
-
     /**
-     *   create a new client-side ssl object
+     *   Create a new client-side ssl object
      */
-    public MemorySegment newSsl() {
+    public MemorySegment newClientSsl() {
         return Openssl.sslNew(sslClientCtx);
     }
 
 
     /**
-     *   validate global network config, throw exception if illegal
+     *   Validate global network config, throw exception if illegal
      */
     private void validateNetworkConfig(NetworkConfig config) {
         String ip = config.getIp();
@@ -201,14 +185,14 @@ public class Net implements LifeCycle {
     }
 
     /**
-     *   return current network config
+     *   Return current network config
      */
     public NetworkConfig config() {
         return config;
     }
 
     /**
-     *   perform round-robin worker selection for worker
+     *   Perform round-robin worker selection for worker
      */
     public Worker nextWorker() {
         int index = (int) (counter.getAndIncrement() % workers.length);
@@ -234,7 +218,7 @@ public class Net implements LifeCycle {
                 if (errno == n.connectBlockCode()) {
                     // connection is still in-process
                     mount(acceptor);
-                    Wheel.wheel().addJob(() -> worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_ACCEPTOR, acceptor, null, null)), timeout, timeUnit);
+                    Wheel.wheel().addJob(() -> worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_ACCEPTOR, acceptor)), timeout, timeUnit);
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, "Failed to connect, errno : %d".formatted(errno));
                 }
@@ -253,7 +237,7 @@ public class Net implements LifeCycle {
      *   Mount target acceptor to its worker thread for write events to happen
      */
     private void mount(Acceptor acceptor) {
-        acceptor.worker().submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.ADD_ACCEPTOR, acceptor, null, null));
+        acceptor.worker().submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.ADD_ACCEPTOR, acceptor));
         if (acceptor.state().compareAndSet(Native.REGISTER_NONE, Native.REGISTER_WRITE)) {
             n.ctl(acceptor.worker().mux(), acceptor.socket(), Native.REGISTER_NONE, Native.REGISTER_WRITE);
         }else {
@@ -263,31 +247,45 @@ public class Net implements LifeCycle {
 
     @Override
     public void init() {
-        if(running.compareAndSet(false, true)) {
-            for (Worker worker : workers) {
-                worker.start();
+        lock.lock();
+        try{
+            if(running.compareAndSet(false, true)) {
+                for (Worker worker : workers) {
+                    worker.start();
+                }
+                thread.start();
             }
-            thread.start();
+        }finally {
+            lock.unlock();
         }
     }
 
     @Override
     public void shutdown() {
+        lock.lock();
         try{
-            long nano = Clock.nano();
-            thread.interrupt();
-            thread.join();
-            for (Worker worker : workers) {
-                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.GRACEFUL_SHUTDOWN, null, null, new Shutdown(config.getShutdownTimeout(), TimeUnit.SECONDS)));
+            if(running.compareAndSet(true, false)) {
+                long nano = Clock.nano();
+                thread.interrupt();
+                thread.join();
+                for (Worker worker : workers) {
+                    worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.GRACEFUL_SHUTDOWN, new Shutdown(config.getShutdownTimeout(), TimeUnit.SECONDS)));
+                }
+                for(Worker worker : workers) {
+                    worker.reader().join();
+                    worker.writer().join();
+                }
+                n.exit();
+                Openssl.sslCtxFree(sslClientCtx);
+                if(sslServerCtx != null) {
+                    Openssl.sslCtxFree(sslServerCtx);
+                }
+                log.debug("Exiting Net gracefully, cost : {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
             }
-            for(Worker worker : workers) {
-                worker.reader().join();
-                worker.writer().join();
-            }
-            n.exit();
-            log.debug("Exiting Net gracefully, cost : {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
         }catch (InterruptedException e) {
             throw new FrameworkException(ExceptionType.NETWORK, "Shutting down Net failed because of thread interruption");
+        }finally {
+            lock.unlock();
         }
     }
 }

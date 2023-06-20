@@ -11,7 +11,10 @@ import org.slf4j.spi.SLF4JServiceProvider;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class LogServiceProvider implements SLF4JServiceProvider {
+/**
+ *   ServiceProvider for Tenet log, not supporting Marker or MDC
+ */
+public final class LogServiceProvider implements SLF4JServiceProvider {
     /**
      *  Slf4j major version 2.0
      */

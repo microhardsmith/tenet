@@ -6,6 +6,14 @@ import cn.zorcc.common.pojo.Loc;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ *   Network acceptor abstraction
+ *   Unlike most application, tenet has divided a connection establish phase into two seperate part: Acceptor and Channel
+ *   During the acceptor part, reading and writing will be handled by a unique connector instance
+ *   Acceptor can evolve into a Channel, then its reading and writing operations will be take over by Tenet default read-write model, or fail and evicted from the worker
+ *   Acceptor and Channel will always use the same worker instance, only one would exist in its socketMap
+ *   The acceptor must only be accessed in the worker's reader thread, acceptor will never touch worker's writer thread
+ */
 public final class Acceptor {
     private static final Native n = Native.n;
     private final Socket socket;
@@ -44,7 +52,7 @@ public final class Acceptor {
     }
 
     /**
-     *   Upgrade current Acceptor to a new created Channel in worker thread
+     *   Evolve current Acceptor to a new created Channel in worker thread
      *   Note that this function should only be invoked by its connector in shouldRead() or shouldWrite() to replace current Acceptor.
      */
     public void toChannel(Protocol protocol) {
@@ -53,7 +61,7 @@ public final class Acceptor {
         }
         Channel channel = new Channel(socket, state, encoder, decoder, handler, protocol, loc, worker);
         worker.socketMap().put(socket, channel);
-        worker.submitWriterTask(new WriterTask(channel, null));
+        worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.INITIATE, channel, null));
         int from = state.getAndSet(Native.REGISTER_READ);
         if(from != Native.REGISTER_READ) {
             n.ctl(worker.mux(), socket, from, Native.REGISTER_READ);
@@ -62,7 +70,7 @@ public final class Acceptor {
     }
 
     /**
-     *   Close current acceptor in worker thread
+     *   Close current acceptor in worker's reader thread
      *   This method could be directly executed by connector, or scheduled by a wheel job to the taskQueue, only one would succeed
      */
     public void close() {
@@ -76,7 +84,7 @@ public final class Acceptor {
             }
             connector.doClose(this);
             if (worker.counter().decrementAndGet() == 0L) {
-                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.POSSIBLE_SHUTDOWN, null, null, null));
+                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.POSSIBLE_SHUTDOWN, null));
             }
         }
     }

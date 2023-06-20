@@ -20,9 +20,9 @@ import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TransferQueue;
 
 /**
- *  tenet logger
+ *  Tenet logger, using a single thread to async log msg to console, file or remote
  */
-public class Logger extends LegacyAbstractLogger {
+public final class Logger extends LegacyAbstractLogger {
     private static final Map<Level, byte[]> levelMap = Map.of(
             Level.DEBUG, Constants.DEBUG_BYTES,
             Level.TRACE, Constants.TRACE_BYTES,
@@ -80,9 +80,6 @@ public class Logger extends LegacyAbstractLogger {
         return null;
     }
 
-    /**
-     *  日志输出,日志分为五个部分： 时间 等级 线程名 类名 日志消息
-     */
     @Override
     protected void handleNormalizedLoggingCall(Level level, Marker marker, String s, Object[] objects, Throwable throwable) {
         Instant instant = Constants.SYSTEM_CLOCK.instant();
@@ -108,7 +105,7 @@ public class Logger extends LegacyAbstractLogger {
     }
 
     /**
-     *   process msg, replacing the {} with target args
+     *   Process msg, replacing '{}' with target args, return UTF-8 byte array
      */
     public static byte[] processMsg(String msg, Object[] args) {
         byte[] msgBytes = msg.getBytes(StandardCharsets.UTF_8);

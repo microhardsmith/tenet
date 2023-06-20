@@ -27,7 +27,7 @@ public class Openssl {
     public static final String CRYPTO_LIB = "crypto";
     public static final String SSL_LIB = "ssl";
     /**
-     *   There two variable is hard-coded definition from ssl.h, since SSL_CTX_set_mode and SSL_CTX_clear_mode are macros, we can't directly use it
+     *   These two variable are hard-coded definition from ssl.h, since SSL_CTX_set_mode and SSL_CTX_clear_mode are macros, we can't directly use it
      */
     private static final int SSL_CTRL_MODE = 33;
     private static final int SSL_CTRL_CLEAR_MODE = 78;
@@ -52,7 +52,6 @@ public class Openssl {
     private static final MethodHandle sslFreeMethod;
     private static final MethodHandle sslCtxFreeMethod;
     private static final MethodHandle sslGetErrMethod;
-    private static final MethodHandle sslErrPrintMethod;
 
 
     static {
@@ -84,10 +83,9 @@ public class Openssl {
         sslReadMethod = NativeUtil.methodHandle(ssl, "SSL_read", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         sslWriteMethod = NativeUtil.methodHandle(ssl, "SSL_write", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         sslShutdownMethod = NativeUtil.methodHandle(ssl, "SSL_shutdown", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        sslFreeMethod = NativeUtil.methodHandle(ssl, "SSL_free", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        sslFreeMethod = NativeUtil.methodHandle(ssl, "SSL_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         sslCtxFreeMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         sslGetErrMethod = NativeUtil.methodHandle(ssl, "SSL_get_error", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        sslErrPrintMethod = NativeUtil.methodHandle(crypto, "ERR_print_errors_fp", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         log.info("Initializing OpenSSL successfully, version : {}, time consuming : {} ms", version, TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
     }
 
@@ -214,9 +212,9 @@ public class Openssl {
         }
     }
 
-    public static int sslFree(MemorySegment ssl) {
+    public static void sslFree(MemorySegment ssl) {
         try{
-            return (int) sslFreeMethod.invokeExact(ssl);
+            sslFreeMethod.invokeExact(ssl);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslFree()", throwable);
         }
@@ -235,14 +233,6 @@ public class Openssl {
             return (int) sslGetErrMethod.invokeExact(ssl, ret);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslGetErr()", throwable);
-        }
-    }
-
-    public static void sslErrPrint(MemorySegment fp) {
-        try{
-            sslErrPrintMethod.invokeExact(fp);
-        }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslErrPrint()", throwable);
         }
     }
 

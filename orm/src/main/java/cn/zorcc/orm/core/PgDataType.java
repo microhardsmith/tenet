@@ -1,4 +1,4 @@
-package cn.zorcc.orm.pg;
+package cn.zorcc.orm.core;
 
 import java.math.BigDecimal;
 import java.time.*;

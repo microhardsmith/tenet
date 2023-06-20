@@ -6,10 +6,10 @@ import java.time.LocalDateTime;
 import java.util.concurrent.TimeUnit;
 
 /**
- *   默认为Constants.TIME_FORMAT提供的时间转化类,通过反射加载
+ *  A default time-resolver for Constants.TIME_FORMAT
  */
 @SuppressWarnings("unused")
-public class DefaultTimeResolver implements TimeResolver {
+public final class DefaultTimeResolver implements TimeResolver {
     private final byte[] bytes = new byte[Constants.TIME_FORMAT.length()];
 
     public DefaultTimeResolver() {

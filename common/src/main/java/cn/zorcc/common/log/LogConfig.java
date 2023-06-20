@@ -29,7 +29,7 @@ public class LogConfig {
     /**
      *  初始日志行内存大小
      */
-    private int bufferSize = 4 * Constants.KB;
+    private long bufferSize = 4 * Constants.KB;
     /**
      *  日志格式字符串
      */

@@ -8,6 +8,9 @@ import lombok.extern.slf4j.Slf4j;
 import java.lang.foreign.MemorySegment;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ *   Connector using SSL encryption
+ */
 @Slf4j
 public class SslConnector implements Connector {
     private static final Native n = Native.n;

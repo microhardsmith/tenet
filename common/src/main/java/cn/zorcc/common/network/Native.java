@@ -12,7 +12,7 @@ import java.lang.foreign.MemorySegment;
 import java.util.Map;
 
 /**
- *   Platform native interface for Network operation
+ *   Platform independent native interface for Network operation
  */
 public interface Native {
 
@@ -89,7 +89,7 @@ public interface Native {
     ClientSocket accept(NetworkConfig config, Socket socket);
 
     /**
-     *   Recv data from remote socket, return the actual bytes received TODO 8 bytes len and result
+     *   Recv data from remote socket, return the actual bytes received
      */
     long recv(Socket socket, MemorySegment data, long len);
 
@@ -137,7 +137,7 @@ public interface Native {
     int REGISTER_READ_WRITE = 3;
 
     /**
-     *   Convert a int port to a unsigned short type
+     *   Convert a int port to an unsigned short type
      */
     default short shortPort(int port) {
         if(port < 1 || port > 65535) {
@@ -148,7 +148,7 @@ public interface Native {
     }
 
     /**
-     *   Convert  a unsigned short type to a int
+     *   Convert an unsigned short type to a int
      */
     default int intPort(short port) {
         return 0xFFFF & port;

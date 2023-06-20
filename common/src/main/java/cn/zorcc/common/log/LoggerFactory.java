@@ -1,18 +1,19 @@
 package cn.zorcc.common.log;
 
+import cn.zorcc.common.Constants;
 import org.slf4j.ILoggerFactory;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- *  tenet logger factory
+ *  Tenet logger factory
  */
-public class LoggerFactory implements ILoggerFactory {
+public final class LoggerFactory implements ILoggerFactory {
     /**
      *   Logger cache
      */
-    private static final Map<String, org.slf4j.Logger> cache = new ConcurrentHashMap<>(1 << 10);
+    private static final Map<String, Logger> cache = new ConcurrentHashMap<>(Constants.KB);
     @Override
     public org.slf4j.Logger getLogger(String name) {
         return cache.computeIfAbsent(name, Logger::new);

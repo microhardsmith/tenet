@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class LinuxNative implements Native {
     /**
-     *  corresponding to union epoll_data in epoll.h
+     *  Corresponding to union epoll_data in epoll.h
      */
     private static final MemoryLayout epollDataLayout = MemoryLayout.unionLayout(
             ValueLayout.ADDRESS.withName("ptr"),
@@ -29,7 +29,7 @@ public class LinuxNative implements Native {
             ValueLayout.JAVA_LONG.withName("u64")
     );
     /**
-     *  corresponding to struct epoll_event in epoll.h
+     *  Corresponding to struct epoll_event in epoll.h
      *  Note that epoll_event struct is defined as __attribute__ ((__packed__))
      *  so there is no need for a padding layout
      */
@@ -42,7 +42,7 @@ public class LinuxNative implements Native {
     private static final long dataOffset = epollEventLayout.byteOffset(MemoryLayout.PathElement.groupElement("data"));
     private static final long fdOffset = epollDataLayout.byteOffset(MemoryLayout.PathElement.groupElement("fd"));
     /**
-     *  corresponding to struct sockaddr_in in in.h
+     *  Corresponding to struct sockaddr_in in in.h
      */
     private static final MemoryLayout sockAddrLayout = MemoryLayout.structLayout(
             ValueLayout.JAVA_SHORT.withName("sin_family"),
@@ -77,7 +77,7 @@ public class LinuxNative implements Native {
     private static final int sendBlockCode;
 
     /**
-     *   corresponding to `int l_connect_block_code()`
+     *   Corresponding to `int l_connect_block_code()`
      */
     @Override
     public int connectBlockCode() {
@@ -85,7 +85,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *   corresponding to `int l_send_block_code()`
+     *   Corresponding to `int l_send_block_code()`
      */
     @Override
     public int sendBlockCode() {
@@ -329,7 +329,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `int l_epoll_create()`
+     *  Corresponding to `int l_epoll_create()`
      */
     public int epollCreate() {
         try{
@@ -340,7 +340,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `int l_epoll_ctl(int epfd, int op, int socket, struct epoll_event* ev)`
+     *  Corresponding to `int l_epoll_ctl(int epfd, int op, int socket, struct epoll_event* ev)`
      */
     public int epollCtl(int epfd, int op, int socket, MemorySegment ev) {
         try{
@@ -351,7 +351,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `int l_epoll_wait(int epfd, struct epoll_event* events, int maxEvents, int timeout)`
+     *  Corresponding to `int l_epoll_wait(int epfd, struct epoll_event* events, int maxEvents, int timeout)`
      */
     public int epollWait(int epfd, MemorySegment events, int maxEvents, int timeout) {
         try{
@@ -362,7 +362,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `int l_address(struct sockaddr_in* sockAddr, char* addrStr, socklen_t len)`
+     *  Corresponding to `int l_address(struct sockaddr_in* sockAddr, char* addrStr, socklen_t len)`
      */
     public int address(MemorySegment sockAddr, MemorySegment addrStr, int len) {
         try{
@@ -373,7 +373,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `uint16_t l_port(struct sockaddr_in* sockAddr)`
+     *  Corresponding to `uint16_t l_port(struct sockaddr_in* sockAddr)`
      */
     public short port(MemorySegment sockAddr) {
         try{
@@ -384,7 +384,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `int l_socket_create()`
+     *  Corresponding to `int l_socket_create()`
      */
     public int socketCreate() {
         try{
@@ -395,7 +395,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `int l_accept(int socket, struct sockaddr_in* clientAddr, socklen_t clientAddrSize)`
+     *  Corresponding to `int l_accept(int socket, struct sockaddr_in* clientAddr, socklen_t clientAddrSize)`
      */
     public int accept(int socket, MemorySegment clientAddr, int clientAddrSize) {
         try{
@@ -406,7 +406,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `int l_set_sock_addr(struct sockaddr_in* sockAddr, char* address, uint16_t port)`
+     *  Corresponding to `int l_set_sock_addr(struct sockaddr_in* sockAddr, char* address, uint16_t port)`
      */
     public int setSockAddr(MemorySegment sockAddr, MemorySegment address, short port) {
         try{
@@ -417,7 +417,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `int l_set_reuse_addr(int socket, int value)`
+     *  Corresponding to `int l_set_reuse_addr(int socket, int value)`
      */
     public int setReuseAddr(int socket, int value) {
         try{
@@ -428,7 +428,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `int l_set_keep_alive(int socket, int value)`
+     *  Corresponding to `int l_set_keep_alive(int socket, int value)`
      */
     public int setKeepAlive(int socket, int value) {
         try{
@@ -439,7 +439,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `int l_set_tcp_no_delay(int socket, int value)`
+     *  Corresponding to `int l_set_tcp_no_delay(int socket, int value)`
      */
     public int setTcpNoDelay(int socket, int value) {
         try{
@@ -450,7 +450,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `int l_get_err_opt(int socket, int* ptr)`
+     *  Corresponding to `int l_get_err_opt(int socket, int* ptr)`
      */
     public int getErrOpt(int socket, MemorySegment ptr) {
         try{
@@ -461,7 +461,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `int l_set_nonblocking(int socket)`
+     *  Corresponding to `int l_set_nonblocking(int socket)`
      */
     public int setNonBlocking(int socket) {
         try{
@@ -472,7 +472,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `int l_bind(int socket, struct sockaddr_in* sockAddr, socklen_t size)`
+     *  Corresponding to `int l_bind(int socket, struct sockaddr_in* sockAddr, socklen_t size)`
      */
     public int bind(int socket, MemorySegment sockAddr, int size) {
         try{
@@ -483,7 +483,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `int l_connect(int socket, struct sockaddr_in* sockAddr, socklen_t size)`
+     *  Corresponding to `int l_connect(int socket, struct sockaddr_in* sockAddr, socklen_t size)`
      */
     public int connect(int socket, MemorySegment sockAddr, int size) {
         try{
@@ -494,7 +494,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `int l_listen(int socket, int backlog)`
+     *  Corresponding to `int l_listen(int socket, int backlog)`
      */
     public int listen(int socket, int backlog) {
         try{
@@ -505,7 +505,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `ssize_t l_recv(int socket, void* buf, size_t len)`
+     *  Corresponding to `ssize_t l_recv(int socket, void* buf, size_t len)`
      */
     public long recv(int socket, MemorySegment buf, long len) {
         try{
@@ -516,7 +516,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `ssize_t l_send(int socket, void* buf, size_t len)`
+     *  Corresponding to `ssize_t l_send(int socket, void* buf, size_t len)`
      */
     public long send(int socket, MemorySegment buf, long len) {
         try{
@@ -527,7 +527,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `int l_close(int fd)`
+     *  Corresponding to `int l_close(int fd)`
      */
     public int close(int fd) {
         try{
@@ -538,7 +538,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `int l_shutdown_write(int fd)`
+     *  Corresponding to `int l_shutdown_write(int fd)`
      */
     public int shutdownWrite(int fd) {
         try{
@@ -549,7 +549,7 @@ public class LinuxNative implements Native {
     }
 
     /**
-     *  corresponding to `int l_errno()`
+     *  Corresponding to `int l_errno()`
      */
     public int errno() {
         try{

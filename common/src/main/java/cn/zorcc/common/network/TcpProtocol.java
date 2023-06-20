@@ -11,7 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.lang.foreign.MemorySegment;
 
 /**
- *   Tcp channel protocol, using system send and recv
+ *   Protocol for normal TCP connection
  */
 @Slf4j
 public final class TcpProtocol implements Protocol {
@@ -36,7 +36,7 @@ public final class TcpProtocol implements Protocol {
     public void canWrite(Channel channel) {
         if(channel.state().compareAndSet(Native.REGISTER_READ_WRITE, Native.REGISTER_READ)) {
             n.ctl(channel.worker().mux(), channel.socket(), Native.REGISTER_READ_WRITE, Native.REGISTER_READ);
-            channel.worker().submitWriterTask(new WriterTask(channel, Boolean.TRUE));
+            channel.worker().submitWriterTask(new WriterTask(WriterTask.WriterTaskType.WRITABLE, channel, null));
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }

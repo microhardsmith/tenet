@@ -1,4 +1,4 @@
-package cn.zorcc.orm.pg;
+package cn.zorcc.orm.core;
 
 import com.ongres.scram.client.ScramClient;
 import com.ongres.scram.client.ScramSession;

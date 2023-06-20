@@ -1,4 +1,4 @@
-package cn.zorcc.orm.pg;
+package cn.zorcc.orm.core;
 
 import lombok.extern.slf4j.Slf4j;
 

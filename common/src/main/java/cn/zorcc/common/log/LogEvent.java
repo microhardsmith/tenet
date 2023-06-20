@@ -1,15 +1,15 @@
 package cn.zorcc.common.log;
 
 /**
- * log event entity
- * @param flush 是否为刷新事件
- * @param timestamp 日志时间戳
- * @param time 日志时间
- * @param level 日志等级
- * @param threadName 线程名
- * @param className 类名
- * @param throwable 异常
- * @param msg 日志消息体(已格式化)
+ * Log event entity
+ * @param flush whether it's a flush event
+ * @param timestamp nanosecond timestamp
+ * @param time
+ * @param level
+ * @param threadName
+ * @param className
+ * @param throwable
+ * @param msg actual log msg which has been formatted
  */
 public record LogEvent (
         boolean flush,

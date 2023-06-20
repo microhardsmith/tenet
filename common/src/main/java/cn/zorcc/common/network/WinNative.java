@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public final class WinNative implements Native {
     /**
-     *  corresponding to union epoll_data in wepoll.h
+     *  Corresponding to union epoll_data in wepoll.h
      */
     private static final MemoryLayout epollDataLayout = MemoryLayout.unionLayout(
             ValueLayout.ADDRESS.withName("ptr"),
@@ -32,7 +32,7 @@ public final class WinNative implements Native {
     );
 
     /**
-     *  corresponding to struct epoll_event in wepoll.h
+     *  Corresponding to struct epoll_event in wepoll.h
      */
     private static final MemoryLayout epollEventLayout = MemoryLayout.structLayout(
             ValueLayout.JAVA_INT.withName("events"),
@@ -45,7 +45,7 @@ public final class WinNative implements Native {
     private static final long sockOffset = epollDataLayout.byteOffset(MemoryLayout.PathElement.groupElement("sock"));
 
     /**
-     *  corresponding to struct sockaddr_in
+     *  Corresponding to struct sockaddr_in
      */
     private static final MemoryLayout sockAddrLayout = MemoryLayout.structLayout(
             ValueLayout.JAVA_SHORT.withName("sin_family"),
@@ -150,7 +150,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *   corresponding to `int w_connect_block_code()`
+     *   Corresponding to `int w_connect_block_code()`
      */
     @Override
     public int connectBlockCode() {
@@ -158,7 +158,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *   corresponding to `int w_send_block_code()`
+     *   Corresponding to `int w_send_block_code()`
      */
     @Override
     public int sendBlockCode() {
@@ -340,7 +340,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `void* w_epoll_create()`
+     *  Corresponding to `void* w_epoll_create()`
      */
     public MemorySegment epollCreate() {
         try{
@@ -351,7 +351,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_epoll_ctl(void* handle, int op, SOCKET socket, struct epoll_event* event)`
+     *  Corresponding to `int w_epoll_ctl(void* handle, int op, SOCKET socket, struct epoll_event* event)`
      */
     public int epollCtl(MemorySegment handle, int op, long socket, MemorySegment event) {
         try{
@@ -362,7 +362,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_epoll_wait(void* handle, struct epoll_event* events, int maxevents, int timeout)`
+     *  Corresponding to `int w_epoll_wait(void* handle, struct epoll_event* events, int maxevents, int timeout)`
      */
     public int epollWait(MemorySegment handle, MemorySegment events, int maxEvents, int timeout) {
         try{
@@ -373,7 +373,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_epoll_close(void* handle)`
+     *  Corresponding to `int w_epoll_close(void* handle)`
      */
     public int epollClose(MemorySegment handle) {
         try{
@@ -384,7 +384,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_address(struct sockaddr_in* clientAddr, char* addrStr, int len)`
+     *  Corresponding to `int w_address(struct sockaddr_in* clientAddr, char* addrStr, int len)`
      */
     public int address(MemorySegment clientAddr, MemorySegment addrStr, int len) {
         try{
@@ -395,7 +395,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `u_short w_port(struct sockaddr_in* clientAddr)`
+     *  Corresponding to `u_short w_port(struct sockaddr_in* clientAddr)`
      */
     public short port(MemorySegment clientAddr) {
         try{
@@ -406,7 +406,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `SOCKET w_socket_create()`
+     *  Corresponding to `SOCKET w_socket_create()`
      */
     public long socketCreate() {
         try{
@@ -417,7 +417,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `SOCKET w_accept(SOCKET socket, struct sockaddr_in* clientAddr, int clientAddrSize)`
+     *  Corresponding to `SOCKET w_accept(SOCKET socket, struct sockaddr_in* clientAddr, int clientAddrSize)`
      */
     public long accept(long socket, MemorySegment clientAddr, int clientAddrSize) {
         try{
@@ -428,7 +428,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_set_sock_addr(struct sockaddr_in* sockAddr, char* address, u_short port)`
+     *  Corresponding to `int w_set_sock_addr(struct sockaddr_in* sockAddr, char* address, u_short port)`
      */
     public int setSockAddr(MemorySegment sockAddr, MemorySegment address, short port) {
         try{
@@ -439,7 +439,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_set_reuse_addr(SOCKET socket, int value)`
+     *  Corresponding to `int w_set_reuse_addr(SOCKET socket, int value)`
      */
     public int setReuseAddr(long socket, int value) {
         try{
@@ -450,7 +450,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_set_keep_alive(SOCKET socket, int value)`
+     *  Corresponding to `int w_set_keep_alive(SOCKET socket, int value)`
      */
     public int setKeepAlive(long socket, int value) {
         try{
@@ -461,7 +461,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_set_tcp_no_delay(SOCKET socket, int value)`
+     *  Corresponding to `int w_set_tcp_no_delay(SOCKET socket, int value)`
      */
     public int setTcpNoDelay(long socket, int value) {
         try{
@@ -472,7 +472,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_get_err_opt(SOCKET socket, int* ptr)`
+     *  Corresponding to `int w_get_err_opt(SOCKET socket, int* ptr)`
      */
     public int getErrOpt(long socket, MemorySegment ptr) {
         try{
@@ -483,7 +483,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_set_nonblocking(SOCKET socket)`
+     *  Corresponding to `int w_set_nonblocking(SOCKET socket)`
      */
     public int setNonBlocking(long socket) {
         try{
@@ -494,7 +494,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_bind(SOCKET socket, struct sockaddr_in* sockAddr, int size)`
+     *  Corresponding to `int w_bind(SOCKET socket, struct sockaddr_in* sockAddr, int size)`
      */
     public int bind(long socket, MemorySegment sockAddr, int size) {
         try{
@@ -505,7 +505,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_connect(SOCKET socket, struct sockaddr_in* sockAddr, int size)`
+     *  Corresponding to `int w_connect(SOCKET socket, struct sockaddr_in* sockAddr, int size)`
      */
     public int connect(long socket, MemorySegment sockAddr, int size) {
         try{
@@ -516,7 +516,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_listen(SOCKET socket, int backlog)`
+     *  Corresponding to `int w_listen(SOCKET socket, int backlog)`
      */
     public int listen(long socket, int backlog) {
         try{
@@ -527,7 +527,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_recv(SOCKET socket, char* buf, int len)`
+     *  Corresponding to `int w_recv(SOCKET socket, char* buf, int len)`
      */
     public int recv(long socket, MemorySegment buf, int len) {
         try{
@@ -538,7 +538,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_send(SOCKET socket, char* buf, int len)`
+     *  Corresponding to `int w_send(SOCKET socket, char* buf, int len)`
      */
     public int send(long socket, MemorySegment buf, int len) {
         try{
@@ -549,7 +549,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_close_socket(SOCKET socket)`
+     *  Corresponding to `int w_close_socket(SOCKET socket)`
      */
     public int closeSocket(long socket) {
         try{
@@ -560,7 +560,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_shutdown_write(SOCKET socket)`
+     *  Corresponding to `int w_shutdown_write(SOCKET socket)`
      */
     public int shutdownWrite(long socket) {
         try{
@@ -571,7 +571,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_get_last_error()`, make it errno() to be consistent with macOS and Linux
+     *  Corresponding to `int w_get_last_error()`, make it errno() to be consistent with macOS and Linux
      */
     @Override
     public int errno() {
@@ -583,7 +583,7 @@ public final class WinNative implements Native {
     }
 
     /**
-     *  corresponding to `int w_clean_up()`
+     *  Corresponding to `int w_clean_up()`
      */
     public int cleanUp() {
         try{

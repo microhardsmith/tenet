@@ -30,8 +30,8 @@ public class Test {
     public static void main(String[] args) {
         long nano = Clock.nano();
 
-        //testTcp();
-        testSsl();
+        testTcp();
+        //testSsl();
 
         long jvmTime = ManagementFactory.getRuntimeMXBean().getUptime();
         log.info("Starting now, causing {} ms, jvm started for {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)), jvmTime);

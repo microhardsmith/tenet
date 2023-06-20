@@ -25,10 +25,6 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @Slf4j
 public final class Worker {
-    /**
-     *   Max write operations in one writer thread loop
-     */
-    private static final int MAX_WRITES_PER_LOOP = 16;
     private final Native n = Native.n;
     private static final int INITIAL = 0;
     private static final int RUNNING = 1;
@@ -66,51 +62,64 @@ public final class Worker {
          */
         private WriteBuffer tempBuffer;
 
-        public void send(Channel channel, Object msg) {
-            switch (msg) {
-                case Boolean b -> {
-                    if(Boolean.TRUE.equals(b)) {
-                        // channel become writable now, try flush the tempBuffer
-                        flushTempBuffer(channel);
-                    }else {
-                        // force close the sender
+        public void sendMix(Channel channel, Mix mix) {
+            if(shutdown == null) {
+                try(WriteBuffer writeBuffer = new WriteBuffer(Net.WRITE_BUFFER_SIZE)) {
+                    for (Object msg : mix.objects()) {
+                        channel.encoder().encode(writeBuffer, msg);
+                    }
+                    if(writeBuffer.notEmpty()) {
+                        doSend(channel, writeBuffer);
+                    }
+                }
+            }
+        }
+
+        public void sendMsg(Channel channel, Object msg) {
+            if(shutdown == null) {
+                try(WriteBuffer writeBuffer = new WriteBuffer(Net.WRITE_BUFFER_SIZE)) {
+                    channel.encoder().encode(writeBuffer, msg);
+                    if(writeBuffer.notEmpty()) {
+                        doSend(channel, writeBuffer);
+                    }
+                }
+            }
+        }
+
+        public void becomeWritable(Channel channel) {
+            if(tempBuffer != null) {
+                switch (channel.protocol().doWrite(channel, tempBuffer)) {
+                    case SUCCESS -> {
+                        tempBuffer.close();
+                        tempBuffer = null;
+                        if(shutdown != null) {
+                            // pending buffer has been flushed, do shutdown right now
+                            doShutdown(channel, shutdown);
+                        }
+                    }
+                    case FAILURE -> {
+                        // channel should be closed, suspend afterwards writing
                         channelMap.remove(channel);
-                        if(tempBuffer != null) {
-                            tempBuffer.close();
-                        }
+                        submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, channel));
                     }
                 }
-                case Shutdown s -> {
-                    if(tempBuffer == null) {
-                        // current channel could be safely shutdown
-                        doShutdown(channel, s);
-                    }else {
-                        // still have some underlying data to be transferred
-                        shutdown = s;
-                    }
-                }
-                case Mix mix -> {
-                    if(shutdown == null) {
-                        try(WriteBuffer writeBuffer = new WriteBuffer(Net.WRITE_BUFFER_SIZE)) {
-                            for (Object o : mix.objects()) {
-                                channel.encoder().encode(writeBuffer, o);
-                            }
-                            if(writeBuffer.notEmpty()) {
-                                doSend(channel, writeBuffer);
-                            }
-                        }
-                    }
-                }
-                default -> {
-                    if(shutdown == null) {
-                        try(WriteBuffer writeBuffer = new WriteBuffer(Net.WRITE_BUFFER_SIZE)) {
-                            channel.encoder().encode(writeBuffer, msg);
-                            if(writeBuffer.notEmpty()) {
-                                doSend(channel, writeBuffer);
-                            }
-                        }
-                    }
-                }
+            }
+        }
+
+        public void shutdown(Channel channel, Shutdown shutdown) {
+            if(tempBuffer == null) {
+                // current channel could be safely shutdown
+                doShutdown(channel, shutdown);
+            }else {
+                // still have some underlying data to be transferred
+                this.shutdown = shutdown;
+            }
+        }
+
+        public void close(Channel channel) {
+            channelMap.remove(channel);
+            if(tempBuffer != null) {
+                tempBuffer.close();
             }
         }
 
@@ -128,7 +137,7 @@ public final class Worker {
                     case FAILURE -> {
                         // channel should be closed, suspend afterwards writing
                         channelMap.remove(channel);
-                        submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, null, channel, null));
+                        submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, channel));
                     }
                 }
             }else {
@@ -138,35 +147,12 @@ public final class Worker {
         }
 
         /**
-         *   Try flush the tempBuffer, if current channel has been shutdown, perform actual shutdown operation
-         */
-        private void flushTempBuffer(Channel channel) {
-            if(tempBuffer != null) {
-                switch (channel.protocol().doWrite(channel, tempBuffer)) {
-                    case SUCCESS -> {
-                        tempBuffer.close();
-                        tempBuffer = null;
-                        if(shutdown != null) {
-                            // pending buffer has been flushed, do shutdown right now
-                            doShutdown(channel, shutdown);
-                        }
-                    }
-                    case FAILURE -> {
-                        // channel should be closed, suspend afterwards writing
-                        channelMap.remove(channel);
-                        submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, null, channel, null));
-                    }
-                }
-            }
-        }
-
-        /**
          *   Perform the actual shutdown operation, no longer receiving write tasks
          */
         private void doShutdown(Channel channel, Shutdown s) {
             channelMap.remove(channel);
             channel.protocol().doShutdown(channel);
-            Wheel.wheel().addJob(() -> submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, null, channel, null)), s.timeout(), s.timeUnit());
+            Wheel.wheel().addJob(() -> submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, channel)), s.timeout(), s.timeUnit());
         }
     }
 
@@ -212,29 +198,58 @@ public final class Worker {
         return ThreadUtil.platform("Worker-w-" + sequence, () -> {
             log.debug("Initializing Net worker's writer, sequence : {}", sequence);
             try{
-                for( ; ; ) {
-                    WriterTask writerTask = writerTaskQueue.take();
-                    if(writerTask == WriterTask.INTERRUPT_TASK) {
-                        // exit writer thread
-                        break ;
-                    }
-                    Channel channel = writerTask.channel();
-                    Object msg = writerTask.msg();
-                    if(msg == null) {
-                        // perform channel registry
-                        channelMap.put(channel, new Sender());
-                    }else {
-                        // perform actual send operation
-                        Sender sender = channelMap.get(channel);
-                        if(sender != null) {
-                            sender.send(channel, msg);
-                        }
-                    }
-                }
+                loop();
             }catch (InterruptedException i) {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED, i);
             }
         });
+    }
+
+    /**
+     *   Infinite loop handling writeTasks from the queue
+     */
+    private void loop() throws InterruptedException {
+        for( ; ; ) {
+            WriterTask writerTask = writerTaskQueue.take();
+            Channel channel = writerTask.channel();
+            switch (writerTask.type()) {
+                case EXIT -> {
+                    return ;
+                }
+                case INITIATE -> channelMap.put(channel, new Sender());
+                case MIX_OF_MSG -> {
+                    Sender sender = channelMap.get(channel);
+                    if(sender != null && writerTask.msg() instanceof Mix mix) {
+                        sender.sendMix(channel, mix);
+                    }
+                }
+                case MSG -> {
+                    Sender sender = channelMap.get(channel);
+                    if(sender != null) {
+                        sender.sendMsg(channel, writerTask.msg());
+                    }
+                }
+                case WRITABLE -> {
+                    Sender sender = channelMap.get(channel);
+                    if(sender != null) {
+                        sender.becomeWritable(channel);
+                    }
+                }
+                case CLOSE -> {
+                    Sender sender = channelMap.get(channel);
+                    if(sender != null) {
+                        sender.close(channel);
+                    }
+                }
+                case SHUTDOWN -> {
+                    Sender sender = channelMap.get(channel);
+                    if(sender != null && writerTask.msg() instanceof Shutdown shutdown) {
+                        sender.shutdown(channel, shutdown);
+                    }
+                }
+                default -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+            }
+        }
     }
 
     public Mux mux() {
@@ -255,20 +270,34 @@ public final class Worker {
     private void handleTask(ReaderTask readerTask) {
         switch (readerTask.type()) {
             case ADD_ACCEPTOR -> {
-                Acceptor acceptor = readerTask.acceptor();
-                socketMap.put(acceptor.socket(), acceptor);
-                counter.getAndIncrement();
+                if(readerTask.target() instanceof Acceptor acceptor) {
+                    socketMap.put(acceptor.socket(), acceptor);
+                    counter.getAndIncrement();
+                }else {
+                    throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+                }
             }
-            case CLOSE_ACCEPTOR -> readerTask.acceptor().close();
-            case CLOSE_CHANNEL -> readerTask.channel().close();
+            case CLOSE_ACCEPTOR -> {
+                if(readerTask.target() instanceof Acceptor acceptor) {
+                    acceptor.close();
+                }else {
+                    throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+                }
+            }
+            case CLOSE_CHANNEL -> {
+                if(readerTask.target() instanceof Channel channel) {
+                    channel.close();
+                }else {
+                    throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+                }
+            }
             case GRACEFUL_SHUTDOWN -> {
-                if(state.compareAndSet(RUNNING, CLOSING)) {
-                    Shutdown shutdown = readerTask.shutdown();
+                if(state.compareAndSet(RUNNING, CLOSING) && readerTask.target() instanceof Shutdown shutdown) {
                     if(counter.get() == 0L) {
                         // current worker has no channel bound, could be directly closed
                         state.set(STOPPED);
                         reader.interrupt();
-                        submitWriterTask(WriterTask.INTERRUPT_TASK);
+                        submitWriterTask(new WriterTask(WriterTask.WriterTaskType.EXIT, null, null));
                     }else {
                         // shutdown every channel
                         socketMap.values().forEach(o -> {
@@ -282,13 +311,13 @@ public final class Worker {
                         });
                     }
                 }else {
-                    throw new FrameworkException(ExceptionType.NETWORK, "Worker is not running");
+                    throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
                 }
             }
             case POSSIBLE_SHUTDOWN -> {
                 if(state.compareAndSet(CLOSING, STOPPED)) {
                     reader.interrupt();
-                    submitWriterTask(WriterTask.INTERRUPT_TASK);
+                    submitWriterTask(new WriterTask(WriterTask.WriterTaskType.EXIT, null, null));
                 }
             }
         }

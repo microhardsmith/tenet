@@ -21,8 +21,7 @@ public class NetworkConfig {
      */
     private String privateKeyFile = Constants.EMPTY_STRING;
     /**
-     *  worker线程数量,默认为4,可以根据CPU核数进行适当调整
-     *  Net的性能并不完全依赖于worker数量的提升,实际读写任务都可在虚拟线程中进行
+     *  worker数量,默认为4,可以根据CPU核数进行适当调整,每一个worker包括一个读线程和一个写线程
      */
     private Integer workerCount = 4;
     /**
@@ -38,7 +37,7 @@ public class NetworkConfig {
      */
     private Boolean tcpNoDelay = Boolean.TRUE;
     /**
-     *  服务器ip地址, note: 目前只支持ipv4版本协议栈,使用localhost访问时可能会定向到ipv6,尽量使用0.0.0.0或127.0.0.1访问
+     *  服务器ip地址, Note: 目前只支持ipv4版本协议栈,使用localhost访问时可能会定向到ipv6,尽量使用0.0.0.0或127.0.0.1访问
      */
     private String ip = "0.0.0.0";
     /**

@@ -6,17 +6,17 @@ package cn.zorcc.common.network;
  */
 public interface Connector {
     /**
-     *   Perform the actual close operation, this method should only be invoked by Acceptor.close() in its worker thread
+     *   Perform the actual close operation, this method should only be invoked by Acceptor.close() in its worker's reader thread
      */
     void doClose(Acceptor acceptor);
 
     /**
-     *   Indicating that current acceptor could read from socket, this method should only be invoked in its worker thread
+     *   Indicating that current acceptor could read from socket, this method should only be invoked in its worker's reader thread
      */
     void shouldRead(Acceptor acceptor);
 
     /**
-     *   Indicating that current acceptor could read from socket, this method should only be invoked in its worker thread
+     *   Indicating that current acceptor could read from socket, this method should only be invoked in its worker's reader thread
      */
     void shouldWrite(Acceptor acceptor);
 }

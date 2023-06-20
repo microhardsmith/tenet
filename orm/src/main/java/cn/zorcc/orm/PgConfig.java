@@ -3,7 +3,7 @@ package cn.zorcc.orm;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.NativeUtil;
-import cn.zorcc.orm.pg.PgConstants;
+import cn.zorcc.orm.core.PgConstants;
 import lombok.Data;
 
 @Data

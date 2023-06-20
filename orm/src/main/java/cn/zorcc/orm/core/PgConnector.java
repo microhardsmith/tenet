@@ -1,4 +1,4 @@
-package cn.zorcc.orm.pg;
+package cn.zorcc.orm.core;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ReadBuffer;
@@ -49,7 +49,7 @@ public class PgConnector implements Connector {
                 }
                 byte b = readBuffer.readByte();
                 if(b == PgConstants.SSL_OK) {
-                    MemorySegment ssl = net.newSsl();
+                    MemorySegment ssl = net.newClientSsl();
                     int r = Openssl.sslSetFd(ssl, acceptor.socket().intValue());
                     if(r == 0) {
                         log.error("Failed to set fd for ssl, err : {}", Openssl.sslGetErr(ssl, r));

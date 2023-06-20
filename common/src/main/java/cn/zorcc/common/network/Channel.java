@@ -111,7 +111,7 @@ public final class Channel {
      *   the caller should provide a timeout mechanism to ensure the msg is not dropped, such as retransmission timeout
      */
     public void send(Object msg) {
-        worker.submitWriterTask(new WriterTask(this, msg));
+        worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.MSG, this, msg));
     }
 
     /**
@@ -122,7 +122,7 @@ public final class Channel {
      */
     public void shutdown(Shutdown shutdown) {
         handler.onShutdown(this);
-        worker.submitWriterTask(new WriterTask(this, shutdown));
+        worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.SHUTDOWN, this, shutdown));
     }
 
     /**
@@ -141,7 +141,7 @@ public final class Channel {
         }
         if(worker.socketMap().remove(socket, this)) {
             // Force close the sender instance
-            worker.submitWriterTask(new WriterTask(this, Boolean.FALSE));
+            worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.CLOSE, this, null));
             int current = state.getAndSet(Native.REGISTER_NONE);
             if(current > 0) {
                 n.ctl(worker.mux(), socket, current, Native.REGISTER_NONE);
@@ -149,7 +149,7 @@ public final class Channel {
             protocol.doClose(this);
             handler.onRemoved(this);
             if (worker.counter().decrementAndGet() == 0L) {
-                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.POSSIBLE_SHUTDOWN, null, null, null));
+                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.POSSIBLE_SHUTDOWN, null));
             }
         }
     }

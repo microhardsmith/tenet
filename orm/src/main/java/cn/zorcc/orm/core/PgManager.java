@@ -1,4 +1,4 @@
-package cn.zorcc.orm.pg;
+package cn.zorcc.orm.core;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.LifeCycle;
@@ -11,6 +11,9 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TransferQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  *   The main postgresql manager for handling all incoming msg
@@ -20,6 +23,8 @@ public final class PgManager implements LifeCycle {
     private final Net net;
     private final PgConfig pgConfig;
     private final TransferQueue<PgConn> connPool = new LinkedTransferQueue<>();
+    private final AtomicBoolean running = new AtomicBoolean(false);
+    private final Lock lock = new ReentrantLock();
 
     public PgManager(Net net, PgConfig pgConfig) {
         this.net = net;

@@ -12,7 +12,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- *   Tcp channel with TLS
+ *   Protocol using SSL encryption
  */
 @Slf4j
 public class SslProtocol implements Protocol {
@@ -46,7 +46,7 @@ public class SslProtocol implements Protocol {
             }
             if((state & SEND_WANT_TO_READ) != 0) {
                 state ^= SEND_WANT_TO_READ;
-                channel.worker().submitWriterTask(new WriterTask(channel, Boolean.TRUE));
+                channel.worker().submitWriterTask(new WriterTask(WriterTask.WriterTaskType.WRITABLE, channel, null));
             }
             if((state & RECV_WANT_TO_WRITE) == 0) {
                 int r = Openssl.sslRead(ssl, readBuffer.segment(), (int) readBuffer.len());
@@ -81,7 +81,7 @@ public class SslProtocol implements Protocol {
             }
             if((state & SEND_WANT_TO_WRITE) != 0) {
                 state ^= SEND_WANT_TO_WRITE;
-                channel.worker().submitWriterTask(new WriterTask(channel, Boolean.TRUE));
+                channel.worker().submitWriterTask(new WriterTask(WriterTask.WriterTaskType.WRITABLE, channel, null));
             }
             if((state & RECV_WANT_TO_WRITE) != 0) {
                 state ^= RECV_WANT_TO_WRITE;
@@ -158,7 +158,7 @@ public class SslProtocol implements Protocol {
                 channel.close();
             }else {
                 // In this case, the channel close operation might be delayed a little bit
-                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, null, channel, null));
+                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, channel));
             }
         }
     }

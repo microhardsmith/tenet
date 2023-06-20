@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  *   Timeout abstraction for different operating system
+ *   Using a int val for windows or linux, using a pointer to struct timespec for macOS
  */
 public record Timeout(
         int val,

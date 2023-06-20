@@ -1,7 +1,7 @@
 package cn.zorcc.common.log;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.HeapBuffer;
+import cn.zorcc.common.ResizableByteArray;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.exception.FrameworkException;
@@ -15,16 +15,13 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.function.BiConsumer;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- *   print log to the file
- *   There is no need for replacing Java's File API with C style regarding to benchmark:
- *      FileTest.testCStyle                 avgt   15  1447.719 ±  32.488  ns/op
- *      FileTest.testFileOutputStream       avgt   15  1587.517 ±  33.149  ns/op
- *      FileTest.testFiles.newOutputStream  avgt   15  1138.292 ± 290.841  ns/op
+ *   Print log to the file,
  */
-public class FileLogEventHandler implements EventHandler<LogEvent> {
+public final class FileLogEventHandler implements EventHandler<LogEvent> {
     private static final OpenOption[] options = new OpenOption[] {
             StandardOpenOption.CREATE_NEW,
             StandardOpenOption.SPARSE,
@@ -34,26 +31,22 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
     private final String logFileName;
     private final int maxFileSize;
     private final int maxRecordingTime;
-    private final HeapBuffer buffer;
-    private final BiConsumer<HeapBuffer, LogEvent> consumer;
+    private final ResizableByteArray buffer;
+    private final List<IOConsumer> consumers;
     /**
-     *   if no data has been written to stream then flush could be avoidable
-     */
-    private boolean needsFlush;
-    /**
-     *   timestamp milli when last stream was allocated
+     *   Timestamp milli when last stream was allocated
      */
     private long allocMilli;
     /**
-     *   timestamp milli when last log event occur
+     *   Timestamp milli when last log event occur
      */
     private long eventMilli;
     /**
-     *   current file output stream
+     *   Current file output stream
      */
     private OutputStream stream;
     /**
-     *   file write index
+     *   File write index
      */
     private long index;
     public FileLogEventHandler(LogConfig logConfig) {
@@ -70,8 +63,8 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
                 throw new FrameworkException(ExceptionType.LOG, "Max log file-size is too small, will possibly overflow");
             }
             this.maxRecordingTime = logConfig.getMaxRecordingTime() <= 0 ? -1 : logConfig.getMaxRecordingTime();
-            this.buffer = new HeapBuffer(logConfig.getFileBuffer());
-            this.consumer = parseLogFormat(logConfig.getLogFormat());
+            this.buffer = new ResizableByteArray(logConfig.getFileBuffer());
+            this.consumers = createIOConsumer(logConfig.getLogFormat());
             allocateNewStream();
         }catch (IOException e) {
             throw new FrameworkException(ExceptionType.LOG, "Unable to create log file");
@@ -79,20 +72,22 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
     }
 
     /**
-     *  write and flush current heap-buffer into the file
-     *  if timestamp or filesize exceed the limit, reallocate the stream
+     *  Write and flush current byte-array into the file
+     *  if timestamp or filesize exceed the limit, reallocate the output-stream
      */
-    private void writeAndFlush(HeapBuffer heapBuffer) {
+    private void writeAndFlush() {
         try{
-            int bufferIndex = heapBuffer.index();
-            if((maxFileSize > 0 && index + bufferIndex > maxFileSize) || (maxRecordingTime > 0 && eventMilli - allocMilli > maxRecordingTime)) {
-                stream.close();
-                allocateNewStream();
+            int bufferIndex = buffer.writeIndex();
+            if(bufferIndex > 0) {
+                if((maxFileSize > 0 && index + bufferIndex > maxFileSize) || (maxRecordingTime > 0 && eventMilli - allocMilli > maxRecordingTime)) {
+                    stream.close();
+                    allocateNewStream();
+                }
+                stream.write(buffer.array(), 0, bufferIndex);
+                stream.flush();
+                index = index + bufferIndex;
+                buffer.reset();
             }
-            stream.write(heapBuffer.array(), 0, bufferIndex);
-            stream.flush();
-            index = index + bufferIndex;
-            heapBuffer.reset();
         }catch (IOException e) {
             throw new FrameworkException(ExceptionType.LOG, "Failed to write to file", e);
         }
@@ -100,7 +95,7 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
 
     private static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss-SSS");
     /**
-     *   allocate a new file stream
+     *   Allocate a new file output-stream
      */
     private void allocateNewStream() {
         try{
@@ -122,10 +117,15 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
     }
 
     /**
-     *   close current file output-stream
+     *   Flush and close current file output-stream
      */
-    public void closeStream() {
+    private void flushAndClose() {
         try{
+            int bufferIndex = buffer.writeIndex();
+            if(bufferIndex > 0) {
+                stream.write(buffer.array(), 0, bufferIndex);
+                stream.flush();
+            }
             stream.close();
         }catch (IOException e) {
             throw new FrameworkException(ExceptionType.LOG, "IOException caught when shutting down FileLogEventHandler");
@@ -134,37 +134,48 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
 
     @Override
     public void handle(LogEvent event) {
-        if(event.flush()) {
-            if(needsFlush) {
-                writeAndFlush(buffer);
-                needsFlush = false;
-            }
+        if(event == LogEvent.flushEvent) {
+            writeAndFlush();
+        }else if(event == LogEvent.shutdownEvent) {
+            flushAndClose();
         }else {
-            needsFlush = true;
             eventMilli = event.timestamp();
-            consumer.accept(buffer, event);
+            for (IOConsumer consumer : consumers) {
+                consumer.accept(buffer, event);
+            }
         }
     }
 
+    @FunctionalInterface
+    interface IOConsumer {
+        void accept(ResizableByteArray buffer, LogEvent event);
+    }
+
     /**
-     *   parsing log-format to lambda consumer
+     *   Parsing log-format to a lambda consumer list
      */
-    public static BiConsumer<HeapBuffer, LogEvent> parseLogFormat(String logFormat) {
-        BiConsumer<HeapBuffer, LogEvent> result = (writeBuffer, logEvent) -> {};
+    private static List<IOConsumer> createIOConsumer(String logFormat) {
+        List<IOConsumer> result = new ArrayList<>();
+        ResizableByteArray arr = new ResizableByteArray(Constants.KB);
         byte[] bytes = logFormat.getBytes(StandardCharsets.UTF_8);
         for(int i = 0; i < bytes.length; i++) {
             byte b = bytes[i];
             if(b == Constants.b10) {
+                if(arr.writeIndex() > 0) {
+                    final byte[] array = arr.toArray();
+                    result.add((resizableByteArray, logEvent) -> resizableByteArray.write(array));
+                    arr.reset();
+                }
                 int j = i + 1;
                 for( ; ; ) {
                     if(bytes[j] == Constants.b10) {
                         String s = new String(bytes, i + 1, j - i - 1);
                         switch (s) {
-                            case "time" -> result = result.andThen((heapBuffer, logEvent) -> heapBuffer.write(logEvent.time()));
-                            case "level" -> result = result.andThen((heapBuffer, logEvent) -> heapBuffer.write(logEvent.level()));
-                            case "className" -> result = result.andThen((heapBuffer, logEvent) -> heapBuffer.write(logEvent.className()));
-                            case "threadName" -> result = result.andThen((heapBuffer, logEvent) -> heapBuffer.write(logEvent.threadName()));
-                            case "msg" -> result = result.andThen((heapBuffer, logEvent) -> heapBuffer.write(logEvent.msg()));
+                            case "time" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.write(logEvent.time()));
+                            case "level" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.write(logEvent.level()));
+                            case "className" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.write(logEvent.className()));
+                            case "threadName" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.write(logEvent.threadName()));
+                            case "msg" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.write(logEvent.msg()));
                             default -> throw new FrameworkException(ExceptionType.LOG, "Unresolved log format : %s".formatted(s));
                         }
                         break;
@@ -174,15 +185,20 @@ public class FileLogEventHandler implements EventHandler<LogEvent> {
                 }
                 i = j;
             }else {
-                result = result.andThen((heapBuffer, logEvent) -> heapBuffer.write(b));
+                arr.write(b);
             }
         }
+        if(arr.writeIndex() > 0) {
+            final byte[] array = arr.toArray();
+            result.add((resizableByteArray, logEvent) -> resizableByteArray.write(array));
+            arr.reset();
+        }
         // automatically add \n and throwable
-        result = result.andThen((heapBuffer, logEvent) -> {
-            heapBuffer.write(Constants.LF);
+        result.add((resizableByteArray, logEvent) -> {
+            resizableByteArray.write(Constants.LF);
             byte[] throwable = logEvent.throwable();
             if(throwable != null) {
-                heapBuffer.write(throwable);
+                resizableByteArray.write(throwable);
             }
         });
         return result;

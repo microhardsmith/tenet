@@ -1,11 +1,17 @@
 package cn.zorcc.common.network;
 
 public record WriterTask(
+        WriterTaskType type,
         Channel channel,
         Object msg
 ) {
-    /**
-     *   Indicating the writer thread should be interrupted
-     */
-    public static final WriterTask INTERRUPT_TASK = new WriterTask(null, null);
+    enum WriterTaskType {
+        INITIATE,
+        WRITABLE,
+        MIX_OF_MSG,
+        MSG,
+        SHUTDOWN,
+        CLOSE,
+        EXIT,
+    }
 }

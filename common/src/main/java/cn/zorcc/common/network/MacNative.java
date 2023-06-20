@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class MacNative implements Native {
     /**
-     *  corresponding to struct kevent in event.h
+     *  Corresponding to struct kevent in event.h
      */
     private static final MemoryLayout keventLayout = MemoryLayout.structLayout(
             ValueLayout.JAVA_LONG.withName("ident"),
@@ -38,7 +38,7 @@ public class MacNative implements Native {
 
 
     /**
-     *  corresponding to struct sockaddr_in in in.h
+     *  Corresponding to struct sockaddr_in in in.h
      */
     private static final MemoryLayout sockAddrLayout = MemoryLayout.structLayout(
             ValueLayout.JAVA_BYTE.withName("sin_len"),
@@ -311,7 +311,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_kqueue()`
+     *  Corresponding to `int m_kqueue()`
      */
     public int kqueue() {
         try{
@@ -322,7 +322,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_kevent_ctl(int kq, int fd, int16_t filter, uint16_t flags)`
+     *  Corresponding to `int m_kevent_ctl(int kq, int fd, int16_t filter, uint16_t flags)`
      */
     public int keventCtl(int kq, int fd, short filter, short flags) {
         try{
@@ -333,7 +333,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_kevent_wait(int kq, struct kevent* eventlist, int nevents, struct timespec* timeout)`
+     *  Corresponding to `int m_kevent_wait(int kq, struct kevent* eventlist, int nevents, struct timespec* timeout)`
      */
     public int keventWait(int kq, MemorySegment eventlist, int nevents, MemorySegment timeout) {
         try{
@@ -344,7 +344,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_address(struct sockaddr_in* sockAddr, char* addrStr, socklen_t len)`
+     *  Corresponding to `int m_address(struct sockaddr_in* sockAddr, char* addrStr, socklen_t len)`
      */
     public int address(MemorySegment sockAddr, MemorySegment addrStr, int len) {
         try{
@@ -355,7 +355,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `uint16_t m_port(struct sockaddr_in* sockAddr)`
+     *  Corresponding to `uint16_t m_port(struct sockaddr_in* sockAddr)`
      */
     public short port(MemorySegment sockAddr) {
         try{
@@ -366,7 +366,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_socket_create()`
+     *  Corresponding to `int m_socket_create()`
      */
     public int socketCreate() {
         try{
@@ -377,7 +377,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_accept(int socket, struct sockaddr_in* clientAddr, socklen_t clientAddrSize)`
+     *  Corresponding to `int m_accept(int socket, struct sockaddr_in* clientAddr, socklen_t clientAddrSize)`
      */
     public int accept(int socket, MemorySegment clientAddr, int clientAddrSize) {
         try{
@@ -388,7 +388,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_set_sock_addr(struct sockaddr_in* sockAddr, char* address, uint16_t port)`
+     *  Corresponding to `int m_set_sock_addr(struct sockaddr_in* sockAddr, char* address, uint16_t port)`
      */
     public int setSockAddr(MemorySegment sockAddr, MemorySegment address, short port) {
         try{
@@ -399,7 +399,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_set_reuse_addr(int socket, int value)`
+     *  Corresponding to `int m_set_reuse_addr(int socket, int value)`
      */
     public int setReuseAddr(int socket, int value) {
         try{
@@ -410,7 +410,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_set_keep_alive(int socket, int value)`
+     *  Corresponding to `int m_set_keep_alive(int socket, int value)`
      */
     public int setKeepAlive(int socket, int value) {
         try{
@@ -421,7 +421,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_set_tcp_no_delay(int socket, int value)`
+     *  Corresponding to `int m_set_tcp_no_delay(int socket, int value)`
      */
     public int setTcpNoDelay(int socket, int value) {
         try{
@@ -432,7 +432,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_get_err_opt(int socket, int* ptr)`
+     *  Corresponding to `int m_get_err_opt(int socket, int* ptr)`
      */
     public int getErrOpt(int socket, MemorySegment ptr) {
         try{
@@ -443,7 +443,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_set_nonblocking(int socket)`
+     *  Corresponding to `int m_set_nonblocking(int socket)`
      */
     public int setNonBlocking(int socket) {
         try{
@@ -454,7 +454,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_bind(int socket, struct sockaddr_in* sockAddr, socklen_t size)`
+     *  Corresponding to `int m_bind(int socket, struct sockaddr_in* sockAddr, socklen_t size)`
      */
     public int bind(int socket, MemorySegment sockAddr, int size) {
         try{
@@ -465,7 +465,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_connect(int socket, struct sockaddr_in* sockAddr, socklen_t size)`
+     *  Corresponding to `int m_connect(int socket, struct sockaddr_in* sockAddr, socklen_t size)`
      */
     public int connect(int socket, MemorySegment sockAddr, int size) {
         try{
@@ -476,7 +476,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_listen(int socket, int backlog)`
+     *  Corresponding to `int m_listen(int socket, int backlog)`
      */
     public int listen(int socket, int backlog) {
         try{
@@ -487,7 +487,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `ssize_t m_recv(int socket, void* buf, size_t len)`
+     *  Corresponding to `ssize_t m_recv(int socket, void* buf, size_t len)`
      */
     public long recv(int socket, MemorySegment buf, long len) {
         try{
@@ -498,7 +498,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `ssize_t m_send(int socket, void* buf, size_t len)`
+     *  Corresponding to `ssize_t m_send(int socket, void* buf, size_t len)`
      */
     public long send(int socket, MemorySegment buf, long len) {
         try{
@@ -509,7 +509,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_close(int fd)`
+     *  Corresponding to `int m_close(int fd)`
      */
     public int close(int fd) {
         try{
@@ -520,7 +520,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_shutdown_write(int fd)`
+     *  Corresponding to `int m_shutdown_write(int fd)`
      */
     public int shutdownWrite(int fd) {
         try{
@@ -531,7 +531,7 @@ public class MacNative implements Native {
     }
 
     /**
-     *  corresponding to `int m_errno()`
+     *  Corresponding to `int m_errno()`
      */
     public int errno() {
         try{

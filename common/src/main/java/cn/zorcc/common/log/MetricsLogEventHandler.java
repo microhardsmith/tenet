@@ -3,9 +3,9 @@ package cn.zorcc.common.log;
 import cn.zorcc.common.event.EventHandler;
 
 /**
- *   print log to the metrics server
+ *   Print log to the remote metrics server TODO not implemented yet
  */
-public class MetricsLogEventHandler implements EventHandler<LogEvent> {
+public final class MetricsLogEventHandler implements EventHandler<LogEvent> {
     public MetricsLogEventHandler(LogConfig logConfig) {
 
     }
