@@ -1,14 +1,13 @@
-package cn.zorcc.common;
+package cn.zorcc.common.example;
 
+import cn.zorcc.common.Clock;
 import cn.zorcc.common.log.LoggerConsumer;
-import cn.zorcc.common.network.Channel;
-import cn.zorcc.common.network.Handler;
-import cn.zorcc.common.network.Net;
-import cn.zorcc.common.network.NetworkConfig;
+import cn.zorcc.common.network.*;
 import cn.zorcc.common.network.http.HttpDecoder;
 import cn.zorcc.common.network.http.HttpEncoder;
 import cn.zorcc.common.network.http.HttpReq;
 import cn.zorcc.common.network.http.HttpRes;
+import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.ThreadUtil;
 import cn.zorcc.common.wheel.Wheel;
 import lombok.extern.slf4j.Slf4j;
@@ -26,12 +25,15 @@ import java.util.concurrent.TimeUnit;
  *   Test class for building a executable fat-jar
  */
 @Slf4j
-public class Test {
+public class NetExample {
     public static void main(String[] args) {
         long nano = Clock.nano();
 
-        testTcp();
+        //testTcp();
+
         //testSsl();
+
+        testMultipleMaster();
 
         long jvmTime = ManagementFactory.getRuntimeMXBean().getUptime();
         log.info("Starting now, causing {} ms, jvm started for {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)), jvmTime);
@@ -41,7 +43,12 @@ public class Test {
         Wheel.wheel().init();
         LoggerConsumer loggerConsumer = new LoggerConsumer();
         loggerConsumer.init();
-        Net net = new Net(HttpEncoder::new, HttpDecoder::new, HttpTestHandler::new);
+        Net net = new Net();
+        MuxConfig muxConfig = new MuxConfig();
+        net.addMaster(HttpEncoder::new, HttpDecoder::new, HttpTestHandler::new, net.tcpConnectorSupplier(), Loc.DEFAULT, muxConfig);
+        for(int i = 0; i < 4; i++) {
+            net.addWorker(muxConfig);
+        }
         Runtime.getRuntime().addShutdownHook(ThreadUtil.virtual("shutdown", () -> {
             net.shutdown();
             loggerConsumer.shutdown();
@@ -57,7 +64,36 @@ public class Test {
         networkConfig.setEnableSsl(true);
         networkConfig.setPublicKeyFile("C:/openresty-1.21.4.1-win64/conf/zorcc.cn+1.pem");
         networkConfig.setPrivateKeyFile("C:/openresty-1.21.4.1-win64/conf/zorcc.cn+1-key.pem");
-        Net net = new Net(HttpEncoder::new, HttpDecoder::new, HttpTestHandler::new, networkConfig);
+        Net net = new Net();
+        MuxConfig muxConfig = new MuxConfig();
+        net.addMaster(HttpEncoder::new, HttpDecoder::new, HttpTestHandler::new, net.tcpConnectorSupplier(), Loc.DEFAULT, muxConfig);
+        for(int i = 0; i < 4; i++) {
+            net.addWorker(muxConfig);
+        }
+        Runtime.getRuntime().addShutdownHook(ThreadUtil.virtual("shutdown", () -> {
+            net.shutdown();
+            loggerConsumer.shutdown();
+        }));
+        net.init();
+    }
+
+    public static void testMultipleMaster() {
+        Wheel.wheel().init();
+        LoggerConsumer loggerConsumer = new LoggerConsumer();
+        loggerConsumer.init();
+        NetworkConfig networkConfig = new NetworkConfig();
+        networkConfig.setEnableSsl(true);
+        networkConfig.setPublicKeyFile("C:/openresty-1.21.4.1-win64/conf/zorcc.cn+1.pem");
+        networkConfig.setPrivateKeyFile("C:/openresty-1.21.4.1-win64/conf/zorcc.cn+1-key.pem");
+        Net net = new Net();
+        MuxConfig muxConfig = new MuxConfig();
+        Loc tcpLoc = new Loc("0.0.0.0", (short) 8002);
+        Loc sslLoc = new Loc("0.0.0.0", (short) 8003);
+        net.addMaster(HttpEncoder::new, HttpDecoder::new, HttpTestHandler::new, net.tcpConnectorSupplier(), tcpLoc, muxConfig);
+        net.addMaster(HttpEncoder::new, HttpDecoder::new, HttpTestHandler::new, net.sslConnectorSupplier(), sslLoc, muxConfig);
+        for(int i = 0; i < 4; i++) {
+            net.addWorker(muxConfig);
+        }
         Runtime.getRuntime().addShutdownHook(ThreadUtil.virtual("shutdown", () -> {
             net.shutdown();
             loggerConsumer.shutdown();

@@ -40,15 +40,15 @@ public final class Worker {
     private final Thread reader;
     private final Thread writer;
     /**
-     *   Representing the connections count mounted on current worker instance
+     *   Representing the number of connections mounted on current worker instance
      *   This field might be optimized to normal long since it's only accessed by reader thread, AtomicLong is more secure however
      */
     private final AtomicLong counter = new AtomicLong(Constants.ZERO);
 
-    public Worker(NetworkConfig config, int sequence) {
+    public Worker(MuxConfig muxConfig, int sequence) {
         this.mux = n.createMux();
-        this.events = n.createEventsArray(config);
-        this.reader = createReaderThread(sequence, config);
+        this.events = n.createEventsArray(muxConfig);
+        this.reader = createReaderThread(sequence, muxConfig);
         this.writer = createWriterThread(sequence);
     }
     
@@ -159,11 +159,11 @@ public final class Worker {
     /**
      *   Create worker's reader thread
      */
-    private Thread createReaderThread(int sequence, NetworkConfig config) {
-        final int maxEvents = config.getMaxEvents();
+    private Thread createReaderThread(int sequence, MuxConfig muxConfig) {
+        final int maxEvents = muxConfig.getMaxEvents();
         return ThreadUtil.platform("Worker-r-" + sequence, () -> {
             log.debug("Initializing Net worker's reader, sequence : {}", sequence);
-            Timeout timeout = Timeout.of(config.getMuxTimeout());
+            Timeout timeout = Timeout.of(muxConfig.getMuxTimeout());
             Thread currentThread = Thread.currentThread();
             try(ReadBufferArray readBufferArray = new ReadBufferArray(maxEvents)) {
                 while (!currentThread.isInterrupted()) {

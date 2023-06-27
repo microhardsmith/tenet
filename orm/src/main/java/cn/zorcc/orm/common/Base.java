@@ -1,8 +1,8 @@
 package cn.zorcc.orm.common;
 
-import cn.zorcc.orm.anno.Col;
-import cn.zorcc.orm.anno.Del;
-import cn.zorcc.orm.anno.Id;
+import cn.zorcc.common.anno.Col;
+import cn.zorcc.common.anno.Del;
+import cn.zorcc.common.anno.Id;
 import lombok.Data;
 
 import java.time.LocalDateTime;

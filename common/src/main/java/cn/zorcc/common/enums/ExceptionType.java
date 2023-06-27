@@ -10,7 +10,7 @@ public enum ExceptionType {
     CONFIG,
     HTTP,
     JSON,
-    CACHE,
+    SQLITE,
     NETWORK,
     JOB,
     SQL,

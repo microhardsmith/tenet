@@ -39,7 +39,7 @@ public interface Native {
     /**
      *   Create multiplexing struct array
      */
-    MemorySegment createEventsArray(NetworkConfig config);
+    MemorySegment createEventsArray(MuxConfig config);
 
     /**
      *   Create a socket, could be server socket or client socket
@@ -54,7 +54,7 @@ public interface Native {
     /**
      *   Bind and listen target port
      */
-    void bindAndListen(NetworkConfig config, Socket socket);
+    void bindAndListen(Loc loc, MuxConfig config, Socket socket);
 
     /**
      *   Modify mux event registration, from represent the old status, to represent the target status
@@ -135,24 +135,6 @@ public interface Native {
     int REGISTER_READ = 1;
     int REGISTER_WRITE = 2;
     int REGISTER_READ_WRITE = 3;
-
-    /**
-     *   Convert a int port to an unsigned short type
-     */
-    default short shortPort(int port) {
-        if(port < 1 || port > 65535) {
-            throw new FrameworkException(ExceptionType.NETWORK, "Port overflow");
-        }
-        // force retain the lower 16bits, the answer could be negative
-        return (short) port;
-    }
-
-    /**
-     *   Convert an unsigned short type to a int
-     */
-    default int intPort(short port) {
-        return 0xFFFF & port;
-    }
 
     /**
      *   Internal check the return value

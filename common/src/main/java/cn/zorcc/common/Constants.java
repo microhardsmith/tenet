@@ -305,6 +305,29 @@ public class Constants {
     public static final long SSL_MODE_AUTO_RETRY = 4L;
     public static final int SSL_VERIFY_PEER = 1;
 
+    /**
+     *   sqlite
+     */
+    public static final int SQLITE_OK = 0;
+    public static final int SQLITE_ERR = 1;
+    public static final int SQLITE_OPEN_READONLY = 1;
+    public static final int SQLITE_OPEN_READWRITE = 2;
+    public static final int SQLITE_OPEN_CREATE = 4;
+    public static final int SQLITE_OPEN_NOMUTEX = 32768;
+    public static final int SQLITE_OPEN_FULLMUTEX = 65535;
+    public static final int SQLITE_OPEN_SHAREDCACHE = 131072;
+    public static final int SQLITE_OPEN_PRIVATECACHE = 262144;
+    public static final int SQLITE_OPEN_NOFOLLOW = 16777216;
+
+    public static final int SQLITE_CONFIG_SINGLETHREAD = 1;
+    public static final int SQLITE_CONFIG_MULTITHREAD = 2;
+    public static final int SQLITE_CONFIG_SERIALIZED = 3;
+
+    public static final int SQLITE_ROW = 100;
+    public static final int SQLITE_DONE = 101;
+    public static final int SQLITE_PREPARE_PERSISTENT = 1;
+    public static final int SQLITE_PREPARE_NORMALIZE = 2;
+    public static final int SQLITE_PREPARE_NO_VTAB = 4;
 
     private Constants() {
         throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);

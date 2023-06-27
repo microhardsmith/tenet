@@ -1,4 +1,4 @@
-package cn.zorcc.orm.anno;
+package cn.zorcc.common.anno;
 
 import cn.zorcc.common.Constants;
 

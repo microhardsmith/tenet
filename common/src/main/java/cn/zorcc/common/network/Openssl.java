@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
  *   On success, the functions return 1. Otherwise check out the error stack to find out the reason.
  */
 @Slf4j
-public class Openssl {
+public final class Openssl {
     /**
      *   Environment variable that must be configured when launching the application
      */
@@ -31,8 +31,6 @@ public class Openssl {
      */
     private static final int SSL_CTRL_MODE = 33;
     private static final int SSL_CTRL_CLEAR_MODE = 78;
-    private static final SymbolLookup crypto;
-    private static final SymbolLookup ssl;
     private static final String version;
     private static final MethodHandle tlsServerMethod;
     private static final MethodHandle tlsClientMethod;
@@ -56,8 +54,8 @@ public class Openssl {
 
     static {
         long nano = Clock.nano();
-        crypto = NativeUtil.loadLibrary(CRYPTO_LIB);
-        ssl = NativeUtil.loadLibrary(SSL_LIB);
+        SymbolLookup crypto = NativeUtil.loadLibrary(CRYPTO_LIB);
+        SymbolLookup ssl = NativeUtil.loadLibrary(SSL_LIB);
         try{
             MethodHandle majorVersionMethod = NativeUtil.methodHandle(crypto, "OPENSSL_version_major", FunctionDescriptor.of(ValueLayout.JAVA_INT));
             MethodHandle minorVersionMethod = NativeUtil.methodHandle(crypto, "OPENSSL_version_minor", FunctionDescriptor.of(ValueLayout.JAVA_INT));
@@ -87,6 +85,10 @@ public class Openssl {
         sslCtxFreeMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         sslGetErrMethod = NativeUtil.methodHandle(ssl, "SSL_get_error", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         log.info("Initializing OpenSSL successfully, version : {}, time consuming : {} ms", version, TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
+    }
+
+    private Openssl() {
+        throw new UnsupportedOperationException();
     }
 
     public static String version() {

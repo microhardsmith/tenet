@@ -18,7 +18,7 @@ public class ConfigUtil {
     }
 
     /**
-     *   检测ipv4地址字符串的合法性,合法则返回true,否则false
+     *   Check ipv4 address string format
      */
     public static boolean checkIp(String ip) {
         if (ip.isBlank()) {
@@ -36,6 +36,13 @@ public class ConfigUtil {
             }
         }
         return true;
+    }
+
+    /**
+     *   Check port number, since Short already less than 65535, only need to check whether port is positive
+     */
+    public static boolean checkPort(Short port) {
+        return port > 0;
     }
 
     /**

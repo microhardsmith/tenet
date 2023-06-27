@@ -1,12 +1,12 @@
 package cn.zorcc.orm.common;
 
+import cn.zorcc.common.anno.Col;
+import cn.zorcc.common.anno.Del;
+import cn.zorcc.common.anno.Id;
+import cn.zorcc.common.anno.Table;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.ClassUtil;
-import cn.zorcc.orm.anno.Col;
-import cn.zorcc.orm.anno.Del;
-import cn.zorcc.orm.anno.Id;
-import cn.zorcc.orm.anno.Table;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;

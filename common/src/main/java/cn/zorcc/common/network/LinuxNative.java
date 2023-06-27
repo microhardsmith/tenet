@@ -96,8 +96,7 @@ public class LinuxNative implements Native {
     public MemorySegment createSockAddr(Loc loc, Arena arena) {
         MemorySegment r = arena.allocate(sockAddrLayout);
         MemorySegment ip = NativeUtil.allocateStr(arena, loc.ip(), addressLen);
-        short port = shortPort(loc.port());
-        if(check(setSockAddr(r, ip, port), "setSockAddr") == 0) {
+        if(check(setSockAddr(r, ip, loc.port()), "setSockAddr") == 0) {
             throw new FrameworkException(ExceptionType.NETWORK, "Loc is not valid");
         }
         return r;
@@ -110,7 +109,7 @@ public class LinuxNative implements Native {
     }
 
     @Override
-    public MemorySegment createEventsArray(NetworkConfig config) {
+    public MemorySegment createEventsArray(MuxConfig config) {
         MemoryLayout eventsArrayLayout = MemoryLayout.sequenceLayout(config.getMaxEvents(), epollEventLayout);
         return MemorySegment.allocateNative(eventsArrayLayout, SegmentScope.global());
     }
@@ -131,12 +130,11 @@ public class LinuxNative implements Native {
     }
 
     @Override
-    public void bindAndListen(NetworkConfig config, Socket socket) {
+    public void bindAndListen(Loc loc, MuxConfig config, Socket socket) {
         try(Arena arena = Arena.openConfined()) {
             MemorySegment addr = arena.allocate(sockAddrLayout);
-            MemorySegment ip = NativeUtil.allocateStr(arena, config.getIp(), addressLen);
-            short port = shortPort(config.getPort());
-            int setSockAddr = check(setSockAddr(addr, ip, port), "set SockAddr");
+            MemorySegment ip = NativeUtil.allocateStr(arena, loc.ip(), addressLen);
+            int setSockAddr = check(setSockAddr(addr, ip, loc.port()), "set SockAddr");
             if(setSockAddr == 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Network address is not valid");
             }
@@ -221,7 +219,7 @@ public class LinuxNative implements Native {
             if(address(clientAddr, address, addressLen) == -1) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Failed to get client socket's remote address, errno : {}", errno());
             }
-            Loc loc = new Loc(NativeUtil.getStr(address), intPort(port(clientAddr)));
+            Loc loc = new Loc(NativeUtil.getStr(address, addressLen), port(clientAddr));
             return new ClientSocket(new Socket(socketFd), loc);
         }
     }

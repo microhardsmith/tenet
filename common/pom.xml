@@ -68,7 +68,7 @@
                             <archive>
                                 <manifest>
                                     <mainClass>
-                                        cn.zorcc.common.Test
+                                        cn.zorcc.common.example.NetExample
                                     </mainClass>
                                 </manifest>
                             </archive>

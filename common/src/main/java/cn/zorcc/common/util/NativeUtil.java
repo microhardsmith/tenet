@@ -5,6 +5,7 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Native;
 import cn.zorcc.common.network.Openssl;
+import cn.zorcc.common.storage.Sqlite;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
@@ -19,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class NativeUtil {
     /**
-     *   Global NULL pointer
+     *   Global NULL pointer, don't use it if the application would modify the actual address of this pointer
      */
     public static final MemorySegment NULL_POINTER = MemorySegment.ofAddress(0L, ValueLayout.ADDRESS.byteSize(), SegmentScope.global());
     private static final String OS_NAME = System.getProperty("os.name").toLowerCase();
@@ -32,6 +33,10 @@ public final class NativeUtil {
      *   Global dynamic library cache to avoid repeated loading
      */
     private static final Map<String, SymbolLookup> cache = new ConcurrentHashMap<>();
+    /**
+     *   Unbounded pointer layout, this is used for acquiring a pointer from C while the size of the memory is unknown
+     */
+    public static final ValueLayout.OfAddress UNBOUNDED_PTR_LAYOUT = ValueLayout.ADDRESS.withBitAlignment(64L).asUnbounded();
     private static final VarHandle byteHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_BYTE);
     private static final VarHandle shortHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_SHORT);
     private static final VarHandle intHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_INT);
@@ -120,6 +125,7 @@ public final class NativeUtil {
                     case Native.LIB -> "libtenet" + libSuffix;
                     case Openssl.CRYPTO_LIB -> "libcrypto" + libSuffix;
                     case Openssl.SSL_LIB -> "libssl" + libSuffix;
+                    case Sqlite.SQLITE_LIB -> "libsqlite" + libSuffix;
                     default -> throw new FrameworkException(ExceptionType.NATIVE, "Environment variable not found : %s".formatted(identifier));
                 };
                 path = FileUtil.toTmp(resourcePath);
@@ -129,7 +135,7 @@ public final class NativeUtil {
     }
 
     /**
-     *  Load function from libc, such as strlen
+     *  Load function from system library, such as strlen
      */
     public static MethodHandle nativeMethodHandle(String methodName, FunctionDescriptor functionDescriptor) {
         return linker.downcallHandle(linker.defaultLookup()
@@ -201,16 +207,35 @@ public final class NativeUtil {
     }
 
     public static String getStr(MemorySegment memorySegment) {
-        int size = (int) memorySegment.byteSize();
-        byte[] bytes = new byte[size];
-        for(int i = 0; i < size; i++) {
-            byte b = getByte(memorySegment, i);
-            if(b == Constants.NUT) {
-                return new String(bytes, 0, i);
-            }else {
-                bytes[i] = b;
+        return getStr(memorySegment, 0);
+    }
+
+    public static String getStr(MemorySegment ptr, int maxLength) {
+        if(maxLength > 0) {
+            byte[] bytes = new byte[maxLength];
+            for(int i = 0; i < maxLength; i++) {
+                byte b = getByte(ptr, i);
+                if(b == Constants.NUT) {
+                    return new String(bytes, 0, i, StandardCharsets.UTF_8);
+                }else {
+                    bytes[i] = b;
+                }
+            }
+        }else {
+            for(int i = 0; i < Integer.MAX_VALUE; i++) {
+                byte b = getByte(ptr, i);
+                if(b == Constants.NUT) {
+                    byte[] bytes = new byte[i];
+                    MemorySegment.copy(ptr, ValueLayout.JAVA_BYTE, 0, bytes, 0, i);
+                    return new String(bytes, StandardCharsets.UTF_8);
+                }
             }
         }
         throw new FrameworkException(ExceptionType.NATIVE, "Not a valid C style string");
+    }
+
+    public static MemorySegment accessPtr(MemorySegment pp) {
+        long address = pp.get(ValueLayout.JAVA_LONG, 0L);
+        return MemorySegment.ofAddress(address, 8, SegmentScope.global());
     }
 }
