@@ -39,10 +39,10 @@ public class ConfigUtil {
     }
 
     /**
-     *   Check port number, since Short already less than 65535, only need to check whether port is positive
+     *   Check network port range
      */
-    public static boolean checkPort(Short port) {
-        return port > 0;
+    public static boolean checkPort(int port) {
+        return port >= 0 && port <= 65535;
     }
 
     /**

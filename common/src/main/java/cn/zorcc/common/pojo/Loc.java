@@ -5,16 +5,34 @@ import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.ConfigUtil;
 
 /**
- * 标识一台特定机器在网络中所处的位置
- * @param ip 机器网卡ipv4地址
- * @param port 机器暴露给外部的端口号
+ *  Ipv4 address, Note that port is a number between 0 and 65535, in C normally represented as u_short, so here we did some transformation
  */
 public record Loc (
         String ip,
-        short port
+        int port
 ) {
 
-    public static final Loc DEFAULT = new Loc("0.0.0.0", (short) 8001);
+    /**
+     *   Convert a int port to a unsigned short type
+     */
+    public static short toShortPort(int port) {
+        if(port < 1 || port > 65535) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Port overflow");
+        }
+        // force retain the lower 16bits, the answer could be negative
+        return (short) port;
+    }
+
+    /**
+     *   Convert a unsigned short type to a int
+     */
+    public static int toIntPort(short port) {
+        return 0xFFFF & port;
+    }
+
+    public short shortPort() {
+        return toShortPort(port);
+    }
 
     /**
      *   Validate current loc configuration

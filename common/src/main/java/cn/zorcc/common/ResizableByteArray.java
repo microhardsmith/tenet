@@ -1,5 +1,8 @@
 package cn.zorcc.common;
 
+import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.exception.FrameworkException;
+
 import java.util.Arrays;
 
 /**
@@ -18,6 +21,10 @@ public final class ResizableByteArray {
         this.initialSize = initialSize;
         this.array = new byte[initialSize];
         this.writeIndex = 0;
+    }
+
+    public ResizableByteArray() {
+        this(16);
     }
 
     public void write(byte data) {
@@ -41,12 +48,12 @@ public final class ResizableByteArray {
         write(data, 0, data.length);
     }
 
-    public byte[] array() {
+    public byte[] rawArray() {
         return array;
     }
 
     public byte[] toArray() {
-        return Arrays.copyOfRange(array, 0, writeIndex);
+        return writeIndex == 0 ? Constants.EMPTY_BYTES : Arrays.copyOfRange(array, 0, writeIndex);
     }
 
     public int writeIndex() {
@@ -62,6 +69,9 @@ public final class ResizableByteArray {
 
     private void resize(int nextIndex) {
         int newSize = Math.max(nextIndex, array.length << 1);
+        if(newSize < 0) {
+            throw new FrameworkException(ExceptionType.NATIVE, "MemorySize overflow");
+        }
         byte[] newArray = new byte[newSize];
         System.arraycopy(array, 0, newArray, 0, writeIndex);
         array = newArray;

@@ -5,7 +5,7 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Native;
 import cn.zorcc.common.network.Openssl;
-import cn.zorcc.common.storage.Sqlite;
+import cn.zorcc.common.sqlite.Sqlite;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
@@ -181,6 +181,20 @@ public final class NativeUtil {
 
     public static void setLong(MemorySegment memorySegment, long index, long value) {
         longHandle.set(memorySegment, index, value);
+    }
+
+    /**
+     *   Using brute-force search for target bytes in a memorySegment
+     *   This method could be optimized for better efficiency using other algorithms like BM or KMF, however when bytes.length is small and unrepeated, BF is simple and good enough
+     *   Usually this method is used to find a target separator in a sequence
+     */
+    public static boolean matches(MemorySegment m, long offset, byte[] bytes) {
+        for(int index = 0; index < bytes.length; index++) {
+            if (getByte(m, offset + index) != bytes[index]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public static MemorySegment allocateStr(Arena arena, String str) {

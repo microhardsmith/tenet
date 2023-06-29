@@ -12,8 +12,9 @@ public class MuxConfig {
     private Integer backlog = 64;
     /**
      *  Max length for a single mux call
+     *  Note that for each mux, maxEvents * readBufferSize native memory were pre-allocated
      */
-    private Integer maxEvents = 64;
+    private Integer maxEvents = 16;
     /**
      *  Max blocking time in milliseconds for a mux call
      */

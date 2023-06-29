@@ -18,13 +18,13 @@ public final class TcpProtocol implements Protocol {
     private static final Native n = Native.n;
 
     @Override
-    public void canRead(Channel channel, ReadBuffer readBuffer) {
-        long readableBytes = n.recv(channel.socket(), readBuffer.segment(), readBuffer.len());
-        if(readableBytes > 0) {
-            readBuffer.setWriteIndex(readableBytes);
-            channel.onReadBuffer(readBuffer);
+    public void canRead(Channel channel, MemorySegment segment) {
+        long len = segment.byteSize();
+        long received = n.recv(channel.socket(), segment, len);
+        if(received > 0) {
+            channel.onReadBuffer(new ReadBuffer(received == len ? segment : segment.asSlice(Constants.ZERO, received)));
         }else {
-            if(readableBytes < 0) {
+            if(received < 0) {
                 // usually connection reset by peer
                 log.debug("{} tcp recv err, errno : {}", channel.loc(), n.errno());
             }
@@ -45,7 +45,7 @@ public final class TcpProtocol implements Protocol {
     @Override
     public WriteStatus doWrite(Channel channel, WriteBuffer writeBuffer) {
         Socket socket = channel.socket();
-        MemorySegment segment = writeBuffer.segment();
+        MemorySegment segment = writeBuffer.content();
         long len = segment.byteSize();
         long bytes = n.send(socket, segment, len);
         if(bytes == -1L) {

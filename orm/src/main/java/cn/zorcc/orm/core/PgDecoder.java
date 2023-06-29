@@ -14,13 +14,14 @@ import java.util.List;
 public class PgDecoder implements Decoder {
     @Override
     public Object decode(ReadBuffer readBuffer) {
-        if(readBuffer.available() < 5) {
+        long startIndex = readBuffer.readIndex();
+        long bufferLength = readBuffer.size() - startIndex;
+        if(bufferLength < 5) {
             return null;
         }
-        long startIndex = readBuffer.readIndex();
         byte msgType = readBuffer.readByte();
         int msgLength = readBuffer.readInt();
-        if(readBuffer.available() < msgLength - 4) {
+        if(bufferLength < msgLength + 1) {
             readBuffer.setReadIndex(startIndex);
             return null;
         }

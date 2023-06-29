@@ -2,7 +2,6 @@ package cn.zorcc.common.network;
 
 import cn.zorcc.common.Clock;
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Loc;
@@ -87,7 +86,7 @@ public class MacNative implements Native {
     public MemorySegment createSockAddr(Loc loc, Arena arena) {
         MemorySegment r = arena.allocate(sockAddrLayout);
         MemorySegment ip = NativeUtil.allocateStr(arena, loc.ip(), addressLen);
-        if(check(setSockAddr(r, ip, loc.port()), "setSockAddr") == 0) {
+        if(check(setSockAddr(r, ip, loc.shortPort()), "setSockAddr") == 0) {
             throw new FrameworkException(ExceptionType.NETWORK, "Loc is not valid");
         }
         return r;
@@ -114,9 +113,9 @@ public class MacNative implements Native {
     @Override
     public void configureSocket(NetworkConfig config, Socket socket) {
         int socketFd = socket.intValue();
-        check(setReuseAddr(socketFd, config.getReuseAddr() ? 1 : 0), "set SO_REUSE_ADDR");
-        check(setKeepAlive(socketFd, config.getKeepAlive() ? 1 : 0), "set SO_KEEPALIVE");
-        check(setTcpNoDelay(socketFd, config.getTcpNoDelay() ? 1 : 0), "set TCP_NODELAY");
+        check(setReuseAddr(socketFd, config.getReuseAddr() > 0 ? 1 : 0), "set SO_REUSE_ADDR");
+        check(setKeepAlive(socketFd, config.getKeepAlive() > 0 ? 1 : 0), "set SO_KEEPALIVE");
+        check(setTcpNoDelay(socketFd, config.getTcpNoDelay() > 0 ? 1 : 0), "set TCP_NODELAY");
         check(setNonBlocking(socketFd), "set NON_BLOCKING");
     }
 
@@ -125,7 +124,7 @@ public class MacNative implements Native {
         try(Arena arena = Arena.openConfined()) {
             MemorySegment addr = arena.allocate(sockAddrLayout);
             MemorySegment ip = NativeUtil.allocateStr(arena, loc.ip(), addressLen);
-            int setSockAddr = check(setSockAddr(addr, ip, loc.port()), "set SockAddr");
+            int setSockAddr = check(setSockAddr(addr, ip, loc.shortPort()), "set SockAddr");
             if(setSockAddr == 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Network address is not valid");
             }
@@ -168,11 +167,11 @@ public class MacNative implements Native {
     }
 
     @Override
-    public void waitForData(Map<Socket, Object> socketMap, ReadBuffer readBuffer, MemorySegment events, int index) {
+    public void waitForData(Map<Socket, Object> socketMap, MemorySegment buffer, MemorySegment events, int index) {
         short filter = NativeUtil.getShort(events, index * keventSize + filterOffset);
         Socket socket = new Socket(NativeUtil.getInt(events, index * keventSize + identOffset));
         if(filter == Constants.EVFILT_READ) {
-            Native.shouldRead(socketMap, socket, readBuffer);
+            Native.shouldRead(socketMap, socket, buffer);
         }else if(filter == Constants.EVFILT_WRITE) {
             Native.shouldWrite(socketMap, socket);
         }else {
@@ -195,14 +194,16 @@ public class MacNative implements Native {
                 throw new FrameworkException(ExceptionType.NETWORK, "Failed to accept client socket, errno : {}", errno());
             }
             Socket clientSocket = new Socket(socketFd);
-            check(setReuseAddr(socketFd, config.getReuseAddr() ? 1 : 0), "set SO_REUSE_ADDR");
-            check(setKeepAlive(socketFd, config.getKeepAlive() ? 1 : 0), "set SO_KEEPALIVE");
-            check(setTcpNoDelay(socketFd, config.getTcpNoDelay() ? 1 : 0), "set TCP_NODELAY");
+            check(setReuseAddr(socketFd, config.getReuseAddr() > 0 ? 1 : 0), "set SO_REUSE_ADDR");
+            check(setKeepAlive(socketFd, config.getKeepAlive() > 0 ? 1 : 0), "set SO_KEEPALIVE");
+            check(setTcpNoDelay(socketFd, config.getTcpNoDelay() > 0 ? 1 : 0), "set TCP_NODELAY");
             check(setNonBlocking(socketFd), "set NON_BLOCKING");
             if(address(clientAddr, address, addressLen) == -1) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Failed to get client socket's remote address, errno : {}", errno());
             }
-            Loc loc = new Loc(NativeUtil.getStr(address, addressLen), port(clientAddr));
+            String ip = NativeUtil.getStr(address, addressLen);
+            int port = Loc.toIntPort(port(clientAddr));
+            Loc loc = new Loc(ip, port);
             return new ClientSocket(clientSocket, loc);
         }
     }

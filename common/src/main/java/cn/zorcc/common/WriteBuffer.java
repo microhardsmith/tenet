@@ -10,25 +10,70 @@ import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 
 /**
- *   写直接内存缓冲区,非线程安全
+ *   Direct memory WriteBuffer, not thread-safe, custom Resizer could be chose to modify the default expansion mechanism
  */
 public final class WriteBuffer implements AutoCloseable {
-    private Arena arena;
     private MemorySegment segment;
+    private long size;
     private long writeIndex;
+    private final WriteBufferPolicy policy;
 
-    public WriteBuffer(long size) {
-        this.arena = Arena.openConfined();
-        this.segment = arena.allocateArray(ValueLayout.JAVA_BYTE, size);
-        this.writeIndex = 0L;
+    public MemorySegment segment() {
+        return segment;
+    }
+
+    public long size() {
+        return size;
+    }
+
+    public void update(MemorySegment segment) {
+        this.segment = segment;
+        this.size = segment.byteSize();
     }
 
     public long writeIndex() {
         return writeIndex;
     }
 
+    /**
+     *   Reset current writeBuffer's writeIndex to zero
+     */
+    public void resetWriteIndex() {
+        writeIndex = Constants.ZERO;
+    }
+
+    /**
+     *   Create a writeBuffer using custom policy
+     */
+    public WriteBuffer(MemorySegment segment, WriteBufferPolicy policy) {
+        this.segment = segment;
+        this.size = segment.byteSize();
+        this.writeIndex = Constants.ZERO;
+        this.policy = policy;
+    }
+
+    /**
+     *   Create a writeBuffer using reserved policy
+     */
+    public WriteBuffer(MemorySegment segment) {
+        this(segment, new ReservedWriteBufferPolicy());
+    }
+
+    /**
+     *   Create a writeBuffer using default policy
+     */
+    public WriteBuffer(Arena arena, long size) {
+        this.segment = arena.allocateArray(ValueLayout.JAVA_BYTE, size);
+        this.size = size;
+        this.writeIndex = Constants.ZERO;
+        this.policy = new DefaultWriteBufferPolicy(arena);
+    }
+
     public void writeByte(byte b) {
-        long nextIndex = ensureCapacity(1L);
+        long nextIndex = writeIndex + 1;
+        if(nextIndex > size) {
+            policy.resize(this, nextIndex);
+        }
         NativeUtil.setByte(segment, writeIndex, b);
         writeIndex = nextIndex;
     }
@@ -37,7 +82,10 @@ public final class WriteBuffer implements AutoCloseable {
         if(bytes.length == 0) {
             return ;
         }
-        long nextIndex = ensureCapacity(bytes.length);
+        long nextIndex = writeIndex + bytes.length;
+        if(nextIndex > size) {
+            policy.resize(this, nextIndex);
+        }
         for(int i = 0; i < bytes.length; i++) {
             NativeUtil.setByte(segment, writeIndex + i, bytes[i]);
         }
@@ -48,7 +96,10 @@ public final class WriteBuffer implements AutoCloseable {
         if(minWidth <= bytes.length) {
             writeBytes(bytes);
         }else {
-            long nextIndex = ensureCapacity(minWidth);
+            long nextIndex = writeIndex + minWidth;
+            if(nextIndex > size) {
+                policy.resize(this, nextIndex);
+            }
             for(int i = 0; i < bytes.length; i++) {
                 NativeUtil.setByte(segment, writeIndex + i, bytes[i]);
             }
@@ -61,26 +112,38 @@ public final class WriteBuffer implements AutoCloseable {
     }
 
     public void writeShort(short s) {
-        long nextIndex = ensureCapacity(2L);
+        long nextIndex = writeIndex + 2;
+        if(nextIndex > size) {
+            policy.resize(this, nextIndex);
+        }
         NativeUtil.setShort(segment, writeIndex, s);
         writeIndex = nextIndex;
     }
 
     public void writeInt(int i) {
-        long nextIndex = ensureCapacity(4L);
+        long nextIndex = writeIndex + 4;
+        if(nextIndex > size) {
+            policy.resize(this, nextIndex);
+        }
         NativeUtil.setInt(segment, writeIndex, i);
         writeIndex = nextIndex;
     }
 
     public void writeLong(long l) {
-        long nextIndex = ensureCapacity(8L);
+        long nextIndex = writeIndex + 8L;
+        if(nextIndex > size) {
+            policy.resize(this, nextIndex);
+        }
         NativeUtil.setLong(segment, writeIndex, l);
         writeIndex = nextIndex;
     }
 
     public void writeCStr(String str) {
         byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
-        long nextIndex = ensureCapacity(bytes.length + 1);
+        long nextIndex = writeIndex + bytes.length + 1;
+        if(nextIndex > size) {
+            policy.resize(this, nextIndex);
+        }
         for(int i = 0; i < bytes.length; i++) {
             NativeUtil.setByte(segment, writeIndex + i, bytes[i]);
         }
@@ -91,12 +154,29 @@ public final class WriteBuffer implements AutoCloseable {
     public void write(MemorySegment memorySegment) {
         if(memorySegment != null) {
             long len = memorySegment.byteSize();
-            long nextIndex = ensureCapacity(len);
+            long nextIndex = writeIndex + len;
+            if(nextIndex > len) {
+                policy.resize(this, nextIndex);
+            }
             MemorySegment.copy(memorySegment, 0L, segment, writeIndex, len);
             writeIndex = nextIndex;
         }else {
             throw new FrameworkException(ExceptionType.NATIVE, "Writing null segment");
         }
+    }
+
+    public void setByte(long index, byte value) {
+        if(index + 1 > writeIndex) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
+        }
+        NativeUtil.setByte(segment, index, value);
+    }
+
+    public void setShort(long index, short value) {
+        if(index + 2 > writeIndex) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
+        }
+        NativeUtil.setShort(segment, index, value);
     }
 
     public void setInt(long index, int value) {
@@ -106,76 +186,33 @@ public final class WriteBuffer implements AutoCloseable {
         NativeUtil.setInt(segment, index, value);
     }
 
+    public void setLong(long index, long value) {
+        if(index + 8 > writeIndex) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
+        }
+        NativeUtil.setLong(segment, index, value);
+    }
+
     /**
      *   Return current written segment, from 0 ~ writeIndex
      */
-    public MemorySegment segment() {
+    public MemorySegment content() {
         return writeIndex == segment.byteSize() ? segment : segment.asSlice(0L, writeIndex);
     }
 
     /**
-     *   Truncate count bytes at the beginning of the segment
+     *   Truncate from the beginning of the segment to the offset
      */
-    public void truncate(long count) {
-        if(count >= writeIndex) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Couldn't truncate after write index");
+    public void truncate(long offset) {
+        if(offset > writeIndex) {
+            throw new FrameworkException(ExceptionType.NATIVE, "truncate overflow");
         }
-        long size = segment.byteSize();
-        segment = segment.asSlice(count, size - count);
-        writeIndex = writeIndex - count;
-    }
-
-    /**
-     *   Reset current writeBuffer, without wiping out what has been written
-     */
-    public void reset() {
-        writeIndex = 0L;
-    }
-
-    public boolean notEmpty() {
-        return writeIndex != 0L;
-    }
-
-    /**
-     *   Turn current writeBuffer into a new ReadBuffer
-     */
-    public ReadBuffer toReadBuffer() {
-        return new ReadBuffer(arena, segment());
+        segment = segment.asSlice(offset, size - offset);
+        writeIndex -= offset;
     }
 
     @Override
     public void close() {
-        arena.close();
-    }
-
-    /**
-     *   Ensure current segment capacity
-     */
-    public long ensureCapacity(long cap) {
-        long nextIndex = writeIndex + cap;
-        if(nextIndex > segment.byteSize()) {
-            resize(nextIndex);
-        }
-        return nextIndex;
-    }
-
-    /**
-     *   Resize current segment to fit at least nextIndex bytes
-     */
-    private void resize(long nextIndex) {
-        long newSize = segment.byteSize();
-        while (newSize > 0 && newSize < nextIndex) {
-            // 按照每次2倍的基数进行扩容
-            newSize = newSize << 1;
-        }
-        if(newSize < 0) {
-            throw new FrameworkException(ExceptionType.NATIVE, "MemorySize overflow");
-        }
-        Arena newArena = Arena.openConfined();
-        MemorySegment newSegment = newArena.allocateArray(ValueLayout.JAVA_BYTE, newSize);
-        MemorySegment.copy(segment, 0L, newSegment, 0L, writeIndex);
-        arena.close();
-        arena = newArena;
-        segment = newSegment;
+        policy.close(this);
     }
 }

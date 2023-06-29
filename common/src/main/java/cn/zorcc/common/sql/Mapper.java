@@ -1,13 +1,9 @@
-package cn.zorcc.orm.common;
+package cn.zorcc.common.sql;
 
 import java.util.Collection;
 import java.util.List;
 
 public interface Mapper<T> {
-
-    static <V> Mapper<V> of(Class<V> poClass) {
-        return SqlMapper.of(poClass);
-    }
 
     /**
      *  Insert a record, only process the non-null fields

@@ -1,5 +1,8 @@
-package cn.zorcc.orm.common;
+package cn.zorcc.common.sql;
 
+/**
+ *   Define auto filler operation when using Mapper
+ */
 public interface Filler {
     /**
      *   Auto filler operation applied when performing insert

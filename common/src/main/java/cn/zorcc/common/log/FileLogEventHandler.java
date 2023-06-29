@@ -83,7 +83,7 @@ public final class FileLogEventHandler implements EventHandler<LogEvent> {
                     stream.close();
                     allocateNewStream();
                 }
-                stream.write(buffer.array(), 0, bufferIndex);
+                stream.write(buffer.rawArray(), 0, bufferIndex);
                 stream.flush();
                 index = index + bufferIndex;
                 buffer.reset();
@@ -123,7 +123,7 @@ public final class FileLogEventHandler implements EventHandler<LogEvent> {
         try{
             int bufferIndex = buffer.writeIndex();
             if(bufferIndex > 0) {
-                stream.write(buffer.array(), 0, bufferIndex);
+                stream.write(buffer.rawArray(), 0, bufferIndex);
                 stream.flush();
             }
             stream.close();

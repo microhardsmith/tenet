@@ -1,6 +1,7 @@
 package cn.zorcc.common.example;
 
 import cn.zorcc.common.Clock;
+import cn.zorcc.common.Constants;
 import cn.zorcc.common.log.LoggerConsumer;
 import cn.zorcc.common.network.*;
 import cn.zorcc.common.network.http.HttpDecoder;
@@ -26,6 +27,7 @@ import java.util.concurrent.TimeUnit;
  */
 @Slf4j
 public class NetExample {
+    private static final Loc DEFAULT_LOC = new Loc("0.0.0.0", 8001);
     public static void main(String[] args) {
         long nano = Clock.nano();
 
@@ -43,11 +45,12 @@ public class NetExample {
         Wheel.wheel().init();
         LoggerConsumer loggerConsumer = new LoggerConsumer();
         loggerConsumer.init();
-        Net net = new Net();
+        NetworkConfig networkConfig = new NetworkConfig();
+        Net net = new Net(networkConfig);
         MuxConfig muxConfig = new MuxConfig();
-        net.addMaster(HttpEncoder::new, HttpDecoder::new, HttpTestHandler::new, net.tcpConnectorSupplier(), Loc.DEFAULT, muxConfig);
+        net.addMaster(HttpEncoder::new, HttpDecoder::new, HttpTestHandler::new, net.tcpConnectorSupplier(), DEFAULT_LOC, muxConfig);
         for(int i = 0; i < 4; i++) {
-            net.addWorker(muxConfig);
+            net.addWorker(networkConfig, muxConfig);
         }
         Runtime.getRuntime().addShutdownHook(ThreadUtil.virtual("shutdown", () -> {
             net.shutdown();
@@ -61,14 +64,14 @@ public class NetExample {
         LoggerConsumer loggerConsumer = new LoggerConsumer();
         loggerConsumer.init();
         NetworkConfig networkConfig = new NetworkConfig();
-        networkConfig.setEnableSsl(true);
+        networkConfig.setEnableSsl(Constants.ONE);
         networkConfig.setPublicKeyFile("C:/openresty-1.21.4.1-win64/conf/zorcc.cn+1.pem");
         networkConfig.setPrivateKeyFile("C:/openresty-1.21.4.1-win64/conf/zorcc.cn+1-key.pem");
-        Net net = new Net();
+        Net net = new Net(networkConfig);
         MuxConfig muxConfig = new MuxConfig();
-        net.addMaster(HttpEncoder::new, HttpDecoder::new, HttpTestHandler::new, net.tcpConnectorSupplier(), Loc.DEFAULT, muxConfig);
+        net.addMaster(HttpEncoder::new, HttpDecoder::new, HttpTestHandler::new, net.tcpConnectorSupplier(), DEFAULT_LOC, muxConfig);
         for(int i = 0; i < 4; i++) {
-            net.addWorker(muxConfig);
+            net.addWorker(networkConfig, muxConfig);
         }
         Runtime.getRuntime().addShutdownHook(ThreadUtil.virtual("shutdown", () -> {
             net.shutdown();
@@ -82,17 +85,17 @@ public class NetExample {
         LoggerConsumer loggerConsumer = new LoggerConsumer();
         loggerConsumer.init();
         NetworkConfig networkConfig = new NetworkConfig();
-        networkConfig.setEnableSsl(true);
+        networkConfig.setEnableSsl(Constants.ONE);
         networkConfig.setPublicKeyFile("C:/openresty-1.21.4.1-win64/conf/zorcc.cn+1.pem");
         networkConfig.setPrivateKeyFile("C:/openresty-1.21.4.1-win64/conf/zorcc.cn+1-key.pem");
-        Net net = new Net();
+        Net net = new Net(networkConfig);
         MuxConfig muxConfig = new MuxConfig();
-        Loc tcpLoc = new Loc("0.0.0.0", (short) 8002);
-        Loc sslLoc = new Loc("0.0.0.0", (short) 8003);
+        Loc tcpLoc = new Loc("0.0.0.0", 8002);
+        Loc sslLoc = new Loc("0.0.0.0", 8003);
         net.addMaster(HttpEncoder::new, HttpDecoder::new, HttpTestHandler::new, net.tcpConnectorSupplier(), tcpLoc, muxConfig);
         net.addMaster(HttpEncoder::new, HttpDecoder::new, HttpTestHandler::new, net.sslConnectorSupplier(), sslLoc, muxConfig);
         for(int i = 0; i < 4; i++) {
-            net.addWorker(muxConfig);
+            net.addWorker(networkConfig, muxConfig);
         }
         Runtime.getRuntime().addShutdownHook(ThreadUtil.virtual("shutdown", () -> {
             net.shutdown();

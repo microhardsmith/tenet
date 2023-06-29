@@ -99,7 +99,7 @@ public class HttpDecoder implements Decoder {
                 String contentLength = current.getHeaders().get(CONTENT_LENGTH);
                 if (contentLength != null) {
                     int len = Integer.parseInt(contentLength);
-                    if (readBuffer.available() < len) {
+                    if (readBuffer.size() - readBuffer.readIndex() < len) {
                         return -1;
                     }
                     current.setData(readBuffer.readBytes(len));

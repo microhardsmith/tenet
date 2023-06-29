@@ -4,78 +4,52 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 
 /**
- *   读直接内存缓冲区,非线程安全
+ *   Direct memory ReadBuffer, not thread-safe, ReadBuffer is read-only, shouldn't be modified directly
+ *   Note that writeIndex is a mutable field, because
  */
-public final class ReadBuffer implements AutoCloseable {
-    private final Arena arena;
-    private final MemorySegment segment;
-    private final long len;
+public final class ReadBuffer {
     /**
-     *   当前已读取的index
+     *   Actual memory segment part
+     */
+    private final MemorySegment segment;
+    /**
+     *   Actual memory size, should be equal to segment.byteSize()
+     */
+    private final long size;
+    /**
+     *   Read index starting from 0, step by reading
      */
     private long readIndex;
-    /**
-     *   当前已写入的index
-     */
-    private long writeIndex;
 
-    /**
-     *   用于构建新的空白的readBuffer
-     */
-    public ReadBuffer(long size) {
-        this.arena = Arena.openConfined();
-        this.segment = arena.allocateArray(ValueLayout.JAVA_BYTE, size);
-        this.len = size;
-        this.readIndex = 0L;
-        this.writeIndex = 0L;
-    }
-
-    /**
-     *   用于从WriteBuffer中转化
-     */
-    public ReadBuffer(Arena arena, MemorySegment segment) {
-        this.arena = arena;
+    public ReadBuffer(MemorySegment segment) {
         this.segment = segment;
-        this.len = segment.byteSize();
-        this.readIndex = 0L;
-        this.writeIndex = segment.byteSize();
-    }
-
-    public long available() {
-        return writeIndex - readIndex;
+        this.size = segment.byteSize();
+        this.readIndex = Constants.ZERO;
     }
 
     public void setReadIndex(long index) {
-        if(index < 0 || index > writeIndex) {
+        if(index < 0 || index > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "ReadIndex out of bound");
         }
         readIndex = index;
     }
 
-    public void setWriteIndex(long index) {
-        if(index > segment.byteSize()) {
-            throw new FrameworkException(ExceptionType.NATIVE, "ReadBuffer write index overflow");
-        }
-        writeIndex = index;
+    public long size() {
+        return size;
     }
 
     public long readIndex() {
         return readIndex;
     }
 
-    public long writeIndex() {
-        return writeIndex;
-    }
-
     public byte readByte() {
         long nextIndex = readIndex + 1;
-        if(nextIndex > writeIndex) {
+        if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
         byte b = NativeUtil.getByte(segment, readIndex);
@@ -83,19 +57,19 @@ public final class ReadBuffer implements AutoCloseable {
         return b;
     }
 
-    public byte[] readBytes(int len) {
-        long nextIndex = readIndex + len;
-        if(nextIndex > writeIndex) {
+    public byte[] readBytes(int count) {
+        long nextIndex = readIndex + count;
+        if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
-        byte[] result = segment.asSlice(readIndex, len).toArray(ValueLayout.JAVA_BYTE);
+        byte[] result = segment.asSlice(readIndex, count).toArray(ValueLayout.JAVA_BYTE);
         readIndex = nextIndex;
         return result;
     }
 
     public short readShort() {
         long nextIndex = readIndex + 2;
-        if(nextIndex > writeIndex) {
+        if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
         short s = NativeUtil.getShort(segment, readIndex);
@@ -105,7 +79,7 @@ public final class ReadBuffer implements AutoCloseable {
 
     public int readInt() {
         long nextIndex = readIndex + 4;
-        if(nextIndex > writeIndex) {
+        if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
         int i = NativeUtil.getInt(segment, readIndex);
@@ -115,7 +89,7 @@ public final class ReadBuffer implements AutoCloseable {
 
     public long readLong() {
         long nextIndex = readIndex + 8;
-        if(nextIndex > writeIndex) {
+        if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
         long l = NativeUtil.getByte(segment, readIndex);
@@ -124,38 +98,32 @@ public final class ReadBuffer implements AutoCloseable {
     }
 
     /**
-     *   读取当前内存块直到读取到指定分隔符,返回已读取的内容（不包含分隔符）,如果未获取到则返回null
+     *   read until sep occurred, if not sep found in the following bytes, no bytes would be read and null would be returned
      */
     public byte[] readUntil(byte sep) {
-        long currentIndex = readIndex;
-        while (currentIndex < writeIndex) {
-            byte b = NativeUtil.getByte(segment, currentIndex);
+        ResizableByteArray resizableByteArray = new ResizableByteArray();
+        byte b;
+        for (long cur = readIndex; cur < size; cur++, resizableByteArray.write(b)) {
+            b = NativeUtil.getByte(segment, cur);
             if(b == sep) {
-                byte[] result = currentIndex == readIndex ? Constants.EMPTY_BYTES : segment.asSlice(readIndex, currentIndex - readIndex).toArray(ValueLayout.JAVA_BYTE);
-                readIndex = currentIndex + 1;
-                return result;
-            }else {
-                currentIndex += 1;
+                readIndex = cur + 1;
+                return resizableByteArray.toArray();
             }
         }
-        readIndex = writeIndex;
         return null;
     }
 
-    public byte[] readUntil(byte sep1, byte sep2) {
-        long currentIndex = readIndex;
-        long maxIndex = writeIndex - 1;
-        while (currentIndex < maxIndex) {
-            byte b = NativeUtil.getByte(segment, currentIndex);
-            if(b == sep1 && NativeUtil.getByte(segment, currentIndex + 1) == sep2) {
-                byte[] result = currentIndex == readIndex ? Constants.EMPTY_BYTES : segment.asSlice(readIndex, currentIndex - readIndex).toArray(ValueLayout.JAVA_BYTE);
-                readIndex = currentIndex + 2;
+    /**
+     *   read until several separators occurred, if not sep found in the following bytes, no bytes would be read and null would be returned
+     */
+    public byte[] readUntil(byte... separators) {
+        for(long cur = readIndex; cur <= size - separators.length; cur++) {
+            if(NativeUtil.matches(segment, cur, separators)) {
+                byte[] result = cur == readIndex ? Constants.EMPTY_BYTES : segment.asSlice(readIndex, cur - readIndex).toArray(ValueLayout.JAVA_BYTE);
+                readIndex = cur + separators.length;
                 return result;
-            }else {
-                currentIndex += 1;
             }
         }
-        readIndex = maxIndex;
         return null;
     }
 
@@ -170,29 +138,10 @@ public final class ReadBuffer implements AutoCloseable {
         return new String(bytes, StandardCharsets.UTF_8);
     }
 
-    public long len() {
-        return len;
-    }
-
-    public MemorySegment segment() {
-        return segment;
-    }
-
-    public boolean remains() {
-        return readIndex != writeIndex;
-    }
-
-    public MemorySegment remaining() {
-        return remains() ? segment.asSlice(readIndex, writeIndex) : null;
-    }
-
-    public void reset() {
-        readIndex = 0L;
-        writeIndex = 0L;
-    }
-
-    @Override
-    public void close() {
-        arena.close();
+    /**
+     *   Return the rest part of current ReadBuffer, before calling this method, readerIndex should be checked if there are still some data remaining
+     */
+    public MemorySegment rest() {
+        return readIndex == Constants.ZERO ? segment : segment.asSlice(readIndex, size - readIndex);
     }
 }

@@ -1,4 +1,4 @@
-package cn.zorcc.orm.common;
+package cn.zorcc.common.sql;
 
 
 public final class Where {

@@ -42,14 +42,6 @@ public class Net implements LifeCycle {
      *  socket map initial size, will automatically expand, could be changed according to specific circumstances
      */
     public static final int MAP_SIZE = 1024;
-    /**
-     *  default connect timeout for client side
-     */
-    public static final long DEFAULT_CONNECT_TIMEOUT = 5;
-    /**
-     *  default connect time-unit for client side
-     */
-    public static final TimeUnit DEFAULT_TIME_UNIT = TimeUnit.SECONDS;
 
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
     private static final Native n = Native.n;
@@ -82,7 +74,7 @@ public class Net implements LifeCycle {
         if(NativeUtil.checkNullPointer(sslClientCtx)) {
             throw new FrameworkException(ExceptionType.NETWORK, "SSL client initialization failed");
         }
-        if(networkConfig.getEnableSsl()) {
+        if(networkConfig.getEnableSsl() > 0) {
             this.sslServerCtx = Openssl.sslCtxNew(Openssl.tlsServerMethod());
             if(NativeUtil.checkNullPointer(sslServerCtx)) {
                 throw new FrameworkException(ExceptionType.NETWORK, "SSL server initialization failed");
@@ -108,13 +100,6 @@ public class Net implements LifeCycle {
                 throw new FrameworkException(ExceptionType.NETWORK, "SSL server not configured");
             };
         }
-    }
-
-    /**
-     *   Create Net instance using default NetworkConfig
-     */
-    public Net() {
-        this(new NetworkConfig());
     }
 
     /**
@@ -150,7 +135,7 @@ public class Net implements LifeCycle {
     /**
      *   Add a new Worker instance to current Net
      */
-    public void addWorker(MuxConfig muxConfig) {
+    public void addWorker(NetworkConfig networkConfig, MuxConfig muxConfig) {
         lock.lock();
         try{
             if(state != INITIAL) {
@@ -158,7 +143,7 @@ public class Net implements LifeCycle {
             }
             muxConfig.validate();
             int sequence = workers.size();
-            workers.add(new Worker(muxConfig, sequence));
+            workers.add(new Worker(networkConfig, muxConfig, sequence));
         }finally {
             lock.unlock();
         }
@@ -231,7 +216,7 @@ public class Net implements LifeCycle {
      */
     @SuppressWarnings("unused")
     public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Supplier<Connector> connectorSupplier) {
-        connect(loc, encoder, decoder, handler, connectorSupplier, DEFAULT_CONNECT_TIMEOUT, DEFAULT_TIME_UNIT);
+        connect(loc, encoder, decoder, handler, connectorSupplier, networkConfig.getDefaultConnectionTimeout(), TimeUnit.MILLISECONDS);
     }
 
     @Override
@@ -245,7 +230,7 @@ public class Net implements LifeCycle {
                     worker.start();
                 }
                 for (Master master : masters) {
-                    master.start();
+                    master.thread().start();
                 }
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, "Net already running");
@@ -263,10 +248,13 @@ public class Net implements LifeCycle {
                 state = SHUTDOWN;
                 long nano = Clock.nano();
                 for (Master master : masters) {
-                    master.exit();
+                    master.thread().interrupt();
+                }
+                for (Master master : masters) {
+                    master.thread().join();
                 }
                 for (Worker worker : workers) {
-                    worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.GRACEFUL_SHUTDOWN, new Shutdown(networkConfig.getShutdownTimeout(), TimeUnit.SECONDS)));
+                    worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.GRACEFUL_SHUTDOWN, new Shutdown(networkConfig.getShutdownTimeout(), TimeUnit.MILLISECONDS)));
                 }
                 for(Worker worker : workers) {
                     worker.reader().join();

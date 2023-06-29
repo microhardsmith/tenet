@@ -9,10 +9,7 @@ import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Native;
 import cn.zorcc.common.util.NativeUtil;
 
-import java.lang.foreign.FunctionDescriptor;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SymbolLookup;
-import java.lang.foreign.ValueLayout;
+import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -30,6 +27,7 @@ public final class ConsoleLogEventHandler implements EventHandler<LogEvent> {
      */
     private final MethodHandle print;
     private final List<ConsoleConsumer> consumers;
+    private final Arena arena;
     private final WriteBuffer buffer;
     private static final MemorySegment stdout = NativeUtil.stdout();
     private static final MemorySegment stderr = NativeUtil.stderr();
@@ -39,16 +37,18 @@ public final class ConsoleLogEventHandler implements EventHandler<LogEvent> {
         this.print = NativeUtil.methodHandle(symbolLookup, "g_print", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         this.consumers = createConsoleConsumer(logConfig);
         // Console builder should have a larger size than logEvent, the constructor method should be guaranteed to be called in log thread to keep arena safe
-        this.buffer = new WriteBuffer(logConfig.getBufferSize() << 1);
+        this.arena = Arena.openConfined();
+        this.buffer = new WriteBuffer(arena.allocateArray(ValueLayout.JAVA_BYTE, logConfig.getBufferSize() << 1));
     }
 
     /**
      *  Print to the console, note that C style string needs to manually add a '\0' to the end
      */
-    private void print(WriteBuffer buffer, MemorySegment stream) {
+    private void print(MemorySegment stream) {
         try{
-            print.invokeExact(buffer.segment(), stream);
-            buffer.reset();
+            MemorySegment content = buffer.content();
+            print.invokeExact(content, stream);
+            buffer.close();
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.LOG, "Exception caught when invoking print()", throwable);
         }
@@ -100,18 +100,20 @@ public final class ConsoleLogEventHandler implements EventHandler<LogEvent> {
     @Override
     public void handle(LogEvent event) {
         // Ignore flush or shutdown since the console will be flushed every time
-        if(event != LogEvent.flushEvent && event != LogEvent.shutdownEvent) {
+        if(event == LogEvent.shutdownEvent) {
+            arena.close();
+        }else if(event != LogEvent.flushEvent) {
             for (ConsoleConsumer consumer : consumers) {
                 consumer.accept(buffer, event);
             }
             buffer.writeByte(Constants.LF);
             buffer.writeByte(Constants.NUT);
-            print(buffer, stdout);
+            print(stdout);
             byte[] throwable = event.throwable();
             if(throwable != null) {
                 buffer.writeBytes(throwable);
                 buffer.writeByte(Constants.NUT);
-                print(buffer, stderr);
+                print(stderr);
             }
         }
     }

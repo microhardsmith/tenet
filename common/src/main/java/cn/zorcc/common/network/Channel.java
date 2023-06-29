@@ -6,6 +6,7 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Loc;
 
+import java.lang.foreign.Arena;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class Channel {
@@ -70,28 +71,22 @@ public final class Channel {
      */
     public void onReadBuffer(ReadBuffer buffer) {
         if(tempBuffer != null) {
-            // last time readBuffer read is not complete
-            tempBuffer.write(buffer.remaining());
-            ReadBuffer readBuffer = tempBuffer.toReadBuffer();
+            tempBuffer.write(buffer.rest());
+            ReadBuffer readBuffer = new ReadBuffer(tempBuffer.content());
             tryRead(readBuffer);
-            if(readBuffer.remains()) {
-                // still incomplete read
+            if(readBuffer.readIndex() < readBuffer.size()) {
                 tempBuffer.truncate(readBuffer.readIndex());
             }else {
-                // writeBuffer can now be released
                 tempBuffer.close();
                 tempBuffer = null;
             }
         }else {
             tryRead(buffer);
-            if(buffer.remains()) {
-                // create a new writeBuffer to maintain the unreadable bytes
-                tempBuffer = new WriteBuffer(buffer.len());
-                tempBuffer.write(buffer.remaining());
+            if(buffer.readIndex() < buffer.size()) {
+                tempBuffer = new WriteBuffer(Arena.openConfined(), buffer.size());
+                tempBuffer.write(buffer.rest());
             }
         }
-        // reset read buffer for reuse
-        buffer.reset();
     }
 
     /**

@@ -1,7 +1,6 @@
 package cn.zorcc.common.network;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Loc;
@@ -76,7 +75,7 @@ public interface Native {
     /**
      *   Waiting for data, don't throw exception here cause it would exit the loop thread
      */
-    void waitForData(Map<Socket, Object> socketMap, ReadBuffer readBuffer, MemorySegment events, int index);
+    void waitForData(Map<Socket, Object> socketMap, MemorySegment buffer, MemorySegment events, int index);
 
     /**
      *   Connect socket with target socketAddr, return 0 if connection is successful, return -1 if error occurred
@@ -183,11 +182,11 @@ public interface Native {
         }
     }
 
-    static void shouldRead(Map<Socket, Object> socketMap, Socket socket, ReadBuffer readBuffer) {
+    static void shouldRead(Map<Socket, Object> socketMap, Socket socket, MemorySegment buffer) {
         switch (socketMap.get(socket)) {
             case null -> {}
             case Acceptor acceptor -> acceptor.connector().shouldRead(acceptor);
-            case Channel channel -> channel.protocol().canRead(channel, readBuffer);
+            case Channel channel -> channel.protocol().canRead(channel, buffer);
             default -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }

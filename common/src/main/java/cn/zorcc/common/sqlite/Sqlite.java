@@ -1,4 +1,4 @@
-package cn.zorcc.common.storage;
+package cn.zorcc.common.sqlite;
 
 import cn.zorcc.common.Clock;
 import cn.zorcc.common.enums.ExceptionType;
@@ -22,14 +22,7 @@ public final class Sqlite {
      *   Environment variable that must be configured when launching the application
      */
     public static final String SQLITE_LIB = "sqlite";
-    /**
-     *   Err pointer, initialized as NULL pointer, the actual memory pointed will be modified by sqlite, thus need to be explicitly freed
-     */
-    private static final MemorySegment err = NativeUtil.NULL_POINTER;
-    /**
-     *   Err dual pointer, used for modifying Err pointer
-     */
-    private static final MemorySegment errPtr = MemorySegment.ofAddress(err.address());
+
     private static final String version;
     private static final MethodHandle openHandle;
     private static final MethodHandle configHandle; // TODO variadic variables still in-process for Project-Panama
@@ -52,6 +45,9 @@ public final class Sqlite {
     private static final MethodHandle clearBindingsHandle;
     private static final MethodHandle finalizeHandle;
     private static final MethodHandle changesHandle;
+    private static final MethodHandle backupInitHandle;
+    private static final MethodHandle backupStepHandle;
+    private static final MethodHandle backupFinishHandle;
 
     private static final MethodHandle freeHandle;
     private static final MethodHandle shutdownHandle;
@@ -85,12 +81,15 @@ public final class Sqlite {
         columnDoubleHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_double", FunctionDescriptor.of(ValueLayout.JAVA_DOUBLE, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         columnTextHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_text", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         columnBlobHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_blob", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-
         resetHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_reset", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         clearBindingsHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_clear_bindings", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-
         finalizeHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_finalize", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         changesHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_changes", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+
+        backupInitHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_backup_init", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+        backupStepHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_backup_step", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        backupFinishHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_backup_finish", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+
         freeHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         shutdownHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_shutdown", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         closeHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_close_v2", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
@@ -103,14 +102,6 @@ public final class Sqlite {
 
     public static String version() {
         return version;
-    }
-
-    public static MemorySegment errPtr() {
-        return errPtr;
-    }
-
-    public static String errStr() {
-        return NativeUtil.checkNullPointer(err) ? null : NativeUtil.getStr(err);
     }
 
     /**
@@ -349,6 +340,40 @@ public final class Sqlite {
             return (int) finalizeHandle.invokeExact(pStmt);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.SQLITE, "Failed to finalize");
+        }
+    }
+
+    /**
+     *   Corresponding to sqlite3_backup *sqlite3_backup_init(sqlite3 *pDest, const char *zDestName, sqlite3 *pSource, const char *zSourceName)
+     *   See <a href="https://sqlite.org/c3ref/backup_finish.html#sqlite3backupinit">...</a>
+     */
+    public static MemorySegment backupInit(MemorySegment dest, MemorySegment destName, MemorySegment source, MemorySegment sourceName) {
+        try{
+            return (MemorySegment) backupInitHandle.invokeExact(dest, destName, source, sourceName);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.SQLITE, "Failed to backupInit");
+        }
+    }
+    /**
+     *   Corresponding to int sqlite3_backup_step(sqlite3_backup *p, int nPage)
+     *   See <a href="https://sqlite.org/c3ref/backup_finish.html#sqlite3backupinit">...</a>
+     */
+    public static int backupStep(MemorySegment backup, int nPage) {
+        try{
+            return (int) backupStepHandle.invokeExact(backup, nPage);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.SQLITE, "Failed to backupStep");
+        }
+    }
+    /**
+     *   Corresponding to int sqlite3_backup_finish(sqlite3_backup *p);
+     *   See <a href="https://sqlite.org/c3ref/backup_finish.html#sqlite3backupinit">...</a>
+     */
+    public static int backupFinish(MemorySegment backup) {
+        try{
+            return (int) backupFinishHandle.invokeExact(backup);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.SQLITE, "Failed to backupFinish");
         }
     }
 

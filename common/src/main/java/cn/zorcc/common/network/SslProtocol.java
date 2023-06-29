@@ -37,7 +37,7 @@ public class SslProtocol implements Protocol {
      *
      */
     @Override
-    public void canRead(Channel channel, ReadBuffer readBuffer) {
+    public void canRead(Channel channel, MemorySegment memorySegment) {
         lock.lock();
         try {
             if((state & SHUTDOWN_WANT_TO_READ) != 0) {
@@ -49,9 +49,10 @@ public class SslProtocol implements Protocol {
                 channel.worker().submitWriterTask(new WriterTask(WriterTask.WriterTaskType.WRITABLE, channel, null));
             }
             if((state & RECV_WANT_TO_WRITE) == 0) {
-                int r = Openssl.sslRead(ssl, readBuffer.segment(), (int) readBuffer.len());
-                if(r <= 0) {
-                    int err = Openssl.sslGetErr(ssl, r);
+                int len = (int) memorySegment.byteSize();
+                int received = Openssl.sslRead(ssl, memorySegment, len);
+                if(received <= 0) {
+                    int err = Openssl.sslGetErr(ssl, received);
                     if(err == Constants.SSL_ERROR_WANT_WRITE) {
                         state &= RECV_WANT_TO_WRITE;
                     }else if(err == Constants.SSL_ERROR_ZERO_RETURN) {
@@ -62,8 +63,7 @@ public class SslProtocol implements Protocol {
                         channel.close();
                     }
                 }else {
-                    readBuffer.setWriteIndex(r);
-                    channel.onReadBuffer(readBuffer);
+                    channel.onReadBuffer(new ReadBuffer(received == len ? memorySegment : memorySegment.asSlice(Constants.ZERO, received)));
                 }
             }
         }finally {
@@ -98,7 +98,7 @@ public class SslProtocol implements Protocol {
 
     @Override
     public WriteStatus doWrite(Channel channel, WriteBuffer writeBuffer) {
-        MemorySegment segment = writeBuffer.segment();
+        MemorySegment segment = writeBuffer.content();
         int len = (int) segment.byteSize();
         lock.lock();
         try{

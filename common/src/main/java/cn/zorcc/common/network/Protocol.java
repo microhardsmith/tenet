@@ -1,7 +1,8 @@
 package cn.zorcc.common.network;
 
-import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
+
+import java.lang.foreign.MemorySegment;
 
 /**
  *   Network protocol interface, protocol determines the operation that master and worker will perform on the target channel
@@ -13,7 +14,7 @@ public interface Protocol {
      *   Indicates that worker can now read from this channel
      *   This method will only be invoked in worker's reader thread
      */
-    void canRead(Channel channel, ReadBuffer readBuffer);
+    void canRead(Channel channel, MemorySegment segment);
 
     /**
      *   Indicates that worker can now write to this channel

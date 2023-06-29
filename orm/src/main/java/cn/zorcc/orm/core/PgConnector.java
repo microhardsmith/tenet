@@ -1,7 +1,6 @@
 package cn.zorcc.orm.core;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
@@ -9,7 +8,9 @@ import cn.zorcc.common.network.*;
 import cn.zorcc.common.util.NativeUtil;
 import lombok.extern.slf4j.Slf4j;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -42,12 +43,13 @@ public class PgConnector implements Connector {
     public void shouldRead(Acceptor acceptor) {
         final int i = status.get();
         if(i == SSL_WAIT) {
-            try(ReadBuffer readBuffer = new ReadBuffer(1L)) {
-                if (n.recv(acceptor.socket(), readBuffer.segment(), 1L) < 1) {
+            try(Arena arena = Arena.openConfined()) {
+                MemorySegment segment = arena.allocate(ValueLayout.JAVA_BYTE);
+                if (n.recv(acceptor.socket(), segment, segment.byteSize()) < 1L) {
                     log.error("Unable to read, errno : {}", n.errno());
                     acceptor.close();
                 }
-                byte b = readBuffer.readByte();
+                byte b = NativeUtil.getByte(segment, 0L);
                 if(b == PgConstants.SSL_OK) {
                     MemorySegment ssl = net.newClientSsl();
                     int r = Openssl.sslSetFd(ssl, acceptor.socket().intValue());
@@ -78,7 +80,7 @@ public class PgConnector implements Connector {
             int errOpt = n.getErrOpt(socket);
             if(errOpt == 0) {
                 long len = 8L;
-                WriteBuffer writeBuffer = new WriteBuffer(len);
+                WriteBuffer writeBuffer = new WriteBuffer(Arena.openConfined(), len);
                 writeBuffer.writeInt(8);
                 writeBuffer.writeInt(PgConstants.SSL_CODE);
                 write(acceptor, writeBuffer);
@@ -115,7 +117,7 @@ public class PgConnector implements Connector {
     }
 
     private void write(Acceptor acceptor, WriteBuffer writeBuffer) {
-        MemorySegment segment = writeBuffer.segment();
+        MemorySegment segment = writeBuffer.content();
         long len = segment.byteSize();
         long bytes = n.send(acceptor.socket(), segment, len);
         if(bytes == -1) {

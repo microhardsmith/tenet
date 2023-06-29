@@ -1,8 +1,6 @@
 package cn.zorcc.common.network;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.enums.ExceptionType;
-import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.ThreadUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -10,7 +8,6 @@ import lombok.extern.slf4j.Slf4j;
 import java.lang.foreign.MemorySegment;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
@@ -36,7 +33,6 @@ public final class Master {
     private final Mux mux;
     private final MemorySegment events;
     private final Thread thread;
-    private final AtomicBoolean running = new AtomicBoolean(false);
     /**
      *   To perform round-robin worker selection for each master instance
      */
@@ -66,7 +62,7 @@ public final class Master {
             final Timeout timeout = Timeout.of(muxConfig.getMuxTimeout());
             Thread currentThread = Thread.currentThread();
             try{
-                log.debug("Initializing Net master, sequence : {}", sequence);
+                log.debug("Initializing Net master, sequence : {}, listening on port : {}", sequence, loc.port());
                 n.bindAndListen(loc, muxConfig, socket);
                 n.ctl(mux, socket, Native.REGISTER_NONE, Native.REGISTER_READ);
                 while (!currentThread.isInterrupted()) {
@@ -99,20 +95,7 @@ public final class Master {
         return loc;
     }
 
-    public void start() {
-        if(running.compareAndSet(false, true)) {
-            thread.start();
-        }else {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-        }
-    }
-
-    public void exit() throws InterruptedException {
-        if(running.compareAndSet(true, false)) {
-            thread.interrupt();
-            thread.join();
-        }else {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-        }
+    public Thread thread() {
+        return thread;
     }
 }
