@@ -2,11 +2,14 @@ package cn.zorcc.common.sql;
 
 import java.util.List;
 
+/**
+ *   Page record from database
+ */
 public record Page<T>(
-    Long pageNo,
-    Long pageSize,
-    Long totalPage,
-    Long total,
+    long pageNo,
+    long pageSize,
+    long totalPage,
+    long total,
     List<T> data
 ) {
 
