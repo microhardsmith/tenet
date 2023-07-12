@@ -32,10 +32,13 @@ public final class Worker {
     private static final int CLOSING = 2;
     private static final int STOPPED = 3;
     private final AtomicInteger state = new AtomicInteger(INITIAL);
+    private final NetworkConfig networkConfig;
+    private final MuxConfig muxConfig;
+    private final int sequence;
     private final Mux mux;
     private final MemorySegment events;
-    private final Map<Socket, Object> socketMap = new HashMap<>(Net.MAP_SIZE);
-    private final Map<Channel, Sender> channelMap = new HashMap<>(Net.MAP_SIZE);
+    private final Map<Socket, Object> socketMap;
+    private final Map<Channel, Sender> channelMap;
     private final Queue<ReaderTask> readerTaskQueue = new MpscUnboundedAtomicArrayQueue<>(Constants.QUEUE_SIZE);
     private final TransferQueue<WriterTask> writerTaskQueue = new LinkedTransferQueue<>();
     private final Thread reader;
@@ -47,10 +50,15 @@ public final class Worker {
     private final AtomicLong counter = new AtomicLong(Constants.ZERO);
 
     public Worker(NetworkConfig networkConfig, MuxConfig muxConfig, int sequence) {
+        this.networkConfig = networkConfig;
+        this.muxConfig = muxConfig;
+        this.sequence = sequence;
         this.mux = n.createMux();
         this.events = n.createEventsArray(muxConfig);
-        this.reader = createReaderThread(networkConfig, muxConfig, sequence);
-        this.writer = createWriterThread(networkConfig, sequence);
+        this.socketMap = new HashMap<>(networkConfig.getMapSize());
+        this.channelMap = new HashMap<>(networkConfig.getMapSize());
+        this.reader = createReaderThread();
+        this.writer = createWriterThread();
     }
 
     public Thread reader() {
@@ -97,7 +105,7 @@ public final class Worker {
     /**
      *   Create worker's reader thread
      */
-    private Thread createReaderThread(NetworkConfig networkConfig, MuxConfig muxConfig, int sequence) {
+    private Thread createReaderThread() {
         final long readBufferSize = networkConfig.getReadBufferSize();
         final int maxEvents = muxConfig.getMaxEvents();
         return ThreadUtil.platform("Worker-r-" + sequence, () -> {
@@ -197,7 +205,7 @@ public final class Worker {
     /**
      *   Create worker's writer thread
      */
-    private Thread createWriterThread(NetworkConfig networkConfig, int sequence) {
+    private Thread createWriterThread() {
         return ThreadUtil.platform("Worker-w-" + sequence, () -> {
             log.debug("Initializing Net worker's writer, sequence : {}", sequence);
             final long writeBufferSize = networkConfig.getWriteBufferSize();

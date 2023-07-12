@@ -92,25 +92,9 @@ public final class ReadBuffer {
         if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
-        long l = NativeUtil.getByte(segment, readIndex);
+        long l = NativeUtil.getLong(segment, readIndex);
         readIndex = nextIndex;
         return l;
-    }
-
-    /**
-     *   read until sep occurred, if not sep found in the following bytes, no bytes would be read and null would be returned
-     */
-    public byte[] readUntil(byte sep) {
-        ResizableByteArray resizableByteArray = new ResizableByteArray();
-        byte b;
-        for (long cur = readIndex; cur < size; cur++, resizableByteArray.write(b)) {
-            b = NativeUtil.getByte(segment, cur);
-            if(b == sep) {
-                readIndex = cur + 1;
-                return resizableByteArray.toArray();
-            }
-        }
-        return null;
     }
 
     /**

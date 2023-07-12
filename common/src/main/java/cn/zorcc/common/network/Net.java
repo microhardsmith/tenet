@@ -17,8 +17,6 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 /**
@@ -29,19 +27,7 @@ import java.util.function.Supplier;
  *   Protocol determines the low level operations
  */
 @Slf4j
-public class Net implements LifeCycle {
-    /**
-     *  read buffer maximum size for a read operation, could be changed according to specific circumstances
-     */
-    public static final long READ_BUFFER_SIZE = 16 * Constants.KB;
-    /**
-     *  write buffer initial size, will automatically expand, could be changed according to specific circumstances
-     */
-    public static final int WRITE_BUFFER_SIZE = 4 * Constants.KB;
-    /**
-     *  socket map initial size, will automatically expand, could be changed according to specific circumstances
-     */
-    public static final int MAP_SIZE = 1024;
+public final class Net implements LifeCycle {
 
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
     private static final Native n = Native.n;
@@ -56,12 +42,11 @@ public class Net implements LifeCycle {
     private static final int INITIAL = 0;
     private static final int RUNNING = 1;
     private static final int SHUTDOWN = 2;
-    private int state = INITIAL;
+    private final AtomicInteger state = new AtomicInteger(INITIAL);
     /**
      *   To perform round-robin worker selection when executing connect()
      */
     private final AtomicInteger connectCounter = new AtomicInteger(Constants.ZERO);
-    private final Lock lock = new ReentrantLock();
 
     public Net(NetworkConfig networkConfig) {
         if(!instanceFlag.compareAndSet(false, true)) {
@@ -112,41 +97,31 @@ public class Net implements LifeCycle {
     }
 
     /**
-     *   Add a new Master instance to current Net
+     *   Add a new Master instance to current Net, not thread safe
      */
     public void addMaster(Supplier<Encoder> e, Supplier<Decoder> d, Supplier<Handler> h, Supplier<Connector> c, Loc loc, MuxConfig muxConfig) {
-        lock.lock();
-        try{
-            if(state != INITIAL) {
-                throw new FrameworkException(ExceptionType.NETWORK, "Can't add master when net is running or shutdown");
-            }
-            loc.validate();
-            muxConfig.validate();
-            if (masters.stream().anyMatch(master -> master.loc().equals(loc))) {
-                throw new FrameworkException(ExceptionType.NETWORK, "Master already exist for target loc");
-            }
-            int sequence = masters.size();
-            masters.add(new Master(e, d, h, c, workers, loc, networkConfig, muxConfig, sequence));
-        }finally {
-            lock.unlock();
+        if(state.getAndSet(INITIAL) != INITIAL) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Can't add master when net is running or shutdown");
         }
+        loc.validate();
+        muxConfig.validate();
+        if (masters.stream().anyMatch(master -> master.loc().equals(loc))) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Master already exist for target loc");
+        }
+        int sequence = masters.size();
+        masters.add(new Master(e, d, h, c, workers, loc, networkConfig, muxConfig, sequence));
     }
 
     /**
-     *   Add a new Worker instance to current Net
+     *   Add a new Worker instance to current Net, not thread safe
      */
     public void addWorker(NetworkConfig networkConfig, MuxConfig muxConfig) {
-        lock.lock();
-        try{
-            if(state != INITIAL) {
-                throw new FrameworkException(ExceptionType.NETWORK, "Can't add worker when net is running or shutdown");
-            }
-            muxConfig.validate();
-            int sequence = workers.size();
-            workers.add(new Worker(networkConfig, muxConfig, sequence));
-        }finally {
-            lock.unlock();
+        if(state.getAndSet(INITIAL) != INITIAL) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Can't add worker when net is running or shutdown");
         }
+        muxConfig.validate();
+        int sequence = workers.size();
+        workers.add(new Worker(networkConfig, muxConfig, sequence));
     }
 
     /**
@@ -221,31 +196,23 @@ public class Net implements LifeCycle {
 
     @Override
     public void init() {
-        lock.lock();
-        try{
-            if(state == INITIAL) {
-                state = RUNNING;
-                // worker must be started before master
-                for (Worker worker : workers) {
-                    worker.start();
-                }
-                for (Master master : masters) {
-                    master.thread().start();
-                }
-            }else {
-                throw new FrameworkException(ExceptionType.NETWORK, "Net already running");
+        if(state.compareAndSet(INITIAL, RUNNING)) {
+            // worker must be started before master
+            for (Worker worker : workers) {
+                worker.start();
             }
-        }finally {
-            lock.unlock();
+            for (Master master : masters) {
+                master.thread().start();
+            }
+        }else {
+            throw new FrameworkException(ExceptionType.NETWORK, "Net already running");
         }
     }
 
     @Override
     public void shutdown() {
-        lock.lock();
         try{
-            if(state == RUNNING) {
-                state = SHUTDOWN;
+            if(state.compareAndSet(RUNNING, SHUTDOWN)) {
                 long nano = Clock.nano();
                 for (Master master : masters) {
                     master.thread().interrupt();
@@ -271,8 +238,6 @@ public class Net implements LifeCycle {
             }
         }catch (InterruptedException e) {
             throw new FrameworkException(ExceptionType.NETWORK, "Shutting down Net failed because of thread interruption");
-        }finally {
-            lock.unlock();
         }
     }
 }

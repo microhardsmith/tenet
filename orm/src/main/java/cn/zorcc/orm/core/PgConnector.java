@@ -130,8 +130,7 @@ public class PgConnector implements Connector {
                 acceptor.close();
             }
         }else if(bytes < len) {
-            writeBuffer.truncate(bytes);
-            write(acceptor, writeBuffer);
+            write(acceptor, writeBuffer.truncate(bytes));
         }else {
             writeBuffer.close();
             status.set(SSL_WAIT);

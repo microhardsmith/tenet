@@ -185,7 +185,7 @@ public final class NativeUtil {
 
     /**
      *   Using brute-force search for target bytes in a memorySegment
-     *   This method could be optimized for better efficiency using other algorithms like BM or KMF, however when bytes.length is small and unrepeated, BF is simple and good enough
+     *   This method could be optimized for better efficiency using other algorithms like BM or KMP, however when bytes.length is small and unrepeated, BF is simple and good enough
      *   Usually this method is used to find a target separator in a sequence
      */
     public static boolean matches(MemorySegment m, long offset, byte[] bytes) {

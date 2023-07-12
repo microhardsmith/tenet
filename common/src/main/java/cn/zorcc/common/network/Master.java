@@ -21,14 +21,14 @@ public final class Master {
     private final Supplier<Decoder> decoderSupplier;
     private final Supplier<Handler> handlerSupplier;
     private final Supplier<Connector> connectorSupplier;
-    private final Loc loc;
-    private final NetworkConfig networkConfig;
-    private final MuxConfig muxConfig;
-    private final int sequence;
     /**
      *   In current implementation, a master will always be bounded to all the workers
      */
     private final List<Worker> workers;
+    private final Loc loc;
+    private final NetworkConfig networkConfig;
+    private final MuxConfig muxConfig;
+    private final int sequence;
     private final Socket socket;
     private final Mux mux;
     private final MemorySegment events;

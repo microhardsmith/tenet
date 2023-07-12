@@ -75,7 +75,7 @@ public final class Channel {
             ReadBuffer readBuffer = new ReadBuffer(tempBuffer.content());
             tryRead(readBuffer);
             if(readBuffer.readIndex() < readBuffer.size()) {
-                tempBuffer.truncate(readBuffer.readIndex());
+                tempBuffer = tempBuffer.truncate(readBuffer.readIndex());
             }else {
                 tempBuffer.close();
                 tempBuffer = null;

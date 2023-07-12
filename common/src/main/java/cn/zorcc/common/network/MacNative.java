@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit;
  *   If developer needs to run it on X86 processors, recompile a new .dylib would be fine
  */
 @Slf4j
-public class MacNative implements Native {
+public final class MacNative implements Native {
     /**
      *  Corresponding to struct kevent in event.h
      */
@@ -194,10 +194,7 @@ public class MacNative implements Native {
                 throw new FrameworkException(ExceptionType.NETWORK, "Failed to accept client socket, errno : {}", errno());
             }
             Socket clientSocket = new Socket(socketFd);
-            check(setReuseAddr(socketFd, config.getReuseAddr() > 0 ? 1 : 0), "set SO_REUSE_ADDR");
-            check(setKeepAlive(socketFd, config.getKeepAlive() > 0 ? 1 : 0), "set SO_KEEPALIVE");
-            check(setTcpNoDelay(socketFd, config.getTcpNoDelay() > 0 ? 1 : 0), "set TCP_NODELAY");
-            check(setNonBlocking(socketFd), "set NON_BLOCKING");
+            configureSocket(config, clientSocket);
             if(address(clientAddr, address, addressLen) == -1) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Failed to get client socket's remote address, errno : {}", errno());
             }

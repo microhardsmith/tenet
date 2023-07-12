@@ -65,8 +65,7 @@ public final class TcpProtocol implements Protocol {
             }
         }else if(bytes < len){
             // only write a part of the segment, wait for next loop
-            writeBuffer.truncate(bytes);
-            return doWrite(channel, writeBuffer);
+            return doWrite(channel, writeBuffer.truncate(bytes));
         }
         return WriteStatus.SUCCESS;
     }

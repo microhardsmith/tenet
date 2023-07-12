@@ -119,8 +119,7 @@ public class SslProtocol implements Protocol {
                 return WriteStatus.PENDING;
             }else if(r < len){
                 // only write a part of the segment, wait for next loop
-                writeBuffer.truncate(r);
-                return doWrite(channel, writeBuffer);
+                return doWrite(channel, writeBuffer.truncate(r));
             }
             return WriteStatus.SUCCESS;
         }finally {

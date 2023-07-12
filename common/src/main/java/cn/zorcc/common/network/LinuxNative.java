@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
  *   Native implementation under Linux, using epoll
  */
 @Slf4j
-public class LinuxNative implements Native {
+public final class LinuxNative implements Native {
     /**
      *  Corresponding to union epoll_data in epoll.h
      */
@@ -211,17 +211,15 @@ public class LinuxNative implements Native {
             if(socketFd == -1) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Failed to accept client socket, errno : {}", errno());
             }
-            check(setReuseAddr(socketFd, config.getReuseAddr() > 0 ? 1 : 0), "set SO_REUSE_ADDR");
-            check(setKeepAlive(socketFd, config.getKeepAlive() > 0 ? 1 : 0), "set SO_KEEPALIVE");
-            check(setTcpNoDelay(socketFd, config.getTcpNoDelay() > 0 ? 1 : 0), "set TCP_NODELAY");
-            check(setNonBlocking(socketFd), "set NON_BLOCKING");
+            Socket clientSocket = new Socket(socketFd);
+            configureSocket(config, clientSocket);
             if(address(clientAddr, address, addressLen) == -1) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Failed to get client socket's remote address, errno : {}", errno());
             }
             String ip = NativeUtil.getStr(address, addressLen);
             int port = Loc.toIntPort(port(clientAddr));
             Loc loc = new Loc(ip, port);
-            return new ClientSocket(new Socket(socketFd), loc);
+            return new ClientSocket(clientSocket, loc);
         }
     }
 

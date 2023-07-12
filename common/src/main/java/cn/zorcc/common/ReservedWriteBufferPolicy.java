@@ -33,7 +33,7 @@ public final class ReservedWriteBufferPolicy implements WriteBufferPolicy {
         if(arena != null) {
             arena.close();
         }else {
-            writeBuffer.resetWriteIndex();
+            writeBuffer.setWriteIndex(Constants.ZERO);
         }
     }
 }

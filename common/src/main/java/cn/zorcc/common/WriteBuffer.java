@@ -10,37 +10,13 @@ import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 
 /**
- *   Direct memory WriteBuffer, not thread-safe, custom Resizer could be chose to modify the default expansion mechanism
+ *   Direct memory WriteBuffer, not thread-safe, custom Resizer could be chosen to modify the default expansion mechanism
  */
 public final class WriteBuffer implements AutoCloseable {
     private MemorySegment segment;
     private long size;
     private long writeIndex;
     private final WriteBufferPolicy policy;
-
-    public MemorySegment segment() {
-        return segment;
-    }
-
-    public long size() {
-        return size;
-    }
-
-    public void update(MemorySegment segment) {
-        this.segment = segment;
-        this.size = segment.byteSize();
-    }
-
-    public long writeIndex() {
-        return writeIndex;
-    }
-
-    /**
-     *   Reset current writeBuffer's writeIndex to zero
-     */
-    public void resetWriteIndex() {
-        writeIndex = Constants.ZERO;
-    }
 
     /**
      *   Create a writeBuffer using custom policy
@@ -63,10 +39,28 @@ public final class WriteBuffer implements AutoCloseable {
      *   Create a writeBuffer using default policy
      */
     public WriteBuffer(Arena arena, long size) {
-        this.segment = arena.allocateArray(ValueLayout.JAVA_BYTE, size);
-        this.size = size;
-        this.writeIndex = Constants.ZERO;
-        this.policy = new DefaultWriteBufferPolicy(arena);
+        this(arena.allocateArray(ValueLayout.JAVA_BYTE, size), new DefaultWriteBufferPolicy(arena));
+    }
+
+    public MemorySegment segment() {
+        return segment;
+    }
+
+    public long size() {
+        return size;
+    }
+
+    public void update(MemorySegment segment) {
+        this.segment = segment;
+        this.size = segment.byteSize();
+    }
+
+    public long writeIndex() {
+        return writeIndex;
+    }
+
+    public void setWriteIndex(long newIndex) {
+        writeIndex = newIndex;
     }
 
     public void writeByte(byte b) {
@@ -197,18 +191,19 @@ public final class WriteBuffer implements AutoCloseable {
      *   Return current written segment, from 0 ~ writeIndex
      */
     public MemorySegment content() {
-        return writeIndex == segment.byteSize() ? segment : segment.asSlice(0L, writeIndex);
+        return writeIndex == size ? segment : segment.asSlice(Constants.ZERO, writeIndex);
     }
 
     /**
-     *   Truncate from the beginning of the segment to the offset
+     *   Truncate from the beginning of the segment to the offset, return a new WriteBuffer
      */
-    public void truncate(long offset) {
+    public WriteBuffer truncate(long offset) {
         if(offset > writeIndex) {
-            throw new FrameworkException(ExceptionType.NATIVE, "truncate overflow");
+            throw new RuntimeException("truncate overflow");
         }
-        segment = segment.asSlice(offset, size - offset);
-        writeIndex -= offset;
+        WriteBuffer w = new WriteBuffer(segment.asSlice(offset, size - offset), policy);
+        w.setWriteIndex(writeIndex - offset);
+        return w;
     }
 
     @Override
