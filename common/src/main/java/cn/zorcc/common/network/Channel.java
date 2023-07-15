@@ -1,5 +1,7 @@
 package cn.zorcc.common.network;
 
+import cn.zorcc.common.Constants;
+import cn.zorcc.common.Mix;
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
@@ -106,7 +108,11 @@ public final class Channel {
      *   the caller should provide a timeout mechanism to ensure the msg is not dropped, such as retransmission timeout
      */
     public void send(Object msg) {
-        worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.MSG, this, msg));
+        switch (msg) {
+            case null -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+            case Mix mix -> worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.MIX_OF_MSG, this, mix));
+            default -> worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.MSG, this, msg));
+        }
     }
 
     /**

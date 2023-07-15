@@ -102,7 +102,6 @@ public final class WriteBuffer implements AutoCloseable {
             }
             writeIndex = nextIndex;
         }
-
     }
 
     public void writeShort(short s) {
