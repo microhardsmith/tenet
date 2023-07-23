@@ -92,7 +92,7 @@ public final class Net implements LifeCycle {
      *   The atomicInteger will overflow when reaching Integer.MAX_VALUE, which is totally safe here
      */
     public static Worker chooseWorker(List<Worker> workers, AtomicInteger counter) {
-        int index = counter.getAndIncrement() % workers.size();
+        final int index = Math.abs(counter.getAndIncrement() % workers.size());
         return workers.get(index);
     }
 

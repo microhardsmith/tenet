@@ -38,7 +38,7 @@ public interface Native {
     /**
      *   Create multiplexing struct array
      */
-    MemorySegment createEventsArray(MuxConfig config);
+    MemorySegment createEventsArray(MuxConfig config, Arena arena);
 
     /**
      *   Create a socket, could be server socket or client socket
@@ -140,7 +140,7 @@ public interface Native {
      */
     default int check(int value, String errMsg) {
         if(value == -1) {
-            Integer err = errno();
+            int err = errno();
             throw new FrameworkException(ExceptionType.NETWORK, "Failed to %s with err code : %d", errMsg, err);
         }
         return value;
@@ -151,7 +151,7 @@ public interface Native {
      */
     default long check(long value, String errMsg) {
         if(value == -1L) {
-            Integer err = errno();
+            int err = errno();
             throw new FrameworkException(ExceptionType.NETWORK, "Failed to %s with err code : %d", errMsg, err);
         }
         return value;
@@ -171,15 +171,12 @@ public interface Native {
      *   Create native library based on target operating system
      */
     private static Native createNative() {
-        if(NativeUtil.isLinux()) {
-            return new LinuxNative();
-        }else if(NativeUtil.isWindows()) {
-            return new WinNative();
-        }else if(NativeUtil.isMacos()) {
-            return new MacNative();
-        }else {
-            throw new FrameworkException(ExceptionType.NETWORK, "Unsupported operating system");
-        }
+        return switch (NativeUtil.ostype()) {
+            case Windows -> new WinNative();
+            case Linux -> new LinuxNative();
+            case MacOS -> new MacNative();
+            default -> throw new FrameworkException(ExceptionType.NETWORK, "Unsupported operating system");
+        };
     }
 
     static void shouldRead(Map<Socket, Object> socketMap, Socket socket, MemorySegment buffer) {

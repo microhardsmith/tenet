@@ -87,8 +87,6 @@ public class Constants {
     public static final String DEFAULT_LOG_CONFIG_NAME = "log-config.json";
     public static final int DEFAULT_LOG_QUEUE_SIZE = NativeUtil.getCpuCores() << 2;
     public static final int DEFAULT_STRING_BUILDER_SIZE = 128;
-    public static final byte END_BYTE = 0;
-    public static final int BYTE_SIZE = 8;
     public static final int KB = 1024;
     public static final int MB = 1024 * KB;
     public static final int GB = 1024 * MB;

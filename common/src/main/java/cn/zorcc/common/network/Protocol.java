@@ -42,8 +42,17 @@ public interface Protocol {
     void doClose(Channel channel);
 
     enum WriteStatus {
+        /**
+         *   All the data has been written to the socket buffer
+         */
         SUCCESS,
+        /**
+         *   Some of the data has been written to the socket buffer, however some data remains unsent
+         */
         PENDING,
+        /**
+         *   Fail to send any data
+         */
         FAILURE
     }
 }

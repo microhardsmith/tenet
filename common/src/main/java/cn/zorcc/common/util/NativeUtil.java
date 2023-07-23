@@ -2,10 +2,9 @@ package cn.zorcc.common.util;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.enums.OsType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Native;
-import cn.zorcc.common.network.Openssl;
-import cn.zorcc.common.sqlite.Sqlite;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
@@ -24,9 +23,7 @@ public final class NativeUtil {
      */
     public static final MemorySegment NULL_POINTER = MemorySegment.ofAddress(0L, ValueLayout.ADDRESS.byteSize(), SegmentScope.global());
     private static final String OS_NAME = System.getProperty("os.name").toLowerCase();
-    private static final boolean LINUX = OS_NAME.contains("linux");
-    private static final boolean WINDOWS = OS_NAME.contains("windows");
-    private static final boolean MACOS = OS_NAME.contains("mac") && OS_NAME.contains("os");
+    private static final OsType ostype;
     private static final int CPU_CORES = Runtime.getRuntime().availableProcessors();
     private static final Linker linker = Linker.nativeLinker();
     /**
@@ -44,6 +41,15 @@ public final class NativeUtil {
     private static final MemorySegment stdout;
     private static final MemorySegment stderr;
     static {
+        if(OS_NAME.contains("windows")) {
+            ostype = OsType.Windows;
+        }else if(OS_NAME.contains("linux")) {
+            ostype = OsType.Linux;
+        }else if(OS_NAME.contains("mac") && OS_NAME.contains("os")) {
+            ostype = OsType.MacOS;
+        }else {
+            ostype = OsType.Unknown;
+        }
         try{
             SymbolLookup symbolLookup = NativeUtil.loadLibrary(Native.LIB);
             MethodHandle stdoutHandle = NativeUtil.methodHandle(symbolLookup, "g_stdout", FunctionDescriptor.of(ValueLayout.ADDRESS));
@@ -71,28 +77,20 @@ public final class NativeUtil {
         return OS_NAME;
     }
 
+    public static OsType ostype() {
+        return ostype;
+    }
+
     public static boolean isLinux() {
-        return LINUX;
+        return ostype == OsType.Linux;
     }
 
     public static boolean isWindows() {
-        return WINDOWS;
+        return ostype == OsType.Windows;
     }
 
     public static boolean isMacos() {
-        return MACOS;
-    }
-
-    public static String libSuffix() {
-        if(WINDOWS) {
-            return ".dll";
-        }else if(LINUX) {
-            return ".so";
-        }else if(MACOS) {
-            return ".dylib";
-        }else {
-            throw new FrameworkException(ExceptionType.NATIVE, "Unrecognized operating system");
-        }
+        return ostype == OsType.MacOS;
     }
 
     /**
@@ -113,22 +111,13 @@ public final class NativeUtil {
     }
 
     /**
-     *  Load a native library by environment variable, if system library was not found in environment variables, will try to copy a duplicate from resource to the tmp folder
-     *  for operating system to load. Note that this mechanism would be significantly slower than directly loading and it's not recommended
+     *  Load a native library by environment variable, if system library was not found in environment variables, will throw a exception
      */
     public static SymbolLookup loadLibrary(String identifier) {
         return cache.computeIfAbsent(identifier, i -> {
             String path = System.getProperty(i);
             if(path == null || path.isEmpty()) {
-                String libSuffix = libSuffix();
-                String resourcePath = switch (identifier) {
-                    case Native.LIB -> "libtenet" + libSuffix;
-                    case Openssl.CRYPTO_LIB -> "libcrypto" + libSuffix;
-                    case Openssl.SSL_LIB -> "libssl" + libSuffix;
-                    case Sqlite.SQLITE_LIB -> "libsqlite" + libSuffix;
-                    default -> throw new FrameworkException(ExceptionType.NATIVE, "Environment variable not found : %s".formatted(identifier));
-                };
-                path = FileUtil.toTmp(resourcePath);
+                throw new FrameworkException(ExceptionType.NATIVE, "Environment variable not found : %s".formatted(i));
             }
             return SymbolLookup.libraryLookup(path, SegmentScope.global());
         });

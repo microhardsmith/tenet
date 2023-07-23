@@ -44,7 +44,7 @@ public final class MacNative implements Native {
             ValueLayout.JAVA_BYTE.withName("sin_family"),
             ValueLayout.JAVA_SHORT.withName("sin_port"),
             ValueLayout.JAVA_INT.withName("sin_addr"),
-            MemoryLayout.paddingLayout(8 * Constants.BYTE_SIZE)
+            MemoryLayout.paddingLayout(8 * ValueLayout.JAVA_BYTE.byteSize())
     );
     private static final int sockAddrSize = (int) sockAddrLayout.byteSize();
     private static final MethodHandle kqueueMethodHandle;
@@ -99,9 +99,9 @@ public final class MacNative implements Native {
     }
 
     @Override
-    public MemorySegment createEventsArray(MuxConfig config) {
+    public MemorySegment createEventsArray(MuxConfig config, Arena arena) {
         MemoryLayout eventsArrayLayout = MemoryLayout.sequenceLayout(config.getMaxEvents(), keventLayout);
-        return MemorySegment.allocateNative(eventsArrayLayout, SegmentScope.global());
+        return arena.allocate(eventsArrayLayout);
     }
 
     @Override
@@ -191,12 +191,12 @@ public final class MacNative implements Native {
             MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, addressLen);
             int socketFd = accept(socket.intValue(), clientAddr, sockAddrSize);
             if(socketFd == -1) {
-                throw new FrameworkException(ExceptionType.NETWORK, "Failed to accept client socket, errno : {}", errno());
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to accept client socket, errno : %d".formatted(errno()));
             }
             Socket clientSocket = new Socket(socketFd);
             configureSocket(config, clientSocket);
             if(address(clientAddr, address, addressLen) == -1) {
-                throw new FrameworkException(ExceptionType.NETWORK, "Failed to get client socket's remote address, errno : {}", errno());
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to get client socket's remote address, errno : %d".formatted(errno()));
             }
             String ip = NativeUtil.getStr(address, addressLen);
             int port = Loc.toIntPort(port(clientAddr));
@@ -529,6 +529,7 @@ public final class MacNative implements Native {
     /**
      *  Corresponding to `int m_errno()`
      */
+    @Override
     public int errno() {
         try{
             return (int) errnoMethodHandle.invokeExact();

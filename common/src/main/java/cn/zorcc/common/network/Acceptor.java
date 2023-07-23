@@ -1,5 +1,6 @@
 package cn.zorcc.common.network;
 
+import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Loc;
@@ -16,6 +17,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class Acceptor {
     private static final Native n = Native.n;
+    private static final AtomicInteger hashcodeGenerator = new AtomicInteger(Constants.ZERO);
+    private final int hashcode = hashcodeGenerator.getAndIncrement();
     private final Socket socket;
     private final Encoder encoder;
     private final Decoder decoder;
@@ -33,6 +36,10 @@ public final class Acceptor {
         this.connector = connector;
         this.worker = worker;
         this.loc = loc;
+    }
+
+    public int hashcode() {
+        return hashcode;
     }
 
     public Socket socket() {
@@ -59,7 +66,7 @@ public final class Acceptor {
         if(Thread.currentThread() != worker.reader()) {
             throw new FrameworkException(ExceptionType.NETWORK, "Not in worker thread");
         }
-        Channel channel = new Channel(socket, state, encoder, decoder, handler, protocol, loc, worker);
+        Channel channel = new Channel(hashcode, socket, state, encoder, decoder, handler, protocol, loc, worker);
         worker.socketMap().put(socket, channel);
         worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.INITIATE, channel, null));
         int from = state.getAndSet(Native.REGISTER_READ);

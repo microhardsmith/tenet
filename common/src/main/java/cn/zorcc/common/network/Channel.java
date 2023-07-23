@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public final class Channel {
     private static final Native n = Native.n;
+    private final int hashcode;
     private final Socket socket;
     private final AtomicInteger state;
     private final Encoder encoder;
@@ -29,7 +30,8 @@ public final class Channel {
      */
     private WriteBuffer tempBuffer;
 
-    public Channel(Socket socket, AtomicInteger state, Encoder e, Decoder d, Handler h, Protocol protocol, Loc loc, Worker worker) {
+    public Channel(int hashcode, Socket socket, AtomicInteger state, Encoder e, Decoder d, Handler h, Protocol protocol, Loc loc, Worker worker) {
+        this.hashcode = hashcode;
         this.socket = socket;
         this.state = state;
         this.encoder = e;
@@ -38,6 +40,11 @@ public final class Channel {
         this.protocol = protocol;
         this.loc = loc;
         this.worker = worker;
+    }
+
+    @Override
+    public int hashCode() {
+        return hashcode;
     }
 
     public Socket socket() {
@@ -140,11 +147,12 @@ public final class Channel {
         if(Thread.currentThread() != worker.reader()) {
             throw new FrameworkException(ExceptionType.NETWORK, "Not in worker thread");
         }
+        // make sure the channel could only be removed once
         if(worker.socketMap().remove(socket, this)) {
             // Force close the sender instance
             worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.CLOSE, this, null));
             int current = state.getAndSet(Native.REGISTER_NONE);
-            if(current > 0) {
+            if(current > Native.REGISTER_NONE) {
                 n.ctl(worker.mux(), socket, current, Native.REGISTER_NONE);
             }
             protocol.doClose(this);

@@ -35,7 +35,7 @@ public final class WinNative implements Native {
      */
     private static final MemoryLayout epollEventLayout = MemoryLayout.structLayout(
             ValueLayout.JAVA_INT.withName("events"),
-            MemoryLayout.paddingLayout(4 * Constants.BYTE_SIZE),
+            MemoryLayout.paddingLayout(4 * ValueLayout.JAVA_BYTE.byteSize()),
             epollDataLayout.withName("data")
     );
     private static final long eventSize = epollEventLayout.byteSize();
@@ -50,7 +50,7 @@ public final class WinNative implements Native {
             ValueLayout.JAVA_SHORT.withName("sin_family"),
             ValueLayout.JAVA_SHORT.withName("sin_port"),
             ValueLayout.JAVA_INT.withName("sin_addr"),
-            MemoryLayout.paddingLayout(8 * Constants.BYTE_SIZE)
+            MemoryLayout.paddingLayout(8 * ValueLayout.JAVA_BYTE.byteSize())
     );
     private static final int sockAddrSize = (int) sockAddrLayout.byteSize();
     private static final MethodHandle epollCreateMethodHandle;
@@ -184,9 +184,9 @@ public final class WinNative implements Native {
     }
 
     @Override
-    public MemorySegment createEventsArray(MuxConfig config) {
+    public MemorySegment createEventsArray(MuxConfig config, Arena arena) {
         MemoryLayout eventsArrayLayout = MemoryLayout.sequenceLayout(config.getMaxEvents(), epollEventLayout);
-        return MemorySegment.allocateNative(eventsArrayLayout, SegmentScope.global());
+        return arena.allocate(eventsArrayLayout);
     }
 
     @Override
@@ -228,12 +228,8 @@ public final class WinNative implements Native {
         if(to == Native.REGISTER_NONE) {
             check(epollCtl(winHandle, Constants.EPOLL_CTL_DEL, fd, NativeUtil.NULL_POINTER), "epollCtl");
         }else {
-            int target = switch (to) {
-                case Native.REGISTER_READ -> Constants.EPOLL_IN | Constants.EPOLL_RDHUP;
-                case Native.REGISTER_WRITE -> Constants.EPOLL_OUT;
-                case Native.REGISTER_READ_WRITE -> Constants.EPOLL_IN | Constants.EPOLL_RDHUP | Constants.EPOLL_OUT;
-                default -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-            };
+            int target = ((to & Native.REGISTER_READ) != 0 ? Constants.EPOLL_IN | Constants.EPOLL_RDHUP : 0) |
+                    ((to & Native.REGISTER_WRITE) != 0 ? Constants.EPOLL_OUT : 0);
             try(Arena arena = Arena.openConfined()) {
                 MemorySegment ev = arena.allocate(epollEventLayout);
                 NativeUtil.setInt(ev, eventsOffset, target);
@@ -284,12 +280,12 @@ public final class WinNative implements Native {
             MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, addressLen);
             long socketFd = accept(socket.longValue(), clientAddr, sockAddrSize);
             if(socketFd == invalidSocket) {
-                throw new FrameworkException(ExceptionType.NETWORK, "Failed to accept client socket, errno : {}", errno());
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to accept client socket, errno : %d".formatted(errno()));
             }
             Socket clientSocket = new Socket(socketFd);
             configureSocket(config, clientSocket);
             if(address(clientAddr, address, addressLen) == -1) {
-                throw new FrameworkException(ExceptionType.NETWORK, "Failed to get client socket's remote address, errno : {}", errno());
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to get client socket's remote address, errno : %d".formatted(errno()));
             }
             String ip = NativeUtil.getStr(address, addressLen);
             int port = Loc.toIntPort(port(clientAddr));

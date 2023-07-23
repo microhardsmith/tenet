@@ -16,7 +16,7 @@ public record Loc (
      *   Convert a int port to a unsigned short type
      */
     public static short toShortPort(int port) {
-        if(port < 1 || port > 65535) {
+        if(port < 0 || port > 65535) {
             throw new FrameworkException(ExceptionType.NETWORK, "Port overflow");
         }
         // force retain the lower 16bits, the answer could be negative

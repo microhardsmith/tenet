@@ -36,7 +36,6 @@ public final class Worker {
     private final MuxConfig muxConfig;
     private final int sequence;
     private final Mux mux;
-    private final MemorySegment events;
     private final Map<Socket, Object> socketMap;
     private final Map<Channel, Sender> channelMap;
     private final Queue<ReaderTask> readerTaskQueue = new MpscUnboundedAtomicArrayQueue<>(Constants.QUEUE_SIZE);
@@ -54,7 +53,6 @@ public final class Worker {
         this.muxConfig = muxConfig;
         this.sequence = sequence;
         this.mux = n.createMux();
-        this.events = n.createEventsArray(muxConfig);
         this.socketMap = new HashMap<>(networkConfig.getMapSize());
         this.channelMap = new HashMap<>(networkConfig.getMapSize());
         this.reader = createReaderThread();
@@ -110,8 +108,9 @@ public final class Worker {
         final int maxEvents = muxConfig.getMaxEvents();
         return ThreadUtil.platform("Worker-r-" + sequence, () -> {
             log.debug("Initializing Net worker's reader, sequence : {}", sequence);
-            Timeout timeout = Timeout.of(muxConfig.getMuxTimeout());
             try(Arena arena = Arena.openConfined()) {
+                Timeout timeout = Timeout.of(arena, muxConfig.getMuxTimeout());
+                MemorySegment events = n.createEventsArray(muxConfig, arena);
                 MemorySegment[] bufArray = new MemorySegment[maxEvents];
                 for (int i = 0; i < bufArray.length; i++) {
                     bufArray[i] = arena.allocateArray(ValueLayout.JAVA_BYTE, readBufferSize);

@@ -5,6 +5,7 @@ import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.ThreadUtil;
 import lombok.extern.slf4j.Slf4j;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.util.Collections;
 import java.util.List;
@@ -31,7 +32,6 @@ public final class Master {
     private final int sequence;
     private final Socket socket;
     private final Mux mux;
-    private final MemorySegment events;
     private final Thread thread;
     /**
      *   To perform round-robin worker selection for each master instance
@@ -52,17 +52,17 @@ public final class Master {
         this.socket = n.createSocket();
         n.configureSocket(networkConfig, socket);
         this.mux = n.createMux();
-        this.events = n.createEventsArray(muxConfig);
         this.thread = createMasterThread();
     }
 
     private Thread createMasterThread() {
         return ThreadUtil.platform("Master-" + sequence, () -> {
-            final int maxEvents = muxConfig.getMaxEvents();
-            final Timeout timeout = Timeout.of(muxConfig.getMuxTimeout());
+            int maxEvents = muxConfig.getMaxEvents();
             Thread currentThread = Thread.currentThread();
-            try{
+            try(Arena arena = Arena.openConfined()){
                 log.debug("Initializing Net master, sequence : {}, listening on port : {}", sequence, loc.port());
+                Timeout timeout = Timeout.of(arena, muxConfig.getMuxTimeout());
+                MemorySegment events = n.createEventsArray(muxConfig, arena);
                 n.bindAndListen(loc, muxConfig, socket);
                 n.ctl(mux, socket, Native.REGISTER_NONE, Native.REGISTER_READ);
                 while (!currentThread.isInterrupted()) {
@@ -87,6 +87,7 @@ public final class Master {
             } finally {
                 log.debug("Exiting Net master, sequence : {}", sequence);
                 n.exitMux(mux);
+                n.closeSocket(socket);
             }
         });
     }

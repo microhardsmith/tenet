@@ -152,6 +152,7 @@ public class SslProtocol implements Protocol {
                 log.error("SSL shutdown failed with err : {}", err);
             }
         }else if(r == 1) {
+            // if openssl.sslShutdown() return 1, then the channel is safe to be closed
             Worker worker = channel.worker();
             if(Thread.currentThread() == worker.reader()) {
                 channel.close();
