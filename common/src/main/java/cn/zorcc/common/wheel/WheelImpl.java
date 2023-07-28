@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 
 public final class WheelImpl implements Wheel {
-    private static final String NAME = "wheel";
+    private static final AtomicLong counter = new AtomicLong(Constants.ZERO);
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
     private static final AtomicBoolean startFlag = new AtomicBoolean(false);
     private final int mask;
@@ -143,7 +143,7 @@ public final class WheelImpl implements Wheel {
                 JobImpl next = remove(current);
                 // the executor thread and the canceller thread will fight for ownership, but only one would succeed
                 if(current.owner.compareAndSet(false, true)) {
-                    ThreadUtil.virtual(NAME, current.mission).start();
+                    ThreadUtil.virtual("wheel-job-" + counter.getAndIncrement(), current.mission).start();
                     final long period = current.period;
                     if(period != JobImpl.ONCE) {
                         // reset current node's status
