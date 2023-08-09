@@ -3,7 +3,8 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.MemorySegment;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -11,8 +12,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  *   Connector using SSL encryption
  */
-@Slf4j
 public class SslConnector implements Connector {
+    private static final Logger log = LoggerFactory.getLogger(SslConnector.class);
     private static final Native n = Native.n;
     private static final int INITIAL = 0;
     private static final int WANT_READ = 1;
@@ -71,14 +72,22 @@ public class SslConnector implements Connector {
     }
 
     /**
-     *   Unregister read or write state from current acceptor
+     *   Register read or write state from target acceptor
      */
-    private void unregisterState(Acceptor acceptor, int state) {
-        int current = acceptor.state().getAndUpdate(i -> i ^ state);
-        if((current & state) != 0) {
-            n.ctl(acceptor.worker().mux(), acceptor.socket(), current, current ^ state);
-        }else {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+    private static void registerState(Acceptor acceptor, int val) {
+        int current = acceptor.state().getAndUpdate(i -> (i & val) == 0 ? i + val : i);
+        if((current & val) == 0) {
+            n.ctl(acceptor.worker().mux(), acceptor.socket(), current, current + val);
+        }
+    }
+
+    /**
+     *   Unregister read or write state from target acceptor
+     */
+    private static void unregisterState(Acceptor acceptor, int val) {
+        int current = acceptor.state().getAndUpdate(i -> (i & val) != 0 ? i - val : i);
+        if((current & val) != 0) {
+            n.ctl(acceptor.worker().mux(), acceptor.socket(), current, current - val);
         }
     }
 
@@ -93,16 +102,10 @@ public class SslConnector implements Connector {
             int err = Openssl.sslGetErr(ssl, r);
             if(err == Constants.SSL_ERROR_WANT_READ) {
                 status.set(WANT_READ);
-                int current = acceptor.state().getAndUpdate(i -> (i & Native.REGISTER_READ) == 0 ? i + Native.REGISTER_READ : i);
-                if((current & Native.REGISTER_READ) == 0) {
-                    n.ctl(acceptor.worker().mux(), acceptor.socket(), current, current + Native.REGISTER_READ);
-                }
+                registerState(acceptor, Native.REGISTER_READ);
             }else if(err == Constants.SSL_ERROR_WANT_WRITE) {
                 status.set(WANT_WRITE);
-                int current = acceptor.state().getAndUpdate(i -> (i & Native.REGISTER_WRITE) == 0 ? i + Native.REGISTER_WRITE : i);
-                if((current & Native.REGISTER_WRITE) == 0) {
-                    n.ctl(acceptor.worker().mux(), acceptor.socket(), current, current + Native.REGISTER_READ);
-                }
+                registerState(acceptor, Native.REGISTER_WRITE);
             }else {
                 log.error("Failed to perform ssl handshake, ssl err : {}", err);
                 acceptor.close();

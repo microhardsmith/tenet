@@ -1,12 +1,10 @@
 package cn.zorcc.common.network;
 
 import cn.zorcc.common.Constants;
-import lombok.Data;
 
 /**
  *  Configuration of net
  */
-@Data
 public class NetworkConfig {
     /**
      *  read buffer maximum size for a read operation
@@ -19,11 +17,11 @@ public class NetworkConfig {
     /**
      *  socket map initial size, will automatically expand, could be changed according to specific circumstances
      */
-    private int mapSize = Constants.KB;
+    private int mapSize = 4 * Constants.KB;
     /**
      *   服务端是否开启TLS加密,默认不开启
      */
-    private int enableSsl = Constants.ZERO;
+    private Boolean enableSsl = Boolean.FALSE;
     /**
      *   服务端证书公钥路径,必须为绝对路径
      */
@@ -47,9 +45,97 @@ public class NetworkConfig {
     /**
      *  优雅停机超时时间,单位豪秒
      */
-    private long shutdownTimeout = 10000L;
+    private long gracefulShutdownTimeout = 10000L;
     /**
      *  默认建立连接超时时间,单位毫秒
      */
     private long defaultConnectionTimeout = 5000L;
+
+    public long getReadBufferSize() {
+        return readBufferSize;
+    }
+
+    public void setReadBufferSize(long readBufferSize) {
+        this.readBufferSize = readBufferSize;
+    }
+
+    public long getWriteBufferSize() {
+        return writeBufferSize;
+    }
+
+    public void setWriteBufferSize(long writeBufferSize) {
+        this.writeBufferSize = writeBufferSize;
+    }
+
+    public int getMapSize() {
+        return mapSize;
+    }
+
+    public void setMapSize(int mapSize) {
+        this.mapSize = mapSize;
+    }
+
+    public Boolean getEnableSsl() {
+        return enableSsl;
+    }
+
+    public void setEnableSsl(Boolean enableSsl) {
+        this.enableSsl = enableSsl;
+    }
+
+    public String getPublicKeyFile() {
+        return publicKeyFile;
+    }
+
+    public void setPublicKeyFile(String publicKeyFile) {
+        this.publicKeyFile = publicKeyFile;
+    }
+
+    public String getPrivateKeyFile() {
+        return privateKeyFile;
+    }
+
+    public void setPrivateKeyFile(String privateKeyFile) {
+        this.privateKeyFile = privateKeyFile;
+    }
+
+    public int getReuseAddr() {
+        return reuseAddr;
+    }
+
+    public void setReuseAddr(int reuseAddr) {
+        this.reuseAddr = reuseAddr;
+    }
+
+    public int getKeepAlive() {
+        return keepAlive;
+    }
+
+    public void setKeepAlive(int keepAlive) {
+        this.keepAlive = keepAlive;
+    }
+
+    public int getTcpNoDelay() {
+        return tcpNoDelay;
+    }
+
+    public void setTcpNoDelay(int tcpNoDelay) {
+        this.tcpNoDelay = tcpNoDelay;
+    }
+
+    public long getGracefulShutdownTimeout() {
+        return gracefulShutdownTimeout;
+    }
+
+    public void setGracefulShutdownTimeout(long gracefulShutdownTimeout) {
+        this.gracefulShutdownTimeout = gracefulShutdownTimeout;
+    }
+
+    public long getDefaultConnectionTimeout() {
+        return defaultConnectionTimeout;
+    }
+
+    public void setDefaultConnectionTimeout(long defaultConnectionTimeout) {
+        this.defaultConnectionTimeout = defaultConnectionTimeout;
+    }
 }

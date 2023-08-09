@@ -3,7 +3,9 @@ package cn.zorcc.common.network;
 
 public record ReaderTask (
     ReaderTaskType type,
-    Object target
+    Acceptor acceptor,
+    Channel channel,
+    Shutdown shutdown
 ) {
     enum ReaderTaskType {
         ADD_ACCEPTOR,

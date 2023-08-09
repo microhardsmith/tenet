@@ -5,9 +5,7 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Loc;
 
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.LockSupport;
 
 /**
  *   Network acceptor abstraction
@@ -69,8 +67,10 @@ public final class Acceptor {
             throw new FrameworkException(ExceptionType.NETWORK, "Not in worker thread");
         }
         Channel channel = new Channel(hashcode, socket, state, encoder, decoder, handler, protocol, loc, worker);
-        worker.socketMap().put(socket, channel);
-        worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.INITIATE, channel, null));
+        if (worker.socketMap().put(socket, channel) != this) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Corrupted state");
+        }
+        worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.INITIATE, channel, null, null));
         int from = state.getAndSet(Native.REGISTER_READ);
         if(from != Native.REGISTER_READ) {
             n.ctl(worker.mux(), socket, from, Native.REGISTER_READ);
@@ -88,12 +88,12 @@ public final class Acceptor {
         }
         if(worker.socketMap().remove(socket, this)) {
             int current = state.getAndSet(Native.REGISTER_NONE);
-            if(current > 0) {
+            if(current > Native.REGISTER_NONE) {
                 n.ctl(worker.mux(), socket, current, Native.REGISTER_NONE);
             }
             connector.doClose(this);
-            if (worker.counter().decrementAndGet() == 0L) {
-                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.POSSIBLE_SHUTDOWN, null));
+            if (worker.counter().decrementAndGet() == Constants.ZERO) {
+                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.POSSIBLE_SHUTDOWN, null, null, null));
             }
         }
     }

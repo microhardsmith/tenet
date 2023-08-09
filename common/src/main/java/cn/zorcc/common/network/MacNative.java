@@ -6,7 +6,8 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.NativeUtil;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
@@ -18,8 +19,8 @@ import java.util.concurrent.TimeUnit;
  *   Note that the .dylib library is only suitable for ARM-based chips since I only tested on M1 MacBook
  *   If developer needs to run it on X86 processors, recompile a new .dylib would be fine
  */
-@Slf4j
 public final class MacNative implements Native {
+    private static final Logger log = LoggerFactory.getLogger(MacNative.class);
     /**
      *  Corresponding to struct kevent in event.h
      */
@@ -44,7 +45,7 @@ public final class MacNative implements Native {
             ValueLayout.JAVA_BYTE.withName("sin_family"),
             ValueLayout.JAVA_SHORT.withName("sin_port"),
             ValueLayout.JAVA_INT.withName("sin_addr"),
-            MemoryLayout.paddingLayout(8 * ValueLayout.JAVA_BYTE.byteSize())
+            MemoryLayout.paddingLayout(8)
     );
     private static final int sockAddrSize = (int) sockAddrLayout.byteSize();
     private static final MethodHandle kqueueMethodHandle;
@@ -121,7 +122,7 @@ public final class MacNative implements Native {
 
     @Override
     public void bindAndListen(Loc loc, MuxConfig config, Socket socket) {
-        try(Arena arena = Arena.openConfined()) {
+        try(Arena arena = Arena.ofConfined()) {
             MemorySegment addr = arena.allocate(sockAddrLayout);
             MemorySegment ip = NativeUtil.allocateStr(arena, loc.ip(), addressLen);
             int setSockAddr = check(setSockAddr(addr, ip, loc.shortPort()), "set SockAddr");
@@ -186,7 +187,7 @@ public final class MacNative implements Native {
 
     @Override
     public ClientSocket accept(NetworkConfig config, Socket socket) {
-        try(Arena arena = Arena.openConfined()) {
+        try(Arena arena = Arena.ofConfined()) {
             MemorySegment clientAddr = arena.allocate(sockAddrLayout);
             MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, addressLen);
             int socketFd = accept(socket.intValue(), clientAddr, sockAddrSize);
@@ -217,7 +218,7 @@ public final class MacNative implements Native {
 
     @Override
     public int getErrOpt(Socket socket) {
-        try(Arena arena = Arena.openConfined()) {
+        try(Arena arena = Arena.ofConfined()) {
             MemorySegment ptr = arena.allocate(ValueLayout.JAVA_INT, -1);
             if (getErrOpt(socket.intValue(), ptr) == -1) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Failed to get Socket's err opt");
@@ -465,7 +466,7 @@ public final class MacNative implements Native {
      */
     public int connect(int socket, MemorySegment sockAddr, int size) {
         try{
-            return (int) connectMethodHandle.invokeExact(sockAddr, socket, size);
+            return (int) connectMethodHandle.invokeExact(socket, sockAddr, size);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking connect()", throwable);
         }

@@ -6,7 +6,8 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.*;
 import cn.zorcc.common.util.NativeUtil;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -14,8 +15,8 @@ import java.lang.foreign.ValueLayout;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-@Slf4j
 public class PgConnector implements Connector {
+    private static final Logger log = LoggerFactory.getLogger(PgConnector.class);
     private static final Native n = Native.n;
     private final Net net;
     private static final int INITIAL = 0;
@@ -43,7 +44,7 @@ public class PgConnector implements Connector {
     public void shouldRead(Acceptor acceptor) {
         final int i = status.get();
         if(i == SSL_WAIT) {
-            try(Arena arena = Arena.openConfined()) {
+            try(Arena arena = Arena.ofConfined()) {
                 MemorySegment segment = arena.allocate(ValueLayout.JAVA_BYTE);
                 if (n.recv(acceptor.socket(), segment, segment.byteSize()) < 1L) {
                     log.error("Unable to read, errno : {}", n.errno());
@@ -80,7 +81,7 @@ public class PgConnector implements Connector {
             int errOpt = n.getErrOpt(socket);
             if(errOpt == 0) {
                 long len = 8L;
-                WriteBuffer writeBuffer = new WriteBuffer(Arena.openConfined(), len);
+                WriteBuffer writeBuffer = new WriteBuffer(Arena.ofConfined(), len);
                 writeBuffer.writeInt(8);
                 writeBuffer.writeInt(PgConstants.SSL_CODE);
                 write(acceptor, writeBuffer);

@@ -68,7 +68,7 @@
                             <archive>
                                 <manifest>
                                     <mainClass>
-                                        cn.zorcc.common.example.NetExample
+                                        cn.zorcc.common.example.HttpServer
                                     </mainClass>
                                 </manifest>
                             </archive>
@@ -78,6 +78,15 @@
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>19</source>
+                    <target>19</target>
+                    <compilerArgs>--enable-preview</compilerArgs>
+                </configuration>
             </plugin>
         </plugins>
     </build>

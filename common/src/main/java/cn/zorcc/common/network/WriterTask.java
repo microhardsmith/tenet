@@ -1,17 +1,42 @@
 package cn.zorcc.common.network;
 
+/**
+ *   Task entity for writer thread
+ */
 public record WriterTask(
         WriterTaskType type,
         Channel channel,
-        Object msg
+        Object msg,
+        WriterCallback callback
 ) {
     enum WriterTaskType {
+        /**
+         *   Bind a socket with target channel
+         */
         INITIATE,
+        /**
+         *   Channel become writable again
+         */
         WRITABLE,
+        /**
+         *   Send a mix of several msg
+         */
         MIX_OF_MSG,
+        /**
+         *   Send a single msg
+         */
         MSG,
+        /**
+         *   Tell the channel to perform shutdown operation
+         */
         SHUTDOWN,
-        CLOSE,
+        /**
+         *   Tell the writer thread to remove target channel
+         */
+        REMOVE,
+        /**
+         *   Exit writer thread
+         */
         EXIT,
     }
 }

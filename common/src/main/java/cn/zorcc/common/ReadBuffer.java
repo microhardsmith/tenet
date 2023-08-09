@@ -57,7 +57,7 @@ public final class ReadBuffer {
         return b;
     }
 
-    public byte[] readBytes(int count) {
+    public byte[] readBytes(long count) {
         long nextIndex = readIndex + count;
         if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");

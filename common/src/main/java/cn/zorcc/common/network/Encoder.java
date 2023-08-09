@@ -9,8 +9,8 @@ import cn.zorcc.common.WriteBuffer;
 public interface Encoder {
 
     /**
-     *   Encode a specific object into a memory-segment
+     *   Encode a specific object into a WriteBuffer, the returned writeBuffer should be the given one in most cases
      *   This function should only be invoked in its worker's writer thread
      */
-    void encode(WriteBuffer writeBuffer, Object o);
+    WriteBuffer encode(WriteBuffer writeBuffer, Object o);
 }

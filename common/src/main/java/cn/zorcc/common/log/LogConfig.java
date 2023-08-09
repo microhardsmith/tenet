@@ -1,14 +1,10 @@
 package cn.zorcc.common.log;
 
 import cn.zorcc.common.Constants;
-import lombok.Getter;
-import lombok.Setter;
 
 /**
  * 日志配置文件,默认从当前工程resources目录下寻找log-config.json读取
  */
-@Getter
-@Setter
 public class LogConfig {
     /**
      * 日志默认允许输出的最低级别,与Slf4j规定的日志级别吻合
@@ -104,4 +100,188 @@ public class LogConfig {
      * 是否将日志传输至Metrics保存,默认为false
      */
     private boolean usingMetrics = false;
+
+    public int getLevel() {
+        return level;
+    }
+
+    public void setLevel(int level) {
+        this.level = level;
+    }
+
+    public String getTimeFormat() {
+        return timeFormat;
+    }
+
+    public void setTimeFormat(String timeFormat) {
+        this.timeFormat = timeFormat;
+    }
+
+    public String getTimeResolver() {
+        return timeResolver;
+    }
+
+    public void setTimeResolver(String timeResolver) {
+        this.timeResolver = timeResolver;
+    }
+
+    public long getFlushInterval() {
+        return flushInterval;
+    }
+
+    public void setFlushInterval(long flushInterval) {
+        this.flushInterval = flushInterval;
+    }
+
+    public long getBufferSize() {
+        return bufferSize;
+    }
+
+    public void setBufferSize(long bufferSize) {
+        this.bufferSize = bufferSize;
+    }
+
+    public String getLogFormat() {
+        return logFormat;
+    }
+
+    public void setLogFormat(String logFormat) {
+        this.logFormat = logFormat;
+    }
+
+    public boolean isUsingConsole() {
+        return usingConsole;
+    }
+
+    public void setUsingConsole(boolean usingConsole) {
+        this.usingConsole = usingConsole;
+    }
+
+    public int getLevelLen() {
+        return levelLen;
+    }
+
+    public void setLevelLen(int levelLen) {
+        this.levelLen = levelLen;
+    }
+
+    public int getThreadNameLen() {
+        return threadNameLen;
+    }
+
+    public void setThreadNameLen(int threadNameLen) {
+        this.threadNameLen = threadNameLen;
+    }
+
+    public int getClassNameLen() {
+        return classNameLen;
+    }
+
+    public void setClassNameLen(int classNameLen) {
+        this.classNameLen = classNameLen;
+    }
+
+    public String getTimeColor() {
+        return timeColor;
+    }
+
+    public void setTimeColor(String timeColor) {
+        this.timeColor = timeColor;
+    }
+
+    public String getThreadNameColor() {
+        return threadNameColor;
+    }
+
+    public void setThreadNameColor(String threadNameColor) {
+        this.threadNameColor = threadNameColor;
+    }
+
+    public String getClassNameColor() {
+        return classNameColor;
+    }
+
+    public void setClassNameColor(String classNameColor) {
+        this.classNameColor = classNameColor;
+    }
+
+    public String getMsgColor() {
+        return msgColor;
+    }
+
+    public void setMsgColor(String msgColor) {
+        this.msgColor = msgColor;
+    }
+
+    public boolean isUsingFile() {
+        return usingFile;
+    }
+
+    public void setUsingFile(boolean usingFile) {
+        this.usingFile = usingFile;
+    }
+
+    public int getFileBuffer() {
+        return fileBuffer;
+    }
+
+    public void setFileBuffer(int fileBuffer) {
+        this.fileBuffer = fileBuffer;
+    }
+
+    public String getLogFileDir() {
+        return logFileDir;
+    }
+
+    public void setLogFileDir(String logFileDir) {
+        this.logFileDir = logFileDir;
+    }
+
+    public String getLogFileName() {
+        return logFileName;
+    }
+
+    public void setLogFileName(String logFileName) {
+        this.logFileName = logFileName;
+    }
+
+    public int getMaxFileSize() {
+        return maxFileSize;
+    }
+
+    public void setMaxFileSize(int maxFileSize) {
+        this.maxFileSize = maxFileSize;
+    }
+
+    public int getMaxRecordingTime() {
+        return maxRecordingTime;
+    }
+
+    public void setMaxRecordingTime(int maxRecordingTime) {
+        this.maxRecordingTime = maxRecordingTime;
+    }
+
+    public boolean isEnableRolling() {
+        return enableRolling;
+    }
+
+    public void setEnableRolling(boolean enableRolling) {
+        this.enableRolling = enableRolling;
+    }
+
+    public int getRollingFileCount() {
+        return rollingFileCount;
+    }
+
+    public void setRollingFileCount(int rollingFileCount) {
+        this.rollingFileCount = rollingFileCount;
+    }
+
+    public boolean isUsingMetrics() {
+        return usingMetrics;
+    }
+
+    public void setUsingMetrics(boolean usingMetrics) {
+        this.usingMetrics = usingMetrics;
+    }
 }

@@ -5,7 +5,8 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.MemorySegment;
@@ -19,8 +20,8 @@ import java.util.concurrent.TimeUnit;
  *   To update current OpenSSL version, just replace the dynamic library under /resources/ssl
  *   On success, the functions return 1. Otherwise check out the error stack to find out the reason.
  */
-@Slf4j
 public final class Openssl {
+    private static final Logger log = LoggerFactory.getLogger(Openssl.class);
     /**
      *   Environment variable that must be configured when launching the application
      */

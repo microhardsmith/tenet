@@ -7,11 +7,14 @@ import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Loc;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.Arena;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class Channel {
+    private static final Logger log = LoggerFactory.getLogger(Channel.class);
     private static final Native n = Native.n;
     private final int hashcode;
     private final Socket socket;
@@ -92,34 +95,46 @@ public final class Channel {
         }else {
             tryRead(buffer);
             if(buffer.readIndex() < buffer.size()) {
-                tempBuffer = new WriteBuffer(Arena.openConfined(), buffer.size());
+                tempBuffer = new WriteBuffer(Arena.ofConfined(), buffer.size());
                 tempBuffer.write(buffer.rest());
             }
         }
     }
 
     /**
-     *   try read from ReadBuffer, should only be accessed in its worker-thread
+     *   Try reading from ReadBuffer, should only be accessed in reader thread
      *   the actual onRecv method should create a new virtual thread to handle the actual blocking business logic
      */
     private void tryRead(ReadBuffer buffer) {
-        Object result = decoder.decode(buffer);
-        if(result != null) {
-            handler.onRecv(this, result);
+        try{
+            Object result = decoder.decode(buffer);
+            if(result != null) {
+                handler.onRecv(this, result);
+            }
+        }catch (FrameworkException e) {
+            log.error("Failed to perform reading from channel : {}", loc, e);
+            shutdown();
         }
     }
 
     /**
-     *   send msg over the channel, this method could be invoked from any thread
-     *   the msg will be processed by the writer thread, there is no guarantee that the msg will delivery
+     *   Send msg over the channel, this method could be invoked from any thread
+     *   the msg will be processed by the writer thread, there is no guarantee that the msg will delivery, the callBack only indicates that calling operating system's API was successful
      *   the caller should provide a timeout mechanism to ensure the msg is not dropped, such as retransmission timeout
      */
-    public void send(Object msg) {
+    public void send(Object msg, WriterCallback callBack) {
         switch (msg) {
             case null -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-            case Mix mix -> worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.MIX_OF_MSG, this, mix));
-            default -> worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.MSG, this, msg));
+            case Mix mix -> worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.MIX_OF_MSG, this, mix, callBack));
+            default -> worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.MSG, this, msg, callBack));
         }
+    }
+
+    /**
+     *   send msg over the channel with no callBack
+     */
+    public void send(Object msg) {
+        send(msg, null);
     }
 
     /**
@@ -130,7 +145,7 @@ public final class Channel {
      */
     public void shutdown(Shutdown shutdown) {
         handler.onShutdown(this);
-        worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.SHUTDOWN, this, shutdown));
+        worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.SHUTDOWN, this, shutdown, null));
     }
 
     /**
@@ -150,15 +165,15 @@ public final class Channel {
         // make sure the channel could only be removed once
         if(worker.socketMap().remove(socket, this)) {
             // Force close the sender instance
-            worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.CLOSE, this, null));
+            worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.REMOVE, this, null, null));
             int current = state.getAndSet(Native.REGISTER_NONE);
             if(current > Native.REGISTER_NONE) {
                 n.ctl(worker.mux(), socket, current, Native.REGISTER_NONE);
             }
             protocol.doClose(this);
             handler.onRemoved(this);
-            if (worker.counter().decrementAndGet() == 0L) {
-                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.POSSIBLE_SHUTDOWN, null));
+            if (worker.counter().decrementAndGet() == Constants.ZERO) {
+                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.POSSIBLE_SHUTDOWN, null, null, null));
             }
         }
     }

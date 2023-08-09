@@ -1,7 +1,8 @@
 package cn.zorcc.common;
 
 import com.esotericsoftware.reflectasm.MethodAccess;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -15,9 +16,9 @@ import java.util.concurrent.locks.ReentrantLock;
  *  本地反射方法调用处理器,通过Reflectasm进行注册调用比直接反射性能更好
  *  该类是并发安全的,全局共享单例
  */
-@Slf4j
 public enum MethodInvoker {
     INSTANCE;
+    private static final Logger log = LoggerFactory.getLogger(MethodInvoker.class);
     /**
      *  反射调用信息缓存
      */

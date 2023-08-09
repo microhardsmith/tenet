@@ -18,11 +18,7 @@ public class ThreadUtil {
      */
     public static Thread virtual(final String name, final Runnable runnable) {
         return Thread.ofVirtual()
-                .allowSetThreadLocals(false)
                 .inheritInheritableThreadLocals(false)
-                .uncaughtExceptionHandler((thread, throwable) -> {
-                    throwable.printStackTrace();
-                })
                 .name(name)
                 .unstarted(runnable);
     }
@@ -35,11 +31,7 @@ public class ThreadUtil {
      */
     public static Thread platform(String name, Runnable runnable) {
         return Thread.ofPlatform()
-                .allowSetThreadLocals(true)
                 .inheritInheritableThreadLocals(true)
-                .uncaughtExceptionHandler((thread, throwable) -> {
-                    throwable.printStackTrace();
-                })
                 .name(name)
                 .unstarted(runnable);
     }

@@ -12,7 +12,8 @@ import cn.zorcc.common.serializer.JsonPoolSerializer;
 import cn.zorcc.common.util.ClassUtil;
 import cn.zorcc.http.HttpReq;
 import io.netty.handler.codec.http.HttpMethod;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
@@ -23,8 +24,9 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
-@Slf4j
+
 public class AppHttpEventHandler implements EventHandler<AppHttpEvent>, AppHttpMapping {
+    private static final Logger log = LoggerFactory.getLogger(AppHttpEventHandler.class);
     /**
      *  可解析的method参数注解
      */

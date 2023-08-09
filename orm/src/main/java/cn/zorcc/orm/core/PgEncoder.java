@@ -14,7 +14,7 @@ public class PgEncoder implements Encoder {
 
     @SuppressWarnings("unused")
     @Override
-    public void encode(WriteBuffer writeBuffer, Object o) {
+    public WriteBuffer encode(WriteBuffer writeBuffer, Object o) {
         switch (o) {
             case PgStartUpMsg(PgConfig pgConfig) -> encodePgStartUpMsg(writeBuffer, pgConfig);
             case PgAuthSaslInitialResponseMsg(String mechanism, String clientFirstMsg) -> encodeSaslInitialResponseMsg(writeBuffer, mechanism, clientFirstMsg);
@@ -29,6 +29,7 @@ public class PgEncoder implements Encoder {
             case PgTerminateMsg() -> encodePgTerminateMsg(writeBuffer);
             default -> throw new FrameworkException(ExceptionType.SQL, Constants.UNREACHED);
         }
+        return writeBuffer;
     }
 
     private void encodeDescribeMsg(WriteBuffer writeBuffer, PgDescribeMsg pgDescribeMsg) {

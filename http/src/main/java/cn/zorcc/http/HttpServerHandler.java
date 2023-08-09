@@ -11,7 +11,8 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.websocketx.*;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,9 +20,9 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  *  http处理器
  */
-@Slf4j
 @ChannelHandler.Sharable
 public class HttpServerHandler extends SimpleChannelInboundHandler<Object> {
+    private static final Logger log = LoggerFactory.getLogger(HttpServerHandler.class);
     private static final String WS = "ws://";
     private static final String UPGRADE = "Upgrade";
     private static final String WEBSOCKET = "websocket";

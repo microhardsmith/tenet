@@ -19,7 +19,8 @@ import com.ongres.scram.common.exception.ScramInvalidServerSignatureException;
 import com.ongres.scram.common.exception.ScramParseException;
 import com.ongres.scram.common.exception.ScramServerErrorException;
 import com.ongres.scram.common.stringprep.StringPreparations;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -33,8 +34,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  *   Representing a basic postgresql connection
  */
-@Slf4j
 public final class PgConn {
+    private static final Logger log = LoggerFactory.getLogger(PgConn.class);
     /**
      *   Global counter for established postgresql connections
      */

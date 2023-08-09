@@ -13,8 +13,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TransferQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  *   Singleton log consumer, init a LoggerConsumer to start the whole log processing procedure
@@ -23,8 +22,10 @@ public final class LoggerConsumer implements LifeCycle {
     private static final String NAME = "tenet-log";
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
     private final Thread consumerThread;
-    private final AtomicBoolean running = new AtomicBoolean(false);
-    private final Lock lock = new ReentrantLock();
+    private static final int INITIAL = 0;
+    private static final int RUNNING = 1;
+    private static final int SHUTDOWN = 2;
+    private final AtomicInteger state = new AtomicInteger(INITIAL);
     public LoggerConsumer() {
         if(instanceFlag.compareAndSet(false, true)) {
             this.consumerThread = createConsumerThread(Logger.config());
@@ -74,30 +75,18 @@ public final class LoggerConsumer implements LifeCycle {
 
     @Override
     public void init() {
-        lock.lock();
-        try {
-            if(running.compareAndSet(false, true)) {
-                consumerThread.start();
-            }
-        }finally {
-            lock.unlock();
+        if(state.compareAndSet(INITIAL, RUNNING)) {
+            consumerThread.start();
         }
     }
 
     @Override
-    public void shutdown() {
-        lock.lock();
-        try{
-            if(running.compareAndSet(true, false)) {
-                if (!Logger.queue().offer(LogEvent.shutdownEvent)) {
-                    throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED);
-                }
-                consumerThread.join();
+    public void shutdown() throws InterruptedException {
+        if(state.compareAndSet(INITIAL, SHUTDOWN)) {
+            if (!Logger.queue().offer(LogEvent.shutdownEvent)) {
+                throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED);
             }
-        }catch (InterruptedException e) {
-            throw new FrameworkException(ExceptionType.NETWORK, "Shutting down Log failed because of thread interruption");
-        }finally {
-            lock.unlock();
+            consumerThread.join();
         }
     }
 }

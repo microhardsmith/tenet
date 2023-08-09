@@ -13,7 +13,7 @@ import java.util.Map;
 /**
  *   Platform independent native interface for Network operation
  */
-public interface Native {
+public sealed interface Native permits WinNative, LinuxNative, MacNative {
 
     /**
      *   Return err code which means connect operation would possibly block
@@ -179,6 +179,9 @@ public interface Native {
         };
     }
 
+    /**
+     *   Perform read operation after multiplexing readable event triggered
+     */
     static void shouldRead(Map<Socket, Object> socketMap, Socket socket, MemorySegment buffer) {
         switch (socketMap.get(socket)) {
             case null -> {}
@@ -188,6 +191,9 @@ public interface Native {
         }
     }
 
+    /**
+     *   Perform write operation after multiplexing writable event triggered
+     */
     static void shouldWrite(Map<Socket, Object> socketMap, Socket socket) {
         switch (socketMap.get(socket)) {
             case null -> {}

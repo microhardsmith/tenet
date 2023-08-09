@@ -12,7 +12,6 @@ public enum ExceptionType {
     JSON,
     SQLITE,
     NETWORK,
-    JOB,
     SQL,
     CLUSTER,
     AUTH,

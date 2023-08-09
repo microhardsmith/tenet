@@ -2,7 +2,6 @@ package cn.zorcc.common.pojo;
 
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.util.ConfigUtil;
 
 /**
  *  Ipv4 address, Note that port is a number between 0 and 65535, in C normally represented as u_short, so here we did some transformation
@@ -38,12 +37,41 @@ public record Loc (
      *   Validate current loc configuration
      */
     public void validate() {
-        if(!ConfigUtil.checkIp(ip)) {
+        if(!checkIp(ip)) {
             throw new FrameworkException(ExceptionType.NETWORK, "IpAddress is not valid : " + ip);
         }
-        if(!ConfigUtil.checkPort(port)) {
+        if(!checkPort(port)) {
             throw new FrameworkException(ExceptionType.NETWORK, "Port is not valid : " + port);
         }
+    }
+
+
+    /**
+     *   Check ipv4 address string format
+     */
+    public static boolean checkIp(String ip) {
+        if (ip.isBlank()) {
+            return false;
+        }
+        String[] strings = ip.split("\\.");
+        for (String s : strings) {
+            try{
+                int value = Integer.parseInt(s);
+                if(value < 0 || value > 255) {
+                    return false;
+                }
+            }catch (NumberFormatException e) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     *   Check network port range
+     */
+    public static boolean checkPort(int port) {
+        return port >= 0 && port <= 65535;
     }
 
     @Override

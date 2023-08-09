@@ -1,15 +1,15 @@
 package cn.zorcc.common;
 
 /**
- *  容器生命周期接口
+ *   Lifecycle interface for all stateful components
  */
 public interface LifeCycle {
     /**
-     *  容器初始化
+     *  Initialize a component
      */
     void init();
     /**
-     *  容器销毁
+     *  Shutdown a component
      */
-    void shutdown();
+    void shutdown() throws InterruptedException;
 }

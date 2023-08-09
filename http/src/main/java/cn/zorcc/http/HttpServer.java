@@ -22,7 +22,8 @@ import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.stream.ChunkedWriteHandler;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.SSLException;
 import java.io.File;
@@ -31,8 +32,8 @@ import java.io.File;
  *  Http服务器(http1.1版本,http2主要在请求静态资源上有较大提升,在动态请求上差距不大)
  *  Http服务器是独立于net通用服务器的实现,通过触发HttpEvent来实现业务逻辑
  */
-@Slf4j
 public class HttpServer {
+    private static final Logger log = LoggerFactory.getLogger(HttpServer.class);
     private final SslContext sslContext;
     private final HttpServerHandler httpServerHandler;
 

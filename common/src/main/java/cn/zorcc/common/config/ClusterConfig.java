@@ -2,7 +2,6 @@ package cn.zorcc.common.config;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.pojo.Peer;
-import lombok.Data;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -10,7 +9,6 @@ import java.util.List;
 /**
  * 集群以及本地的网络配置
  */
-@Data
 public class ClusterConfig {
     /**
      * 是否使用集群部署
@@ -21,9 +19,9 @@ public class ClusterConfig {
      */
     private List<Peer> peers = new ArrayList<>();
     /**
-     *  raft阻塞队列长度 TODO 限制写操作的流速避免阻塞队列爆掉
+     * raft阻塞队列长度 TODO 限制写操作的流速避免阻塞队列爆掉
      */
-    private int queueSize =  1024;
+    private int queueSize = 1024;
     /**
      * 是否作为配置变更加入集群,即集群中的其他节点是否事先了解此信息
      */
@@ -85,4 +83,226 @@ public class ClusterConfig {
      * 集群重试连接间隔,节点在无法连接其他节点时会每隔该间隔再次发起连接,单位毫秒
      */
     private int retryInterval = 5000;
+
+    public ClusterConfig() {
+    }
+
+    public boolean isEnabled() {
+        return this.enabled;
+    }
+
+    public List<Peer> getPeers() {
+        return this.peers;
+    }
+
+    public int getQueueSize() {
+        return this.queueSize;
+    }
+
+    public boolean isMembershipChange() {
+        return this.membershipChange;
+    }
+
+    public int getHeartBeatTimeout() {
+        return this.heartBeatTimeout;
+    }
+
+    public int getHeartBeatReceiveTimeout() {
+        return this.heartBeatReceiveTimeout;
+    }
+
+    public int getElectionTimeout() {
+        return this.electionTimeout;
+    }
+
+    public int getAllowHeartBeatTimeoutCount() {
+        return this.allowHeartBeatTimeoutCount;
+    }
+
+    public long getMsgTimeout() {
+        return this.msgTimeout;
+    }
+
+    public int getMaxRetryTimes() {
+        return this.maxRetryTimes;
+    }
+
+    public long getRetryWaitTime() {
+        return this.retryWaitTime;
+    }
+
+    public String getMetaDir() {
+        return this.metaDir;
+    }
+
+    public String getDataDir() {
+        return this.dataDir;
+    }
+
+    public String getBackupDir() {
+        return this.backupDir;
+    }
+
+    public String getTempDir() {
+        return this.tempDir;
+    }
+
+    public int getCompressionCount() {
+        return this.compressionCount;
+    }
+
+    public int getMaxInMemoryLogSize() {
+        return this.maxInMemoryLogSize;
+    }
+
+    public int getRetryInterval() {
+        return this.retryInterval;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public void setPeers(List<Peer> peers) {
+        this.peers = peers;
+    }
+
+    public void setQueueSize(int queueSize) {
+        this.queueSize = queueSize;
+    }
+
+    public void setMembershipChange(boolean membershipChange) {
+        this.membershipChange = membershipChange;
+    }
+
+    public void setHeartBeatTimeout(int heartBeatTimeout) {
+        this.heartBeatTimeout = heartBeatTimeout;
+    }
+
+    public void setHeartBeatReceiveTimeout(int heartBeatReceiveTimeout) {
+        this.heartBeatReceiveTimeout = heartBeatReceiveTimeout;
+    }
+
+    public void setElectionTimeout(int electionTimeout) {
+        this.electionTimeout = electionTimeout;
+    }
+
+    public void setAllowHeartBeatTimeoutCount(int allowHeartBeatTimeoutCount) {
+        this.allowHeartBeatTimeoutCount = allowHeartBeatTimeoutCount;
+    }
+
+    public void setMsgTimeout(long msgTimeout) {
+        this.msgTimeout = msgTimeout;
+    }
+
+    public void setMaxRetryTimes(int maxRetryTimes) {
+        this.maxRetryTimes = maxRetryTimes;
+    }
+
+    public void setRetryWaitTime(long retryWaitTime) {
+        this.retryWaitTime = retryWaitTime;
+    }
+
+    public void setMetaDir(String metaDir) {
+        this.metaDir = metaDir;
+    }
+
+    public void setDataDir(String dataDir) {
+        this.dataDir = dataDir;
+    }
+
+    public void setBackupDir(String backupDir) {
+        this.backupDir = backupDir;
+    }
+
+    public void setTempDir(String tempDir) {
+        this.tempDir = tempDir;
+    }
+
+    public void setCompressionCount(int compressionCount) {
+        this.compressionCount = compressionCount;
+    }
+
+    public void setMaxInMemoryLogSize(int maxInMemoryLogSize) {
+        this.maxInMemoryLogSize = maxInMemoryLogSize;
+    }
+
+    public void setRetryInterval(int retryInterval) {
+        this.retryInterval = retryInterval;
+    }
+
+    public boolean equals(final Object o) {
+        if (o == this) return true;
+        if (!(o instanceof ClusterConfig)) return false;
+        final ClusterConfig other = (ClusterConfig) o;
+        if (!other.canEqual((Object) this)) return false;
+        if (this.isEnabled() != other.isEnabled()) return false;
+        final Object this$peers = this.getPeers();
+        final Object other$peers = other.getPeers();
+        if (this$peers == null ? other$peers != null : !this$peers.equals(other$peers)) return false;
+        if (this.getQueueSize() != other.getQueueSize()) return false;
+        if (this.isMembershipChange() != other.isMembershipChange()) return false;
+        if (this.getHeartBeatTimeout() != other.getHeartBeatTimeout()) return false;
+        if (this.getHeartBeatReceiveTimeout() != other.getHeartBeatReceiveTimeout()) return false;
+        if (this.getElectionTimeout() != other.getElectionTimeout()) return false;
+        if (this.getAllowHeartBeatTimeoutCount() != other.getAllowHeartBeatTimeoutCount()) return false;
+        if (this.getMsgTimeout() != other.getMsgTimeout()) return false;
+        if (this.getMaxRetryTimes() != other.getMaxRetryTimes()) return false;
+        if (this.getRetryWaitTime() != other.getRetryWaitTime()) return false;
+        final Object this$metaDir = this.getMetaDir();
+        final Object other$metaDir = other.getMetaDir();
+        if (this$metaDir == null ? other$metaDir != null : !this$metaDir.equals(other$metaDir)) return false;
+        final Object this$dataDir = this.getDataDir();
+        final Object other$dataDir = other.getDataDir();
+        if (this$dataDir == null ? other$dataDir != null : !this$dataDir.equals(other$dataDir)) return false;
+        final Object this$backupDir = this.getBackupDir();
+        final Object other$backupDir = other.getBackupDir();
+        if (this$backupDir == null ? other$backupDir != null : !this$backupDir.equals(other$backupDir)) return false;
+        final Object this$tempDir = this.getTempDir();
+        final Object other$tempDir = other.getTempDir();
+        if (this$tempDir == null ? other$tempDir != null : !this$tempDir.equals(other$tempDir)) return false;
+        if (this.getCompressionCount() != other.getCompressionCount()) return false;
+        if (this.getMaxInMemoryLogSize() != other.getMaxInMemoryLogSize()) return false;
+        if (this.getRetryInterval() != other.getRetryInterval()) return false;
+        return true;
+    }
+
+    protected boolean canEqual(final Object other) {
+        return other instanceof ClusterConfig;
+    }
+
+    public int hashCode() {
+        final int PRIME = 59;
+        int result = 1;
+        result = result * PRIME + (this.isEnabled() ? 79 : 97);
+        final Object $peers = this.getPeers();
+        result = result * PRIME + ($peers == null ? 43 : $peers.hashCode());
+        result = result * PRIME + this.getQueueSize();
+        result = result * PRIME + (this.isMembershipChange() ? 79 : 97);
+        result = result * PRIME + this.getHeartBeatTimeout();
+        result = result * PRIME + this.getHeartBeatReceiveTimeout();
+        result = result * PRIME + this.getElectionTimeout();
+        result = result * PRIME + this.getAllowHeartBeatTimeoutCount();
+        final long $msgTimeout = this.getMsgTimeout();
+        result = result * PRIME + (int) ($msgTimeout >>> 32 ^ $msgTimeout);
+        result = result * PRIME + this.getMaxRetryTimes();
+        final long $retryWaitTime = this.getRetryWaitTime();
+        result = result * PRIME + (int) ($retryWaitTime >>> 32 ^ $retryWaitTime);
+        final Object $metaDir = this.getMetaDir();
+        result = result * PRIME + ($metaDir == null ? 43 : $metaDir.hashCode());
+        final Object $dataDir = this.getDataDir();
+        result = result * PRIME + ($dataDir == null ? 43 : $dataDir.hashCode());
+        final Object $backupDir = this.getBackupDir();
+        result = result * PRIME + ($backupDir == null ? 43 : $backupDir.hashCode());
+        final Object $tempDir = this.getTempDir();
+        result = result * PRIME + ($tempDir == null ? 43 : $tempDir.hashCode());
+        result = result * PRIME + this.getCompressionCount();
+        result = result * PRIME + this.getMaxInMemoryLogSize();
+        result = result * PRIME + this.getRetryInterval();
+        return result;
+    }
+
+    public String toString() {
+        return "ClusterConfig(enabled=" + this.isEnabled() + ", peers=" + this.getPeers() + ", queueSize=" + this.getQueueSize() + ", membershipChange=" + this.isMembershipChange() + ", heartBeatTimeout=" + this.getHeartBeatTimeout() + ", heartBeatReceiveTimeout=" + this.getHeartBeatReceiveTimeout() + ", electionTimeout=" + this.getElectionTimeout() + ", allowHeartBeatTimeoutCount=" + this.getAllowHeartBeatTimeoutCount() + ", msgTimeout=" + this.getMsgTimeout() + ", maxRetryTimes=" + this.getMaxRetryTimes() + ", retryWaitTime=" + this.getRetryWaitTime() + ", metaDir=" + this.getMetaDir() + ", dataDir=" + this.getDataDir() + ", backupDir=" + this.getBackupDir() + ", tempDir=" + this.getTempDir() + ", compressionCount=" + this.getCompressionCount() + ", maxInMemoryLogSize=" + this.getMaxInMemoryLogSize() + ", retryInterval=" + this.getRetryInterval() + ")";
+    }
 }

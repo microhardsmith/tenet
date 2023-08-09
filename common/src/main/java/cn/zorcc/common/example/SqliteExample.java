@@ -8,13 +8,15 @@ import cn.zorcc.common.sqlite.Sqlite;
 import cn.zorcc.common.sqlite.SqliteConfig;
 import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.common.wheel.Wheel;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 
-@Slf4j
 public class SqliteExample {
+    private static final Logger log = LoggerFactory.getLogger(SqliteExample.class);
     public static void main(String[] args) {
         Wheel.wheel().init();
         LoggerConsumer loggerConsumer = new LoggerConsumer();
@@ -32,20 +34,20 @@ public class SqliteExample {
         if (Sqlite.initialize() > 0) {
             throw new FrameworkException(ExceptionType.SQLITE, "Failed to initialize");
         }
-        try(Arena arena = Arena.openConfined()) {
-            MemorySegment ppSqlite = arena.allocate(NativeUtil.UNBOUNDED_PTR_LAYOUT);
+        try(Arena arena = Arena.ofConfined()) {
+            MemorySegment ppSqlite = arena.allocate(ValueLayout.ADDRESS).reinterpret(ValueLayout.ADDRESS.byteSize());
             MemorySegment fileName = NativeUtil.allocateStr(arena, sqliteConfig.getPath());
             int open = Sqlite.open(fileName, ppSqlite, Constants.SQLITE_OPEN_READWRITE |
                     Constants.SQLITE_OPEN_CREATE | Constants.SQLITE_OPEN_NOMUTEX | Constants.SQLITE_OPEN_PRIVATECACHE | Constants.SQLITE_OPEN_NOFOLLOW, NativeUtil.NULL_POINTER);
             if(open > 0) {
                 throw new FrameworkException(ExceptionType.SQLITE, "Failed to open");
             }
-            MemorySegment sqlite = NativeUtil.accessPtr(ppSqlite);
+            MemorySegment sqlite = NativeUtil.accessPtr(ppSqlite, arena);
             log.info("sqlite : {}", sqlite.address());
-            MemorySegment ppstmt = arena.allocate(NativeUtil.UNBOUNDED_PTR_LAYOUT);
+            MemorySegment ppstmt = arena.allocate(ValueLayout.ADDRESS).reinterpret(ValueLayout.ADDRESS.byteSize());
             MemorySegment sql = NativeUtil.allocateStr(arena, "create table if not exists test_sqlite( id int primary key not null, str text not null);");
             int prepare = Sqlite.prepare(sqlite, sql, (int) sql.byteSize(), Constants.SQLITE_PREPARE_NORMALIZE, ppstmt, NativeUtil.NULL_POINTER);
-            MemorySegment stmt = NativeUtil.accessPtr(ppstmt);
+            MemorySegment stmt = NativeUtil.accessPtr(ppstmt, arena);
             if(prepare > 0) {
                 log.error("Prepare failed : {}", prepare);
                 System.out.println(stmt.address());

@@ -1,14 +1,10 @@
 package cn.zorcc.http;
 
 import cn.zorcc.common.Constants;
-import lombok.Getter;
-import lombok.Setter;
 
 /**
  * 网关http配置文件
  */
-@Getter
-@Setter
 public class HttpConfig {
     /**
      *  Http端口号
@@ -46,4 +42,76 @@ public class HttpConfig {
      * ssl ca证书文件地址, .crt或.pem格式
      */
     private String httpCaCertFile = Constants.EMPTY_STRING;
+
+    public int getPort() {
+        return port;
+    }
+
+    public void setPort(int port) {
+        this.port = port;
+    }
+
+    public int getHttpClientThreads() {
+        return httpClientThreads;
+    }
+
+    public void setHttpClientThreads(int httpClientThreads) {
+        this.httpClientThreads = httpClientThreads;
+    }
+
+    public int getHttpClientTimeout() {
+        return httpClientTimeout;
+    }
+
+    public void setHttpClientTimeout(int httpClientTimeout) {
+        this.httpClientTimeout = httpClientTimeout;
+    }
+
+    public int getHttpServerThreads() {
+        return httpServerThreads;
+    }
+
+    public void setHttpServerThreads(int httpServerThreads) {
+        this.httpServerThreads = httpServerThreads;
+    }
+
+    public boolean isEnableWebSocket() {
+        return enableWebSocket;
+    }
+
+    public void setEnableWebSocket(boolean enableWebSocket) {
+        this.enableWebSocket = enableWebSocket;
+    }
+
+    public boolean isUsingHttps() {
+        return usingHttps;
+    }
+
+    public void setUsingHttps(boolean usingHttps) {
+        this.usingHttps = usingHttps;
+    }
+
+    public String getHttpSslCertFile() {
+        return httpSslCertFile;
+    }
+
+    public void setHttpSslCertFile(String httpSslCertFile) {
+        this.httpSslCertFile = httpSslCertFile;
+    }
+
+    public String getHttpSslKeyFile() {
+        return httpSslKeyFile;
+    }
+
+    public void setHttpSslKeyFile(String httpSslKeyFile) {
+        this.httpSslKeyFile = httpSslKeyFile;
+    }
+
+    public String getHttpCaCertFile() {
+        return httpCaCertFile;
+    }
+
+    public void setHttpCaCertFile(String httpCaCertFile) {
+        this.httpCaCertFile = httpCaCertFile;
+    }
 }

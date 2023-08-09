@@ -1,4 +1,4 @@
-package cn.zorcc.common.network.http;
+package cn.zorcc.common.http;
 
 /**
  *   Enum for normally used Http methods

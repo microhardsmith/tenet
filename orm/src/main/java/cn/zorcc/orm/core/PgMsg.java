@@ -1,10 +1,6 @@
 package cn.zorcc.orm.core;
 
-import lombok.Getter;
-import lombok.Setter;
 
-@Getter
-@Setter
 public class PgMsg {
     /**
      * 消息类型
@@ -18,4 +14,28 @@ public class PgMsg {
      * 消息内容
      */
     private byte[] data;
+
+    public byte getType() {
+        return type;
+    }
+
+    public void setType(byte type) {
+        this.type = type;
+    }
+
+    public int getLength() {
+        return length;
+    }
+
+    public void setLength(int length) {
+        this.length = length;
+    }
+
+    public byte[] getData() {
+        return data;
+    }
+
+    public void setData(byte[] data) {
+        this.data = data;
+    }
 }

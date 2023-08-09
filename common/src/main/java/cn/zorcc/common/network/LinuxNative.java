@@ -6,7 +6,8 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.NativeUtil;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
@@ -16,8 +17,8 @@ import java.util.concurrent.TimeUnit;
 /**
  *   Native implementation under Linux, using epoll
  */
-@Slf4j
 public final class LinuxNative implements Native {
+    private static final Logger log = LoggerFactory.getLogger(LinuxNative.class);
     /**
      *  Corresponding to union epoll_data in epoll.h
      */
@@ -47,7 +48,7 @@ public final class LinuxNative implements Native {
             ValueLayout.JAVA_SHORT.withName("sin_family"),
             ValueLayout.JAVA_SHORT.withName("sin_port"),
             ValueLayout.JAVA_INT.withName("sin_addr"),
-            MemoryLayout.paddingLayout(8 * ValueLayout.JAVA_BYTE.byteSize())
+            MemoryLayout.paddingLayout(8)
     );
     private static final int sockAddrSize = (int) sockAddrLayout.byteSize();
     private static final MethodHandle epollCreateMethodHandle;
@@ -130,7 +131,7 @@ public final class LinuxNative implements Native {
 
     @Override
     public void bindAndListen(Loc loc, MuxConfig config, Socket socket) {
-        try(Arena arena = Arena.openConfined()) {
+        try(Arena arena = Arena.ofConfined()) {
             MemorySegment addr = arena.allocate(sockAddrLayout);
             MemorySegment ip = NativeUtil.allocateStr(arena, loc.ip(), addressLen);
             int setSockAddr = check(setSockAddr(addr, ip, loc.shortPort()), "set SockAddr");
@@ -154,7 +155,7 @@ public final class LinuxNative implements Native {
         }else {
             int target = ((to & Native.REGISTER_READ) != 0 ? Constants.EPOLL_IN | Constants.EPOLL_RDHUP : 0) |
                     ((to & Native.REGISTER_WRITE) != 0 ? Constants.EPOLL_OUT : 0);
-            try(Arena arena = Arena.openConfined()) {
+            try(Arena arena = Arena.ofConfined()) {
                 MemorySegment ev = arena.allocate(epollEventLayout);
                 NativeUtil.setInt(ev, eventsOffset, target);
                 NativeUtil.setInt(ev, dataOffset + fdOffset, fd);
@@ -183,7 +184,7 @@ public final class LinuxNative implements Native {
     public void waitForData(Map<Socket, Object> socketMap, MemorySegment buffer, MemorySegment events, int index) {
         int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
         Socket socket = new Socket(NativeUtil.getInt(events, index * eventSize + dataOffset + fdOffset));
-        if((event & (Constants.EPOLL_IN | Constants.EPOLL_ERR | Constants.EPOLL_HUP | Constants.EPOLL_RDHUP)) != 0) {
+        if((event & (Constants.EPOLL_IN | Constants.EPOLL_HUP | Constants.EPOLL_RDHUP)) != 0) {
             Native.shouldRead(socketMap, socket, buffer);
         }else if((event & Constants.EPOLL_OUT) != 0) {
             Native.shouldWrite(socketMap, socket);
@@ -199,7 +200,7 @@ public final class LinuxNative implements Native {
 
     @Override
     public ClientSocket accept(NetworkConfig config, Socket socket) {
-        try(Arena arena = Arena.openConfined()) {
+        try(Arena arena = Arena.ofConfined()) {
             MemorySegment clientAddr = arena.allocate(sockAddrLayout);
             MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, addressLen);
             int socketFd = accept(socket.intValue(), clientAddr, sockAddrSize);
@@ -230,7 +231,7 @@ public final class LinuxNative implements Native {
 
     @Override
     public int getErrOpt(Socket socket) {
-        try(Arena arena = Arena.openConfined()) {
+        try(Arena arena = Arena.ofConfined()) {
             MemorySegment ptr = arena.allocate(ValueLayout.JAVA_INT, -1);
             if (getErrOpt(socket.intValue(), ptr) == -1) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Failed to get Socket's err opt");
@@ -479,7 +480,7 @@ public final class LinuxNative implements Native {
      */
     public int connect(int socket, MemorySegment sockAddr, int size) {
         try{
-            return (int) connectMethodHandle.invokeExact(sockAddr, socket, size);
+            return (int) connectMethodHandle.invokeExact(sockAddr, sockAddr, size);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking connect()", throwable);
         }

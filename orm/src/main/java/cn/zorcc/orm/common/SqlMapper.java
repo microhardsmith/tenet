@@ -7,15 +7,16 @@ import cn.zorcc.common.sql.Mapper;
 import cn.zorcc.common.sql.Page;
 import cn.zorcc.common.sql.Where;
 import cn.zorcc.common.util.SqlUtil;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Slf4j
 public final class SqlMapper<T> implements Mapper<T> {
+    private static final Logger log = LoggerFactory.getLogger(SqlMapper.class);
     private static final Map<Class<?>, Mapper<?>> mapperMap = new ConcurrentHashMap<>();
 
     @SuppressWarnings("unchecked")

@@ -14,15 +14,14 @@ import java.util.List;
 public class PgDecoder implements Decoder {
     @Override
     public Object decode(ReadBuffer readBuffer) {
-        long startIndex = readBuffer.readIndex();
-        long bufferLength = readBuffer.size() - startIndex;
-        if(bufferLength < 5) {
+        long size = readBuffer.size();
+        if(size < 5) {
             return null;
         }
         byte msgType = readBuffer.readByte();
         int msgLength = readBuffer.readInt();
-        if(bufferLength < msgLength + 1) {
-            readBuffer.setReadIndex(startIndex);
+        if(size < msgLength + 1) {
+            readBuffer.setReadIndex(Constants.ZERO);
             return null;
         }
         switch (msgType) {
@@ -164,7 +163,7 @@ public class PgDecoder implements Decoder {
             }
             case PgConstants.AUTH_MD5_PASSWORD -> {
                 checkLength(msgLength, 12);
-                return new PgAuthMd5Msg(readBuffer.readBytes(4));
+                return new PgAuthMd5Msg(readBuffer.readBytes(4L));
             }
             case PgConstants.AUTH_SASL_PASSWORD -> {
                 return decodeSaslPwdMsg(readBuffer, msgLength);

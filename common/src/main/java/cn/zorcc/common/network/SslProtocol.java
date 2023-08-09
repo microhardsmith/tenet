@@ -5,7 +5,8 @@ import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.MemorySegment;
 import java.util.concurrent.locks.Lock;
@@ -14,8 +15,8 @@ import java.util.concurrent.locks.ReentrantLock;
 /**
  *   Protocol using SSL encryption
  */
-@Slf4j
 public class SslProtocol implements Protocol {
+    private static final Logger log = LoggerFactory.getLogger(SslProtocol.class);
     private static final Native n = Native.n;
     private final MemorySegment ssl;
     private final Lock lock = new ReentrantLock();
@@ -38,36 +39,40 @@ public class SslProtocol implements Protocol {
      */
     @Override
     public void canRead(Channel channel, MemorySegment memorySegment) {
+        ReadBuffer rb = null;
         lock.lock();
         try {
-            if((state & SHUTDOWN_WANT_TO_READ) != 0) {
+            if((state & SHUTDOWN_WANT_TO_READ) != Constants.ZERO) {
                 state ^= SHUTDOWN_WANT_TO_READ;
                 performShutdown(channel);
             }
-            if((state & SEND_WANT_TO_READ) != 0) {
+            if((state & SEND_WANT_TO_READ) != Constants.ZERO) {
                 state ^= SEND_WANT_TO_READ;
-                channel.worker().submitWriterTask(new WriterTask(WriterTask.WriterTaskType.WRITABLE, channel, null));
+                channel.worker().submitWriterTask(new WriterTask(WriterTask.WriterTaskType.WRITABLE, channel, null, null));
             }
-            if((state & RECV_WANT_TO_WRITE) == 0) {
+            if((state & RECV_WANT_TO_WRITE) == Constants.ZERO) {
                 int len = (int) memorySegment.byteSize();
                 int received = Openssl.sslRead(ssl, memorySegment, len);
                 if(received <= 0) {
                     int err = Openssl.sslGetErr(ssl, received);
-                    if(err == Constants.SSL_ERROR_WANT_WRITE) {
-                        state &= RECV_WANT_TO_WRITE;
-                    }else if(err == Constants.SSL_ERROR_ZERO_RETURN) {
-                        performShutdown(channel);
-                    }else if(err != Constants.SSL_ERROR_WANT_READ) {
-                        // usually connection reset by peer
-                        log.debug("{} ssl recv err, ssl_err : {}", channel.loc(), err);
-                        channel.close();
+                    switch (err) {
+                        case Constants.SSL_ERROR_WANT_WRITE -> state &= RECV_WANT_TO_WRITE;
+                        case Constants.SSL_ERROR_ZERO_RETURN -> performShutdown(channel);
+                        case Constants.SSL_ERROR_WANT_READ -> {}
+                        default -> {
+                            log.debug("{} ssl recv err, ssl_err : {}", channel.loc(), err);
+                            channel.close();
+                        }
                     }
                 }else {
-                    channel.onReadBuffer(new ReadBuffer(received == len ? memorySegment : memorySegment.asSlice(Constants.ZERO, received)));
+                    rb = new ReadBuffer(received == len ? memorySegment : memorySegment.asSlice(Constants.ZERO, received));
                 }
             }
         }finally {
             lock.unlock();
+        }
+        if (rb != null) {
+            channel.onReadBuffer(rb);
         }
     }
 
@@ -75,90 +80,103 @@ public class SslProtocol implements Protocol {
     public void canWrite(Channel channel) {
         lock.lock();
         try {
-            if((state & SHUTDOWN_WANT_TO_WRITE) != 0) {
+            if((state & SHUTDOWN_WANT_TO_WRITE) != Constants.ZERO) {
                 state ^= SHUTDOWN_WANT_TO_WRITE;
                 performShutdown(channel);
             }
-            if((state & SEND_WANT_TO_WRITE) != 0) {
+            if((state & SEND_WANT_TO_WRITE) != Constants.ZERO) {
                 state ^= SEND_WANT_TO_WRITE;
-                channel.worker().submitWriterTask(new WriterTask(WriterTask.WriterTaskType.WRITABLE, channel, null));
+                channel.worker().submitWriterTask(new WriterTask(WriterTask.WriterTaskType.WRITABLE, channel, null, null));
             }
-            if((state & RECV_WANT_TO_WRITE) != 0) {
+            if((state & RECV_WANT_TO_WRITE) != Constants.ZERO) {
                 state ^= RECV_WANT_TO_WRITE;
-            }
-            if(channel.state().compareAndSet(Native.REGISTER_READ_WRITE, Native.REGISTER_READ)) {
-                n.ctl(channel.worker().mux(), channel.socket(), Native.REGISTER_READ_WRITE, Native.REGISTER_READ);
-            }else {
-                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
         }finally {
             lock.unlock();
+        }
+        if(channel.state().compareAndSet(Native.REGISTER_READ_WRITE, Native.REGISTER_READ)) {
+            n.ctl(channel.worker().mux(), channel.socket(), Native.REGISTER_READ_WRITE, Native.REGISTER_READ);
+        }else {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
     @Override
     public WriteStatus doWrite(Channel channel, WriteBuffer writeBuffer) {
+        boolean registerWrite = false;
         MemorySegment segment = writeBuffer.content();
         int len = (int) segment.byteSize();
         lock.lock();
         try{
             int r = Openssl.sslWrite(ssl, segment, len);
-            if(r <= 0) {
+            if(r <= Constants.ZERO) {
                 int err = Openssl.sslGetErr(ssl, r);
                 if(err == Constants.SSL_ERROR_WANT_WRITE) {
                     state &= SEND_WANT_TO_WRITE;
-                    if(channel.state().compareAndSet(Native.REGISTER_READ, Native.REGISTER_READ_WRITE)) {
-                        n.ctl(channel.worker().mux(), channel.socket(), Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
-                    }
+                    registerWrite = true;
                 }else if(err == Constants.SSL_ERROR_WANT_READ) {
                     state &= SEND_WANT_TO_READ;
                 }else {
                     log.error("Failed to write, ssl err : {}", err);
                     return WriteStatus.FAILURE;
                 }
-                return WriteStatus.PENDING;
+
             }else if(r < len){
-                // only write a part of the segment, wait for next loop
                 return doWrite(channel, writeBuffer.truncate(r));
+            }else {
+                return WriteStatus.SUCCESS;
             }
-            return WriteStatus.SUCCESS;
         }finally {
             lock.unlock();
         }
+        if(registerWrite && channel.state().compareAndSet(Native.REGISTER_READ, Native.REGISTER_READ_WRITE)) {
+            n.ctl(channel.worker().mux(), channel.socket(), Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
+        }
+        return WriteStatus.PENDING;
     }
 
     @Override
     public void doShutdown(Channel channel) {
+        performShutdown(channel);
+    }
+
+    /**
+     *   Perform the actual shutdown operation, this function must be guarded by lock
+     */
+    private void performShutdown(Channel channel) {
+        int r;
+        boolean registerWrite = false, errOccur = false;
         lock.lock();
-        try{
-            performShutdown(channel);
+        try {
+            r = Openssl.sslShutdown(ssl);
+            if(r < 0) {
+                int err = Openssl.sslGetErr(ssl, r);
+                switch (err) {
+                    case Constants.SSL_ERROR_WANT_READ -> state &= SHUTDOWN_WANT_TO_READ;
+                    case Constants.SSL_ERROR_WANT_WRITE -> {
+                        state &= SHUTDOWN_WANT_TO_WRITE;
+                        registerWrite = true;
+                    }
+                    default -> {
+                        log.error("SSL shutdown failed with err : {}", err);
+                        errOccur = true;
+                    }
+                }
+            }
         }finally {
             lock.unlock();
         }
-    }
-
-    private void performShutdown(Channel channel) {
-        int r = Openssl.sslShutdown(ssl);
-        if(r < 0) {
-            int err = Openssl.sslGetErr(ssl, r);
-            if(err == Constants.SSL_ERROR_WANT_READ) {
-                state &= SHUTDOWN_WANT_TO_READ;
-            }else if(err == Constants.SSL_ERROR_WANT_WRITE) {
-                state &= SHUTDOWN_WANT_TO_WRITE;
-                if(channel.state().compareAndSet(Native.REGISTER_READ, Native.REGISTER_READ_WRITE)) {
-                    n.ctl(channel.worker().mux(), channel.socket(), Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
-                }
-            }else {
-                log.error("SSL shutdown failed with err : {}", err);
-            }
-        }else if(r == 1) {
+        if(registerWrite && channel.state().compareAndSet(Native.REGISTER_READ, Native.REGISTER_READ_WRITE)) {
+            n.ctl(channel.worker().mux(), channel.socket(), Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
+        }
+        if(errOccur || r == Constants.ONE) {
             // if openssl.sslShutdown() return 1, then the channel is safe to be closed
             Worker worker = channel.worker();
             if(Thread.currentThread() == worker.reader()) {
                 channel.close();
             }else {
                 // In this case, the channel close operation might be delayed a little bit
-                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, channel));
+                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, null, channel, null));
             }
         }
     }

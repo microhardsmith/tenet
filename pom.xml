@@ -11,8 +11,6 @@
     <module>app</module>
     <module>mint</module>
     <module>gateway</module>
-    <module>metrics</module>
-    <module>storage</module>
     <module>http</module>
   </modules>
   <packaging>pom</packaging>
@@ -41,7 +39,7 @@
 
   <properties>
     <project.version>0.0.1</project.version>
-    <java.version>20</java.version>
+    <java.version>21</java.version>
     <resource.delimiter>@</resource.delimiter>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -50,7 +48,6 @@
     <maven-surefile-plugin.version>3.0.0-M9</maven-surefile-plugin.version>
     <maven-assembly-plugin.version>3.4.2</maven-assembly-plugin.version>
 
-    <lombok.version>1.18.26</lombok.version>
     <slf4j.version>2.0.7</slf4j.version>
     <scram.version>2.1</scram.version>
     <jctools.version>4.0.1</jctools.version>
@@ -67,12 +64,6 @@
   <!-- general dependencies for all modules -->
 
   <dependencies>
-    <!-- lombok -->
-    <dependency>
-      <groupId>org.projectlombok</groupId>
-      <artifactId>lombok</artifactId>
-      <version>${lombok.version}</version>
-    </dependency>
 
     <!-- junit  -->
     <dependency>
@@ -110,17 +101,12 @@
           <compilerArgs>
             <arg>--enable-preview</arg> <!-- enable virtual threads and ffi-->
           </compilerArgs>
-          <source>20</source>
-          <target>20</target>
+          <source>${java.version}</source>
+          <target>${java.version}</target>
           <release>${java.version}</release>
           <meminitial>256m</meminitial>
           <maxmem>2048m</maxmem>
           <annotationProcessorPaths>
-            <path>
-              <groupId>org.projectlombok</groupId>
-              <artifactId>lombok</artifactId>
-              <version>${lombok.version}</version>
-            </path>
             <path>
               <groupId>org.openjdk.jmh</groupId>
               <artifactId>jmh-generator-annprocess</artifactId>

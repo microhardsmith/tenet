@@ -20,7 +20,7 @@ public final class ReservedWriteBufferPolicy implements WriteBufferPolicy {
             throw new FrameworkException(ExceptionType.NATIVE, "MemorySize overflow");
         }
         if(arena == null) {
-            arena = Arena.openConfined();
+            arena = Arena.ofConfined();
         }
         MemorySegment oldSegment = writeBuffer.segment();
         MemorySegment newSegment = arena.allocateArray(ValueLayout.JAVA_BYTE, newLen);

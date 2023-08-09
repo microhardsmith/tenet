@@ -64,6 +64,11 @@ public final class WheelImpl implements Wheel {
     }
 
     @Override
+    public void shutdown() {
+        wheelThread.interrupt();
+    }
+
+    @Override
     public Job addJob(Runnable job, long delay, TimeUnit timeUnit) {
         long delayMillis = timeUnit.toMillis(delay);
         JobImpl result = new JobImpl(Clock.current() + delayMillis, JobImpl.ONCE, job);
@@ -85,11 +90,6 @@ public final class WheelImpl implements Wheel {
             throw new FrameworkException(ExceptionType.WHEEL, Constants.UNREACHED);
         }
         return result;
-    }
-
-    @Override
-    public void shutdown() {
-        wheelThread.interrupt();
     }
 
     /**

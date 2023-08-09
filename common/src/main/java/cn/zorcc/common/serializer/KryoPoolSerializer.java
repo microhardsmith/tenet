@@ -6,8 +6,9 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.util.DefaultInstantiatorStrategy;
-import lombok.extern.slf4j.Slf4j;
 import org.objenesis.strategy.StdInstantiatorStrategy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -15,9 +16,9 @@ import java.io.ByteArrayOutputStream;
 /**
  * 线程安全的kryo序列化,使用对象池分配
  */
-@Slf4j
 public enum KryoPoolSerializer implements Serializer {
     INSTANCE;
+    private static final Logger log = LoggerFactory.getLogger(KryoPoolSerializer.class);
     private final Pool<Kryo> kryoPool;
 
     KryoPoolSerializer() {

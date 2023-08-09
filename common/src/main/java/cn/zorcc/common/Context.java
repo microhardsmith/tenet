@@ -6,7 +6,8 @@ import cn.zorcc.common.event.ContextEvent;
 import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Peer;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.RuntimeMXBean;
@@ -17,8 +18,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  *  应用上下文
  */
-@Slf4j
 public class Context {
+    private static final Logger log = LoggerFactory.getLogger(Context.class);
     /**
      *  初始化标识
      */

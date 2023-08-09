@@ -3,7 +3,8 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.ThreadUtil;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -15,8 +16,8 @@ import java.util.function.Supplier;
 /**
  *   Network master
  */
-@Slf4j
 public final class Master {
+    private static final Logger log = LoggerFactory.getLogger(Master.class);
     private static final Native n = Native.n;
     private final Supplier<Encoder> encoderSupplier;
     private final Supplier<Decoder> decoderSupplier;
@@ -59,8 +60,8 @@ public final class Master {
         return ThreadUtil.platform("Master-" + sequence, () -> {
             int maxEvents = muxConfig.getMaxEvents();
             Thread currentThread = Thread.currentThread();
-            try(Arena arena = Arena.openConfined()){
-                log.debug("Initializing Net master, sequence : {}, listening on port : {}", sequence, loc.port());
+            try(Arena arena = Arena.ofConfined()){
+                log.debug("Master start listening on port : {}, sequence : {}, ", loc.port(), sequence);
                 Timeout timeout = Timeout.of(arena, muxConfig.getMuxTimeout());
                 MemorySegment events = n.createEventsArray(muxConfig, arena);
                 n.bindAndListen(loc, muxConfig, socket);

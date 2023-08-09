@@ -3,14 +3,12 @@ package cn.zorcc.common.sql;
 import cn.zorcc.common.anno.Col;
 import cn.zorcc.common.anno.Del;
 import cn.zorcc.common.anno.Id;
-import lombok.Data;
 
 import java.time.LocalDateTime;
 
 /**
  *   Default design specification for database tables
  */
-@Data
 public abstract class Base implements Filler {
 
     /**
@@ -51,5 +49,37 @@ public abstract class Base implements Filler {
     @Override
     public void onUpdate() {
         setModifiedAt(LocalDateTime.now());
+    }
+
+    public Long id() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public LocalDateTime createdAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime modifiedAt() {
+        return modifiedAt;
+    }
+
+    public void setModifiedAt(LocalDateTime modifiedAt) {
+        this.modifiedAt = modifiedAt;
+    }
+
+    public Boolean deleted() {
+        return deleted;
+    }
+
+    public void setDeleted(Boolean deleted) {
+        this.deleted = deleted;
     }
 }

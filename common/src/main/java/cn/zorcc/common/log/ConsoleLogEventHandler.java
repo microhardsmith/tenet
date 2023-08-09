@@ -1,6 +1,7 @@
 package cn.zorcc.common.log;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.ReservedWriteBufferPolicy;
 import cn.zorcc.common.ResizableByteArray;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
@@ -37,8 +38,8 @@ public final class ConsoleLogEventHandler implements EventHandler<LogEvent> {
         this.print = NativeUtil.methodHandle(symbolLookup, "g_print", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         this.consumers = createConsoleConsumer(logConfig);
         // Console builder should have a larger size than logEvent, the constructor method should be guaranteed to be called in log thread to keep arena safe
-        this.arena = Arena.openConfined();
-        this.buffer = new WriteBuffer(arena.allocateArray(ValueLayout.JAVA_BYTE, logConfig.getBufferSize() << 1));
+        this.arena = Arena.ofConfined();
+        this.buffer = new WriteBuffer(arena.allocateArray(ValueLayout.JAVA_BYTE, logConfig.getBufferSize() << 1), new ReservedWriteBufferPolicy());
     }
 
     /**

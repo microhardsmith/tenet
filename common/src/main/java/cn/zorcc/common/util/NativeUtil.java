@@ -21,7 +21,7 @@ public final class NativeUtil {
     /**
      *   Global NULL pointer, don't use it if the application would modify the actual address of this pointer
      */
-    public static final MemorySegment NULL_POINTER = MemorySegment.ofAddress(0L, ValueLayout.ADDRESS.byteSize(), SegmentScope.global());
+    public static final MemorySegment NULL_POINTER = MemorySegment.ofAddress(0L).reinterpret(Arena.global(), null);
     private static final String OS_NAME = System.getProperty("os.name").toLowerCase();
     private static final OsType ostype;
     private static final int CPU_CORES = Runtime.getRuntime().availableProcessors();
@@ -30,10 +30,6 @@ public final class NativeUtil {
      *   Global dynamic library cache to avoid repeated loading
      */
     private static final Map<String, SymbolLookup> cache = new ConcurrentHashMap<>();
-    /**
-     *   Unbounded pointer layout, this is used for acquiring a pointer from C while the size of the memory is unknown
-     */
-    public static final ValueLayout.OfAddress UNBOUNDED_PTR_LAYOUT = ValueLayout.ADDRESS.withBitAlignment(64L).asUnbounded();
     private static final VarHandle byteHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_BYTE);
     private static final VarHandle shortHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_SHORT);
     private static final VarHandle intHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_INT);
@@ -119,7 +115,7 @@ public final class NativeUtil {
             if(path == null || path.isEmpty()) {
                 throw new FrameworkException(ExceptionType.NATIVE, "Environment variable not found : %s".formatted(i));
             }
-            return SymbolLookup.libraryLookup(path, SegmentScope.global());
+            return SymbolLookup.libraryLookup(path, Arena.global());
         });
     }
 
@@ -237,8 +233,7 @@ public final class NativeUtil {
         throw new FrameworkException(ExceptionType.NATIVE, "Not a valid C style string");
     }
 
-    public static MemorySegment accessPtr(MemorySegment pp) {
-        long address = pp.get(ValueLayout.JAVA_LONG, 0L);
-        return MemorySegment.ofAddress(address, 8, SegmentScope.global());
+    public static MemorySegment accessPtr(MemorySegment pp, Arena arena) {
+        return pp.get(ValueLayout.ADDRESS, 0L).reinterpret(ValueLayout.ADDRESS.byteSize(),arena, null);
     }
 }

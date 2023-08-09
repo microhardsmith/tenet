@@ -43,6 +43,12 @@ public class Constants {
     public static final byte LF = (byte) '\n';
     public static final byte b10 = (byte) '%';
     public static final byte NUT = (byte) '\0';
+    public static final byte B_ZERO = (byte) '0';
+    public static final byte B_NINE = (byte) '9';
+    public static final byte B_A = (byte) 'A';
+    public static final byte B_F = (byte) 'F';
+    public static final byte B_a = (byte) 'a';
+    public static final byte B_f = (byte) 'f';
     public static final String DEFAULT_HTTP_VERSION = "HTTP/1.1";
 
     public static final String TMP_LIB = "tenet-lib";
@@ -296,12 +302,16 @@ public class Constants {
     public static final int SSL_FILETYPE_PEM = 1;
     public static final int SSL_ERROR_WANT_READ = 2;
     public static final int SSL_ERROR_WANT_WRITE = 3;
-    public static final int SSL_ERROR_SYSCALL = 5;
     public static final int SSL_ERROR_ZERO_RETURN = 6;
     public static final long SSL_MODE_ENABLE_PARTIAL_WRITE = 1L;
     public static final long SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER = 2L;
     public static final long SSL_MODE_AUTO_RETRY = 4L;
     public static final int SSL_VERIFY_PEER = 1;
+
+    /**
+     *   http
+     */
+
 
     /**
      *   sqlite

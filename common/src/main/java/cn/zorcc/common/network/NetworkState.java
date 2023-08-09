@@ -1,7 +1,5 @@
 package cn.zorcc.common.network;
 
-import lombok.extern.slf4j.Slf4j;
-
 import java.lang.foreign.MemorySegment;
 import java.util.Map;
 
@@ -12,7 +10,6 @@ import java.util.Map;
  * @param events events array
  * @param socketMap socket node map for established acceptor bindings or channel bindings
  */
-@Slf4j
 public record NetworkState(
         Mux mux,
         MemorySegment events,

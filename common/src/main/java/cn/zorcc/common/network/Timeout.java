@@ -12,7 +12,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  *   Timeout abstraction for different operating system
- *   Using a int val for windows or linux, using a pointer to struct timespec for macOS
+ *   Using a int val for windows or linux
+ *   Using a pointer to struct timespec for macOS
  */
 public record Timeout(
         int val,
@@ -36,7 +37,7 @@ public record Timeout(
                 NativeUtil.setLong(ptr, nsecOffset, TimeUnit.MILLISECONDS.toNanos(milliseconds % 1000));
                 return new Timeout(Integer.MIN_VALUE, ptr);
             }
-            default -> throw new FrameworkException(ExceptionType.NETWORK, "Unrecognized operating system");
+            default -> throw new FrameworkException(ExceptionType.NATIVE, "Unrecognized operating system");
         }
     }
 }
