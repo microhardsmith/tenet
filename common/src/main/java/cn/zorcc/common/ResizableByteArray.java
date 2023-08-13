@@ -3,13 +3,15 @@ package cn.zorcc.common;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Arrays;
 
 /**
  *   A byte array which is resizable like ArrayList,
  *   This is a replacement for ByteArrayOutputStream, without thread-safety
  */
-public final class ResizableByteArray {
+public final class ResizableByteArray extends OutputStream {
     /**
      *   The initial size of the ResizableByteArray will not be changed, after reset the array will fall back to the initialSize
      */
@@ -24,7 +26,7 @@ public final class ResizableByteArray {
     }
 
     public ResizableByteArray() {
-        this(16);
+        this(32);
     }
 
     public void write(byte data) {
@@ -35,6 +37,12 @@ public final class ResizableByteArray {
         writeIndex += 1;
     }
 
+    @Override
+    public void write(int b) throws IOException {
+        write((byte) b);
+    }
+
+    @Override
     public void write(byte[] data, int offset, int len) {
         int nextIndex = writeIndex + len;
         if(nextIndex > array.length) {

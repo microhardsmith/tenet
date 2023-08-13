@@ -126,7 +126,7 @@ public final class Worker {
                     }
                 }
             }finally {
-                log.debug("Exiting Net worker, sequence : {}", sequence);
+                log.debug("Exiting Net reader, sequence : {}", sequence);
                 n.exitMux(mux);
             }
         });
@@ -191,6 +191,8 @@ public final class Worker {
                 processWriterTasks(reservedSegment);
             }catch (InterruptedException i) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Writer thread interrupted", i);
+            }finally {
+                log.debug("Exiting Net writer, sequence : {}", sequence);
             }
         });
     }

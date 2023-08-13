@@ -2,6 +2,9 @@ package cn.zorcc.common.example;
 
 import cn.zorcc.common.Chain;
 import cn.zorcc.common.Clock;
+import cn.zorcc.common.Constants;
+import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.http.*;
 import cn.zorcc.common.log.LoggerConsumer;
 import cn.zorcc.common.network.*;
@@ -17,6 +20,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.Deflater;
 
@@ -25,18 +29,21 @@ import java.util.zip.Deflater;
  */
 public final class HttpServer {
     private static final Logger log = LoggerFactory.getLogger(HttpServer.class);
-    private static final Loc DEFAULT_LOC = new Loc("0.0.0.0", 8001);
+    private static final Loc HTTP_LOC = new Loc("0.0.0.0", 80);
+    private static final Loc HTTPS_LOC = new Loc("0.0.0.0", 443);
+    private static final String PUBLIC_KEY_FILE = "/Users/liuxichen/workspace/ca/server.crt";
+    private static final String PRIVATE_KEY_FILE = "/Users/liuxichen/workspace/ca/server.key";
     public static void main(String[] args) {
         long nano = Clock.nano();
         Chain chain = Chain.chain();
         chain.add(Wheel.wheel());
         chain.add(new LoggerConsumer());
 
-        //chain.add(createHttpNet());
+        chain.add(createHttpNet());
 
         //chain.add(createHttpsNet());
 
-        chain.add(createHttpAndHttpsNet());
+        //chain.add(createHttpAndHttpsNet());
         chain.run();
 
         long jvmTime = ManagementFactory.getRuntimeMXBean().getUptime();
@@ -47,7 +54,7 @@ public final class HttpServer {
         NetworkConfig networkConfig = new NetworkConfig();
         Net net = new Net(networkConfig);
         MuxConfig muxConfig = new MuxConfig();
-        net.addMaster(HttpServerEncoder::new, HttpServerDecoder::new, HttpTestHandler::new, TcpConnector::new, DEFAULT_LOC, muxConfig);
+        net.addMaster(HttpServerEncoder::new, HttpServerDecoder::new, HttpTestHandler::new, TcpConnector::new, HTTP_LOC, muxConfig);
         for(int i = 0; i < 4; i++) {
             net.addWorker(networkConfig, muxConfig);
         }
@@ -56,12 +63,12 @@ public final class HttpServer {
 
     public static Net createHttpsNet() {
         NetworkConfig networkConfig = new NetworkConfig();
-        networkConfig.setEnableSsl(Boolean.TRUE);
-        networkConfig.setPublicKeyFile("C:/openresty-1.21.4.1-win64/conf/zorcc.cn+1.pem");
-        networkConfig.setPrivateKeyFile("C:/openresty-1.21.4.1-win64/conf/zorcc.cn+1-key.pem");
+        networkConfig.setEnableSsl(true);
+        networkConfig.setPublicKeyFile(PUBLIC_KEY_FILE);
+        networkConfig.setPrivateKeyFile(PRIVATE_KEY_FILE);
         Net net = new Net(networkConfig);
         MuxConfig muxConfig = new MuxConfig();
-        net.addMaster(HttpServerEncoder::new, HttpServerDecoder::new, HttpTestHandler::new, TcpConnector::new, DEFAULT_LOC, muxConfig);
+        net.addMaster(HttpServerEncoder::new, HttpServerDecoder::new, HttpTestHandler::new, net.sslServerConnectorSupplier(), HTTPS_LOC, muxConfig);
         for(int i = 0; i < 4; i++) {
             net.addWorker(networkConfig, muxConfig);
         }
@@ -70,15 +77,13 @@ public final class HttpServer {
 
     public static Net createHttpAndHttpsNet() {
         NetworkConfig networkConfig = new NetworkConfig();
-        networkConfig.setEnableSsl(Boolean.TRUE);
-        networkConfig.setPublicKeyFile("C:/openresty-1.21.4.1-win64/conf/zorcc.cn+1.pem");
-        networkConfig.setPrivateKeyFile("C:/openresty-1.21.4.1-win64/conf/zorcc.cn+1-key.pem");
+        networkConfig.setEnableSsl(true);
+        networkConfig.setPublicKeyFile(PUBLIC_KEY_FILE);
+        networkConfig.setPrivateKeyFile(PRIVATE_KEY_FILE);
         Net net = new Net(networkConfig);
         MuxConfig muxConfig = new MuxConfig();
-        Loc tcpLoc = new Loc("0.0.0.0", 8002);
-        Loc sslLoc = new Loc("0.0.0.0", 8003);
-        net.addMaster(HttpServerEncoder::new, HttpServerDecoder::new, HttpTestHandler::new, TcpConnector::new, tcpLoc, muxConfig);
-        net.addMaster(HttpServerEncoder::new, HttpServerDecoder::new, HttpTestHandler::new, net.sslServerConnectorSupplier(), sslLoc, muxConfig);
+        net.addMaster(HttpServerEncoder::new, HttpServerDecoder::new, HttpTestHandler::new, TcpConnector::new, HTTP_LOC, muxConfig);
+        net.addMaster(HttpServerEncoder::new, HttpServerDecoder::new, HttpTestHandler::new, net.sslServerConnectorSupplier(), HTTPS_LOC, muxConfig);
         for(int i = 0; i < 4; i++) {
             net.addWorker(networkConfig, muxConfig);
         }
@@ -94,6 +99,7 @@ public final class HttpServer {
                 """.getBytes(StandardCharsets.UTF_8);
         private static final ZoneId gmt = ZoneId.of("GMT");
         private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss z", Locale.ENGLISH).withZone(gmt);
+        private final ThreadFactory threadFactory = Thread.ofVirtual().name("http-", 0).factory();
         @Override
         public void onConnected(Channel channel) {
             log.debug("Http connection established");
@@ -102,18 +108,24 @@ public final class HttpServer {
         @Override
         public void onRecv(Channel channel, Object data) {
             if(data instanceof HttpRequest httpRequest) {
-                HttpResponse httpResponse = new HttpResponse();
-                HttpHeader headers = httpResponse.getHeaders();
-                headers.put("Content-Type", "application/json; charset=utf-8");
-                headers.put("Date", formatter.format(ZonedDateTime.now(gmt)));
-                if(httpRequest.getHttpHeader().get(HttpHeader.K_ACCEPT_ENCODING).contains("gzip")) {
-                    headers.put(HttpHeader.K_CONTENT_ENCODING, HttpHeader.V_GZIP);
-                    httpResponse.setData(CompressUtil.compressUsingGzip(body, Deflater.BEST_COMPRESSION));
-                }else {
-                    httpResponse.setData(body);
-                }
-                channel.send(httpResponse);
+                threadFactory.newThread(() -> onHttpRequest(channel, httpRequest)).start();
+            }else {
+                throw new FrameworkException(ExceptionType.HTTP, Constants.UNREACHED);
             }
+        }
+
+        private void onHttpRequest(Channel channel, HttpRequest httpRequest) {
+            HttpResponse httpResponse = new HttpResponse();
+            HttpHeader headers = httpResponse.getHeaders();
+            headers.put("Content-Type", "application/json; charset=utf-8");
+            headers.put("Date", formatter.format(ZonedDateTime.now(gmt)));
+            if(httpRequest.getHttpHeader().get(HttpHeader.K_ACCEPT_ENCODING).contains("gzip")) {
+                headers.put(HttpHeader.K_CONTENT_ENCODING, HttpHeader.V_GZIP);
+                httpResponse.setData(CompressUtil.compressUsingGzip(body, Deflater.BEST_COMPRESSION));
+            }else {
+                httpResponse.setData(body);
+            }
+            channel.send(httpResponse);
         }
 
         @Override

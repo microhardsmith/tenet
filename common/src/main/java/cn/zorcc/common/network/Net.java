@@ -56,7 +56,7 @@ public final class Net implements LifeCycle {
         if(NativeUtil.checkNullPointer(sslClientCtx)) {
             throw new FrameworkException(ExceptionType.NETWORK, "SSL client initialization failed");
         }
-        if(Boolean.TRUE.equals(networkConfig.getEnableSsl())) {
+        if(networkConfig.getEnableSsl()) {
             this.sslServerCtx = Openssl.sslCtxNew(Openssl.tlsServerMethod());
             if(NativeUtil.checkNullPointer(sslServerCtx)) {
                 throw new FrameworkException(ExceptionType.NETWORK, "SSL server initialization failed");

@@ -61,7 +61,7 @@ public final class Openssl {
             MethodHandle majorVersionMethod = NativeUtil.methodHandle(crypto, "OPENSSL_version_major", FunctionDescriptor.of(ValueLayout.JAVA_INT));
             MethodHandle minorVersionMethod = NativeUtil.methodHandle(crypto, "OPENSSL_version_minor", FunctionDescriptor.of(ValueLayout.JAVA_INT));
             MethodHandle patchVersionMethod = NativeUtil.methodHandle(crypto, "OPENSSL_version_patch", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-            version = "OpenSSL version %d.%d.%d".formatted((int) majorVersionMethod.invokeExact(),(int) minorVersionMethod.invokeExact(),(int) patchVersionMethod.invokeExact());
+            version = "OpenSSL version %d.%d.%d".formatted((int) majorVersionMethod.invokeExact(), (int) minorVersionMethod.invokeExact(), (int) patchVersionMethod.invokeExact());
         }catch (Throwable throwable) {
             // should never happen
             throw new FrameworkException(ExceptionType.NATIVE, "Failed to initialize constants", throwable);

@@ -16,5 +16,6 @@ public enum ExceptionType {
     CLUSTER,
     AUTH,
     FILE,
-    LOG
+    LOG,
+    COMPRESS
 }

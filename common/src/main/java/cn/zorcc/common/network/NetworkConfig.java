@@ -21,7 +21,7 @@ public class NetworkConfig {
     /**
      *   服务端是否开启TLS加密,默认不开启
      */
-    private Boolean enableSsl = Boolean.FALSE;
+    private boolean enableSsl = false;
     /**
      *   服务端证书公钥路径,必须为绝对路径
      */
@@ -75,7 +75,7 @@ public class NetworkConfig {
         this.mapSize = mapSize;
     }
 
-    public Boolean getEnableSsl() {
+    public boolean getEnableSsl() {
         return enableSsl;
     }
 
