@@ -7,6 +7,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ *   Http header abstraction backed by a hashmap
+ */
 public final class HttpHeader {
     public static final String K_CONTENT_TYPE = "Content-Type";
     public static final String V_JSON_TYPE = "application/json";

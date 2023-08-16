@@ -16,25 +16,25 @@ import java.lang.invoke.MethodHandle;
 import java.util.concurrent.TimeUnit;
 
 /**
- *   Class that interact with underlying OpenSSL library
- *   To update current OpenSSL version, just replace the dynamic library under /resources/ssl
- *   On success, the functions return 1. Otherwise check out the error stack to find out the reason.
+ *   Class that interact with underlying SSL library, currently only openssl and libressl are tested
+ *   It's recommended to use openssl in Windows and Linux, use libressl in macOS
  */
-public final class Openssl {
-    private static final Logger log = LoggerFactory.getLogger(Openssl.class);
+public final class Ssl {
+    private static final Logger log = LoggerFactory.getLogger(Ssl.class);
     /**
      *   Environment variable that must be configured when launching the application
      */
     public static final String CRYPTO_LIB = "crypto";
     public static final String SSL_LIB = "ssl";
+    @SuppressWarnings("unused")
+    private static final SymbolLookup crypto;
+    private static final SymbolLookup ssl;
     /**
      *   These two variable are hard-coded definition from ssl.h, since SSL_CTX_set_mode and SSL_CTX_clear_mode are macros, we can't directly use it
      */
     private static final int SSL_CTRL_MODE = 33;
     private static final int SSL_CTRL_CLEAR_MODE = 78;
-    private static final String version;
-    private static final MethodHandle tlsServerMethod;
-    private static final MethodHandle tlsClientMethod;
+    private static final MethodHandle tlsMethod;
     private static final MethodHandle sslCtxNewMethod;
     private static final MethodHandle sslCtxUseCertificateFileMethod;
     private static final MethodHandle sslCtxUsePrivateKeyFileMethod;
@@ -52,23 +52,12 @@ public final class Openssl {
     private static final MethodHandle sslCtxFreeMethod;
     private static final MethodHandle sslGetErrMethod;
 
-
     static {
         long nano = Clock.nano();
-        SymbolLookup crypto = NativeUtil.loadLibrary(CRYPTO_LIB);
-        SymbolLookup ssl = NativeUtil.loadLibrary(SSL_LIB);
-        try{
-            MethodHandle majorVersionMethod = NativeUtil.methodHandle(crypto, "OPENSSL_version_major", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-            MethodHandle minorVersionMethod = NativeUtil.methodHandle(crypto, "OPENSSL_version_minor", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-            MethodHandle patchVersionMethod = NativeUtil.methodHandle(crypto, "OPENSSL_version_patch", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-            version = "OpenSSL version %d.%d.%d".formatted((int) majorVersionMethod.invokeExact(), (int) minorVersionMethod.invokeExact(), (int) patchVersionMethod.invokeExact());
-        }catch (Throwable throwable) {
-            // should never happen
-            throw new FrameworkException(ExceptionType.NATIVE, "Failed to initialize constants", throwable);
-        }
+        crypto = NativeUtil.loadLibrary(CRYPTO_LIB);
+        ssl = NativeUtil.loadLibrary(SSL_LIB);
 
-        tlsServerMethod = NativeUtil.methodHandle(ssl, "TLS_server_method", FunctionDescriptor.of(ValueLayout.ADDRESS));
-        tlsClientMethod = NativeUtil.methodHandle(ssl, "TLS_client_method", FunctionDescriptor.of(ValueLayout.ADDRESS));
+        tlsMethod = NativeUtil.methodHandle(ssl, "TLS_method", FunctionDescriptor.of(ValueLayout.ADDRESS));
         sslCtxNewMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_new", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         sslCtxUseCertificateFileMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_use_certificate_file", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         sslCtxUsePrivateKeyFileMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_use_PrivateKey_file", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
@@ -85,30 +74,18 @@ public final class Openssl {
         sslFreeMethod = NativeUtil.methodHandle(ssl, "SSL_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         sslCtxFreeMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         sslGetErrMethod = NativeUtil.methodHandle(ssl, "SSL_get_error", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        log.info("Initializing OpenSSL successfully, version : {}, time consuming : {} ms", version, TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
+        log.info("Initializing SSL library successfully, time consuming : {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
     }
 
-    private Openssl() {
+    private Ssl() {
         throw new UnsupportedOperationException();
     }
 
-    public static String version() {
-        return version;
-    }
-
-    public static MemorySegment tlsServerMethod() {
+    public static MemorySegment tlsMethod() {
         try{
-            return (MemorySegment) tlsServerMethod.invokeExact();
+            return (MemorySegment) tlsMethod.invokeExact();
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking tlsServerMethod()", throwable);
-        }
-    }
-
-    public static MemorySegment tlsClientMethod() {
-        try{
-            return (MemorySegment) tlsClientMethod.invokeExact();
-        }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking tlsClientMethod()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking tlsMethod()", throwable);
         }
     }
 

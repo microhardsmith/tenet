@@ -13,6 +13,10 @@ import org.slf4j.LoggerFactory;
 import java.lang.foreign.Arena;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ *   Network channel abstraction, could only get evolved from acceptor
+ *   in channel state, the socket read and write operation would be taken over by Encoder, Decoder and Handler using Protocol
+ */
 public final class Channel {
     private static final Logger log = LoggerFactory.getLogger(Channel.class);
     private static final Native n = Native.n;

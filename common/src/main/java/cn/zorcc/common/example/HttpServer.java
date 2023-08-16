@@ -119,7 +119,8 @@ public final class HttpServer {
             HttpHeader headers = httpResponse.getHeaders();
             headers.put("Content-Type", "application/json; charset=utf-8");
             headers.put("Date", formatter.format(ZonedDateTime.now(gmt)));
-            if(httpRequest.getHttpHeader().get(HttpHeader.K_ACCEPT_ENCODING).contains("gzip")) {
+            String acceptEncoding = httpRequest.getHttpHeader().get(HttpHeader.K_ACCEPT_ENCODING);
+            if(acceptEncoding != null && acceptEncoding.contains("gzip")) {
                 headers.put(HttpHeader.K_CONTENT_ENCODING, HttpHeader.V_GZIP);
                 httpResponse.setData(CompressUtil.compressUsingGzip(body, Deflater.BEST_COMPRESSION));
             }else {

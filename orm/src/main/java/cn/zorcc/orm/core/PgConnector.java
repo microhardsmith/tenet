@@ -35,7 +35,7 @@ public class PgConnector implements Connector {
     public void doClose(Acceptor acceptor) {
         MemorySegment ssl = sslReference.getAndSet(null);
         if(!NativeUtil.checkNullPointer(ssl)) {
-            Openssl.sslFree(ssl);
+            Ssl.sslFree(ssl);
         }
         n.closeSocket(acceptor.socket());
     }
@@ -53,9 +53,9 @@ public class PgConnector implements Connector {
                 byte b = NativeUtil.getByte(segment, 0L);
                 if(b == PgConstants.SSL_OK) {
                     MemorySegment ssl = net.newClientSsl();
-                    int r = Openssl.sslSetFd(ssl, acceptor.socket().intValue());
+                    int r = Ssl.sslSetFd(ssl, acceptor.socket().intValue());
                     if(r == 0) {
-                        log.error("Failed to set fd for ssl, err : {}", Openssl.sslGetErr(ssl, r));
+                        log.error("Failed to set fd for ssl, err : {}", Ssl.sslGetErr(ssl, r));
                         acceptor.close();
                     }else {
                         sslReference.set(ssl);
@@ -97,11 +97,11 @@ public class PgConnector implements Connector {
     }
 
     private void doSslConnect(Acceptor acceptor, MemorySegment ssl) {
-        int c = Openssl.sslConnect(ssl);
+        int c = Ssl.sslConnect(ssl);
         if(c == 1) {
             acceptor.toChannel(new SslProtocol(ssl));
         }else {
-            int err = Openssl.sslGetErr(ssl, c);
+            int err = Ssl.sslGetErr(ssl, c);
             if(err == Constants.SSL_ERROR_WANT_READ) {
                 status.set(SSL_WANT_READ);
             }else if(err == Constants.SSL_ERROR_WANT_WRITE) {

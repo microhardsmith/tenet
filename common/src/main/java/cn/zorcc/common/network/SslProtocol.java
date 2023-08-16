@@ -52,9 +52,9 @@ public class SslProtocol implements Protocol {
             }
             if((state & RECV_WANT_TO_WRITE) == Constants.ZERO) {
                 int len = (int) memorySegment.byteSize();
-                int received = Openssl.sslRead(ssl, memorySegment, len);
+                int received = Ssl.sslRead(ssl, memorySegment, len);
                 if(received <= 0) {
-                    int err = Openssl.sslGetErr(ssl, received);
+                    int err = Ssl.sslGetErr(ssl, received);
                     switch (err) {
                         case Constants.SSL_ERROR_WANT_WRITE -> state &= RECV_WANT_TO_WRITE;
                         case Constants.SSL_ERROR_ZERO_RETURN -> performShutdown(channel);
@@ -108,9 +108,9 @@ public class SslProtocol implements Protocol {
         int len = (int) segment.byteSize();
         lock.lock();
         try{
-            int r = Openssl.sslWrite(ssl, segment, len);
+            int r = Ssl.sslWrite(ssl, segment, len);
             if(r <= Constants.ZERO) {
-                int err = Openssl.sslGetErr(ssl, r);
+                int err = Ssl.sslGetErr(ssl, r);
                 if(err == Constants.SSL_ERROR_WANT_WRITE) {
                     state &= SEND_WANT_TO_WRITE;
                     registerWrite = true;
@@ -148,9 +148,9 @@ public class SslProtocol implements Protocol {
         boolean registerWrite = false, errOccur = false;
         lock.lock();
         try {
-            r = Openssl.sslShutdown(ssl);
+            r = Ssl.sslShutdown(ssl);
             if(r < 0) {
-                int err = Openssl.sslGetErr(ssl, r);
+                int err = Ssl.sslGetErr(ssl, r);
                 switch (err) {
                     case Constants.SSL_ERROR_WANT_READ -> state &= SHUTDOWN_WANT_TO_READ;
                     case Constants.SSL_ERROR_WANT_WRITE -> {
@@ -183,7 +183,7 @@ public class SslProtocol implements Protocol {
 
     @Override
     public void doClose(Channel channel) {
-        Openssl.sslFree(ssl);
+        Ssl.sslFree(ssl);
         n.closeSocket(channel.socket());
     }
 }

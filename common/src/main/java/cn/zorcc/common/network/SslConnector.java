@@ -29,7 +29,7 @@ public class SslConnector implements Connector {
 
     @Override
     public void doClose(Acceptor acceptor) {
-        Openssl.sslFree(ssl);
+        Ssl.sslFree(ssl);
         n.closeSocket(acceptor.socket());
     }
 
@@ -52,11 +52,11 @@ public class SslConnector implements Connector {
             Socket socket = acceptor.socket();
             int errOpt = n.getErrOpt(acceptor.socket());
             if(errOpt == 0) {
-                int r = Openssl.sslSetFd(ssl, socket.intValue());
+                int r = Ssl.sslSetFd(ssl, socket.intValue());
                 if(r == 1) {
                     doHandshake(acceptor);
                 }else {
-                    log.error("Failed to set fd for ssl, err : {}", Openssl.sslGetErr(ssl, r));
+                    log.error("Failed to set fd for ssl, err : {}", Ssl.sslGetErr(ssl, r));
                     acceptor.close();
                 }
             }else {
@@ -95,11 +95,11 @@ public class SslConnector implements Connector {
      *   Performing actual SSL handshake
      */
     private void doHandshake(Acceptor acceptor) {
-        int r = clientSide ? Openssl.sslConnect(ssl) : Openssl.sslAccept(ssl);
+        int r = clientSide ? Ssl.sslConnect(ssl) : Ssl.sslAccept(ssl);
         if(r == 1) {
             acceptor.toChannel(new SslProtocol(ssl));
         }else if(r <= 0) {
-            int err = Openssl.sslGetErr(ssl, r);
+            int err = Ssl.sslGetErr(ssl, r);
             if(err == Constants.SSL_ERROR_WANT_READ) {
                 status.set(WANT_READ);
                 registerState(acceptor, Native.REGISTER_READ);

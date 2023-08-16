@@ -49,33 +49,33 @@ public final class Net implements LifeCycle {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.SINGLETON_MSG);
         }
         this.networkConfig = networkConfig;
-        this.sslClientCtx = Openssl.sslCtxNew(Openssl.tlsClientMethod());
-        Openssl.configureCtx(sslClientCtx);
-        Openssl.setVerify(sslClientCtx, Constants.SSL_VERIFY_PEER, NativeUtil.NULL_POINTER);
-        this.sslClientConnectorSupplier =  () -> new SslConnector(true, Openssl.sslNew(sslClientCtx));
+        this.sslClientCtx = Ssl.sslCtxNew(Ssl.tlsMethod());
+        Ssl.configureCtx(sslClientCtx);
+        Ssl.setVerify(sslClientCtx, Constants.SSL_VERIFY_PEER, NativeUtil.NULL_POINTER);
+        this.sslClientConnectorSupplier =  () -> new SslConnector(true, Ssl.sslNew(sslClientCtx));
         if(NativeUtil.checkNullPointer(sslClientCtx)) {
             throw new FrameworkException(ExceptionType.NETWORK, "SSL client initialization failed");
         }
         if(networkConfig.getEnableSsl()) {
-            this.sslServerCtx = Openssl.sslCtxNew(Openssl.tlsServerMethod());
+            this.sslServerCtx = Ssl.sslCtxNew(Ssl.tlsMethod());
             if(NativeUtil.checkNullPointer(sslServerCtx)) {
                 throw new FrameworkException(ExceptionType.NETWORK, "SSL server initialization failed");
             }
-            Openssl.configureCtx(sslServerCtx);
+            Ssl.configureCtx(sslServerCtx);
             try(Arena arena = Arena.ofConfined()) {
                 MemorySegment publicKey = NativeUtil.allocateStr(arena, networkConfig.getPublicKeyFile());
-                if (Openssl.setPublicKey(sslServerCtx, publicKey, Constants.SSL_FILETYPE_PEM) <= 0) {
+                if (Ssl.setPublicKey(sslServerCtx, publicKey, Constants.SSL_FILETYPE_PEM) <= 0) {
                     throw new FrameworkException(ExceptionType.NETWORK, "SSL server public key err");
                 }
                 MemorySegment privateKey = NativeUtil.allocateStr(arena, networkConfig.getPrivateKeyFile());
-                if (Openssl.setPrivateKey(sslServerCtx, privateKey, Constants.SSL_FILETYPE_PEM) <= 0) {
+                if (Ssl.setPrivateKey(sslServerCtx, privateKey, Constants.SSL_FILETYPE_PEM) <= 0) {
                     throw new FrameworkException(ExceptionType.NETWORK, "SSL server private key err");
                 }
-                if (Openssl.checkPrivateKey(sslServerCtx) <= 0) {
+                if (Ssl.checkPrivateKey(sslServerCtx) <= 0) {
                     throw new FrameworkException(ExceptionType.NETWORK, "SSL server private key and public key doesn't match");
                 }
             }
-            this.sslServerConnectorSupplier = () -> new SslConnector(false, Openssl.sslNew(sslServerCtx));
+            this.sslServerConnectorSupplier = () -> new SslConnector(false, Ssl.sslNew(sslServerCtx));
         }else {
             this.sslServerCtx = null;
             this.sslServerConnectorSupplier = () -> {
@@ -125,7 +125,7 @@ public final class Net implements LifeCycle {
      *   Create a new client-side ssl object
      */
     public MemorySegment newClientSsl() {
-        return Openssl.sslNew(sslClientCtx);
+        return Ssl.sslNew(sslClientCtx);
     }
 
     /**
@@ -225,9 +225,9 @@ public final class Net implements LifeCycle {
                 worker.writer().join();
             }
             n.exit();
-            Openssl.sslCtxFree(sslClientCtx);
+            Ssl.sslCtxFree(sslClientCtx);
             if(sslServerCtx != null) {
-                Openssl.sslCtxFree(sslServerCtx);
+                Ssl.sslCtxFree(sslServerCtx);
             }
             log.debug("Exiting Net gracefully, cost : {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
         }else {
