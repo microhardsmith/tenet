@@ -15,13 +15,13 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- *  Helper class when need to reach C native methods
+ *  Native Helper class for accessing native memory and methods
  */
 public final class NativeUtil {
     /**
      *   Global NULL pointer, don't use it if the application would modify the actual address of this pointer
      */
-    public static final MemorySegment NULL_POINTER = MemorySegment.ofAddress(0L).reinterpret(Arena.global(), null);
+    public static final MemorySegment NULL_POINTER = MemorySegment.ofAddress(0L).reinterpret(ValueLayout.ADDRESS.byteSize(), Arena.global(), null);
     private static final String OS_NAME = System.getProperty("os.name").toLowerCase();
     private static final OsType ostype;
     private static final int CPU_CORES = Runtime.getRuntime().availableProcessors();
@@ -75,18 +75,6 @@ public final class NativeUtil {
 
     public static OsType ostype() {
         return ostype;
-    }
-
-    public static boolean isLinux() {
-        return ostype == OsType.Linux;
-    }
-
-    public static boolean isWindows() {
-        return ostype == OsType.Windows;
-    }
-
-    public static boolean isMacos() {
-        return ostype == OsType.MacOS;
     }
 
     /**
@@ -234,6 +222,6 @@ public final class NativeUtil {
     }
 
     public static MemorySegment accessPtr(MemorySegment pp, Arena arena) {
-        return pp.get(ValueLayout.ADDRESS, 0L).reinterpret(ValueLayout.ADDRESS.byteSize(),arena, null);
+        return pp.get(ValueLayout.ADDRESS, 0L).reinterpret(ValueLayout.ADDRESS.byteSize(), arena, null);
     }
 }

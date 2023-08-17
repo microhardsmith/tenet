@@ -39,11 +39,11 @@ public final class HttpServer {
         chain.add(Wheel.wheel());
         chain.add(new LoggerConsumer());
 
-        chain.add(createHttpNet());
+        //chain.add(createHttpNet());
 
         //chain.add(createHttpsNet());
 
-        //chain.add(createHttpAndHttpsNet());
+        chain.add(createHttpAndHttpsNet());
         chain.run();
 
         long jvmTime = ManagementFactory.getRuntimeMXBean().getUptime();
@@ -108,7 +108,9 @@ public final class HttpServer {
         @Override
         public void onRecv(Channel channel, Object data) {
             if(data instanceof HttpRequest httpRequest) {
-                threadFactory.newThread(() -> onHttpRequest(channel, httpRequest)).start();
+                // TODO 好像有线程安全问题，只有在多个worker时的情况下会触发
+//                threadFactory.newThread(() -> onHttpRequest(channel, httpRequest)).start();
+                onHttpRequest(channel, httpRequest);
             }else {
                 throw new FrameworkException(ExceptionType.HTTP, Constants.UNREACHED);
             }

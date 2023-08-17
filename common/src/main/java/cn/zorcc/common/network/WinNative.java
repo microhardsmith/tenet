@@ -166,6 +166,11 @@ public final class WinNative implements Native {
     }
 
     @Override
+    public int interruptCode() {
+        return Constants.WSAEINTR;
+    }
+
+    @Override
     public MemorySegment createSockAddr(Loc loc, Arena arena) {
         MemorySegment r = arena.allocate(sockAddrLayout);
         MemorySegment ip = NativeUtil.allocateStr(arena, loc.ip(), addressLen);

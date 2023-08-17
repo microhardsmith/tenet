@@ -276,6 +276,12 @@ public class Constants {
     public static final String DYNAMIC_SQL_ERR = "Err occurred in dynamic sql";
 
     /**
+     *   errno
+     */
+    public static final int EINTR = 4;
+    public static final int WSAEINTR = 10004;
+
+    /**
      *  epoll
      */
     public static final int EPOLL_IN = 1;
@@ -307,10 +313,6 @@ public class Constants {
     public static final long SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER = 2L;
     public static final long SSL_MODE_AUTO_RETRY = 4L;
     public static final int SSL_VERIFY_PEER = 1;
-
-    /**
-     *   http
-     */
 
 
     /**

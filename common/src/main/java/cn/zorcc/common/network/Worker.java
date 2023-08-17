@@ -113,9 +113,13 @@ public final class Worker {
                 }
                 for( ; ; ) {
                     final int count = n.multiplexingWait(mux, events, maxEvents, timeout);
-                    if(count == -1) {
-                        log.error("Mux wait failed with errno : {}", n.errno());
-                        continue;
+                    if(count < Constants.ZERO) {
+                        int errno = n.errno();
+                        if(errno == n.interruptCode()) {
+                            continue;
+                        }else {
+                            throw new FrameworkException(ExceptionType.NETWORK, "Multiplexing wait failed with errno : %d".formatted(errno));
+                        }
                     }
                     if(processReaderTasks()) {
                         break ;

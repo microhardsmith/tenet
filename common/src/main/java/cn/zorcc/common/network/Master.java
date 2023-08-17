@@ -1,6 +1,8 @@
 package cn.zorcc.common.network;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.ThreadUtil;
 import org.slf4j.Logger;
@@ -68,9 +70,13 @@ public final class Master {
                 n.ctl(mux, socket, Native.REGISTER_NONE, Native.REGISTER_READ);
                 while (!currentThread.isInterrupted()) {
                     int count = n.multiplexingWait(mux, events, maxEvents, timeout);
-                    if(count == -1) {
-                        log.error("Mux wait failed with errno : {}", n.errno());
-                        continue;
+                    if(count < Constants.ZERO) {
+                        int errno = n.errno();
+                        if(errno == n.interruptCode()) {
+                            continue;
+                        }else {
+                            throw new FrameworkException(ExceptionType.NETWORK, "Multiplexing wait failed with errno : %d".formatted(errno));
+                        }
                     }
                     for(int index = 0; index < count; ++index) {
                         ClientSocket clientSocket = n.waitForAccept(networkConfig, socket, events, index);

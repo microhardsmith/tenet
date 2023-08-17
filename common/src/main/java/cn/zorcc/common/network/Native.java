@@ -26,6 +26,11 @@ public sealed interface Native permits WinNative, LinuxNative, MacNative {
     int sendBlockCode();
 
     /**
+     *   Return err code which means the underlying function all was interrupted
+     */
+    int interruptCode();
+
+    /**
      *   Create sockAddr struct according to loc using target arena
      */
     MemorySegment createSockAddr(Loc loc, Arena arena);

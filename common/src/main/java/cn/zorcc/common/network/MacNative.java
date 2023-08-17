@@ -84,6 +84,11 @@ public final class MacNative implements Native {
     }
 
     @Override
+    public int interruptCode() {
+        return Constants.EINTR;
+    }
+
+    @Override
     public MemorySegment createSockAddr(Loc loc, Arena arena) {
         MemorySegment r = arena.allocate(sockAddrLayout);
         MemorySegment ip = NativeUtil.allocateStr(arena, loc.ip(), addressLen);
