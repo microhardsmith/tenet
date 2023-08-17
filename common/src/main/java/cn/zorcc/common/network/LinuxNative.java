@@ -23,10 +23,10 @@ public final class LinuxNative implements Native {
      *  Corresponding to union epoll_data in epoll.h
      */
     private static final MemoryLayout epollDataLayout = MemoryLayout.unionLayout(
-            ValueLayout.ADDRESS.withName("ptr"),
-            ValueLayout.JAVA_INT.withName("fd"),
-            ValueLayout.JAVA_INT.withName("u32"),
-            ValueLayout.JAVA_LONG.withName("u64")
+            ValueLayout.ADDRESS_UNALIGNED.withName("ptr"),
+            ValueLayout.JAVA_INT_UNALIGNED.withName("fd"),
+            ValueLayout.JAVA_INT_UNALIGNED.withName("u32"),
+            ValueLayout.JAVA_LONG_UNALIGNED.withName("u64")
     );
     /**
      *  Corresponding to struct epoll_event in epoll.h
@@ -34,7 +34,7 @@ public final class LinuxNative implements Native {
      *  so there is no need for a padding layout
      */
     private static final MemoryLayout epollEventLayout = MemoryLayout.structLayout(
-            ValueLayout.JAVA_INT.withName("events"),
+            ValueLayout.JAVA_INT_UNALIGNED.withName("events"),
             epollDataLayout.withName("data")
     );
     private static final long eventSize = epollEventLayout.byteSize();
@@ -485,7 +485,7 @@ public final class LinuxNative implements Native {
      */
     public int connect(int socket, MemorySegment sockAddr, int size) {
         try{
-            return (int) connectMethodHandle.invokeExact(sockAddr, sockAddr, size);
+            return (int) connectMethodHandle.invokeExact(socket, sockAddr, size);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking connect()", throwable);
         }
@@ -518,9 +518,9 @@ public final class LinuxNative implements Native {
      */
     public long send(int socket, MemorySegment buf, long len) {
         try{
-            return (int) sendMethodHandle.invokeExact(socket, buf, len);
+            return (long) sendMethodHandle.invokeExact(socket, buf, len);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking recv()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking send()", throwable);
         }
     }
 
