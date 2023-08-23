@@ -25,17 +25,16 @@ public final class MacNative implements Native {
      *  Corresponding to struct kevent in event.h
      */
     private static final MemoryLayout keventLayout = MemoryLayout.structLayout(
-            ValueLayout.JAVA_LONG.withName("ident"),
-            ValueLayout.JAVA_SHORT.withName("filter"),
-            ValueLayout.JAVA_SHORT.withName("flags"),
-            ValueLayout.JAVA_INT.withName("fflags"),
-            ValueLayout.JAVA_LONG.withName("data"),
-            ValueLayout.ADDRESS.withName("udata")
-    );
+            ValueLayout.JAVA_LONG_UNALIGNED.withName("ident"),
+            ValueLayout.JAVA_SHORT_UNALIGNED.withName("filter"),
+            ValueLayout.JAVA_SHORT_UNALIGNED.withName("flags"),
+            ValueLayout.JAVA_INT_UNALIGNED.withName("fflags"),
+            ValueLayout.JAVA_LONG_UNALIGNED.withName("data"),
+            ValueLayout.ADDRESS_UNALIGNED.withName("udata")
+    ).withByteAlignment(4L);
     private static final long keventSize = keventLayout.byteSize();
     private static final long identOffset = keventLayout.byteOffset(MemoryLayout.PathElement.groupElement("ident"));
     private static final long filterOffset = keventLayout.byteOffset(MemoryLayout.PathElement.groupElement("filter"));
-
 
     /**
      *  Corresponding to struct sockaddr_in in in.h
