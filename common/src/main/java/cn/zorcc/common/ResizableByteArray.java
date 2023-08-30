@@ -11,7 +11,8 @@ import java.util.Arrays;
  *   A byte array which is resizable like ArrayList,
  *   This is a replacement for ByteArrayOutputStream, without thread-safety
  */
-public final class ResizableByteArray extends OutputStream {
+public final class ResizableByteArray extends OutputStream implements Writer {
+    public static final int DEFAULT_SIZE = 32;
     /**
      *   The initial size of the ResizableByteArray will not be changed, after reset the array will fall back to the initialSize
      */
@@ -22,14 +23,15 @@ public final class ResizableByteArray extends OutputStream {
     public ResizableByteArray(int initialSize) {
         this.initialSize = initialSize;
         this.array = new byte[initialSize];
-        this.writeIndex = 0;
+        this.writeIndex = Constants.ZERO;
     }
 
     public ResizableByteArray() {
-        this(32);
+        this(DEFAULT_SIZE);
     }
 
-    public void write(byte data) {
+    @Override
+    public void writeByte(byte data) {
         if(writeIndex == array.length) {
             resize(writeIndex + 1);
         }
@@ -39,7 +41,7 @@ public final class ResizableByteArray extends OutputStream {
 
     @Override
     public void write(int b) throws IOException {
-        write((byte) b);
+        writeByte((byte) b);
     }
 
     @Override
@@ -52,8 +54,19 @@ public final class ResizableByteArray extends OutputStream {
         writeIndex = nextIndex;
     }
 
-    public void write(byte[] data) {
-        write(data, 0, data.length);
+    @Override
+    public void close() {
+        // No operation needed
+    }
+
+    @Override
+    public void writeBytes(byte... data) {
+        write(data, Constants.ZERO, data.length);
+    }
+
+    @Override
+    public void writeBytes(byte[] data, int offset, int len) {
+        write(data, offset, len);
     }
 
     public byte[] rawArray() {
@@ -61,7 +74,7 @@ public final class ResizableByteArray extends OutputStream {
     }
 
     public byte[] toArray() {
-        return writeIndex == 0 ? Constants.EMPTY_BYTES : Arrays.copyOfRange(array, 0, writeIndex);
+        return writeIndex == Constants.ZERO ? Constants.EMPTY_BYTES : Arrays.copyOfRange(array, Constants.ZERO, writeIndex);
     }
 
     public int writeIndex() {
@@ -69,7 +82,7 @@ public final class ResizableByteArray extends OutputStream {
     }
 
     public void reset() {
-        writeIndex = 0;
+        writeIndex = Constants.ZERO;
         if(array.length > initialSize) {
             array = new byte[initialSize];
         }
@@ -77,11 +90,11 @@ public final class ResizableByteArray extends OutputStream {
 
     private void resize(int nextIndex) {
         int newSize = Math.max(nextIndex, array.length << 1);
-        if(newSize < 0) {
+        if(newSize < Constants.ZERO) {
             throw new FrameworkException(ExceptionType.NATIVE, "MemorySize overflow");
         }
         byte[] newArray = new byte[newSize];
-        System.arraycopy(array, 0, newArray, 0, writeIndex);
+        System.arraycopy(array, Constants.ZERO, newArray, Constants.ZERO, writeIndex);
         array = newArray;
     }
 }

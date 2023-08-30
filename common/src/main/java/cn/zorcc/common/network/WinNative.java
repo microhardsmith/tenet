@@ -262,15 +262,18 @@ public final class WinNative implements Native {
     }
 
     @Override
-    public void waitForData(Map<Socket, Object> socketMap, MemorySegment buffer, MemorySegment events, int index) {
+    public void waitForData(Map<Socket, Actor> socketMap, MemorySegment buffer, MemorySegment events, int index) {
         int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
         Socket socket = new Socket(NativeUtil.getLong(events, index * eventSize + dataOffset + sockOffset));
-        if((event & (Constants.EPOLL_IN | Constants.EPOLL_HUP | Constants.EPOLL_RDHUP)) != 0) {
-            Native.shouldRead(socketMap, socket, buffer);
-        }else if((event & Constants.EPOLL_OUT) != 0) {
-            Native.shouldWrite(socketMap, socket);
-        }else {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        Actor actor = socketMap.get(socket);
+        if(actor != null) {
+            if((event & (Constants.EPOLL_IN | Constants.EPOLL_HUP | Constants.EPOLL_RDHUP)) != Constants.ZERO) {
+                actor.canRead(buffer);
+            }else if((event & Constants.EPOLL_OUT) != Constants.ZERO) {
+                actor.canWrite();
+            }else {
+                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+            }
         }
     }
 

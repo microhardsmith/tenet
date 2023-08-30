@@ -173,15 +173,18 @@ public final class MacNative implements Native {
     }
 
     @Override
-    public void waitForData(Map<Socket, Object> socketMap, MemorySegment buffer, MemorySegment events, int index) {
+    public void waitForData(Map<Socket, Actor> socketMap, MemorySegment buffer, MemorySegment events, int index) {
         short filter = NativeUtil.getShort(events, index * keventSize + filterOffset);
         Socket socket = new Socket(NativeUtil.getInt(events, index * keventSize + identOffset));
-        if(filter == Constants.EVFILT_READ) {
-            Native.shouldRead(socketMap, socket, buffer);
-        }else if(filter == Constants.EVFILT_WRITE) {
-            Native.shouldWrite(socketMap, socket);
-        }else {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        Actor actor = socketMap.get(socket);
+        if(actor != null) {
+            if(filter == Constants.EVFILT_READ) {
+                actor.canRead(buffer);
+            }else if(filter == Constants.EVFILT_WRITE) {
+                actor.canWrite();
+            }else {
+                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+            }
         }
     }
 

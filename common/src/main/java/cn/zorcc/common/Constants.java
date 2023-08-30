@@ -12,17 +12,11 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 
 /**
- *  定义项目中使用到的所有常量
+ *   Constants pool
  */
-public class Constants {
+public final class Constants {
     public static final String SINGLETON_MSG = "Violating singleton";
     public static final String CONFIG_FILE = "configFile";
-    public static final Thread.UncaughtExceptionHandler DEFAULT_EXCEPTION_HANDLER = (thread, throwable) -> {
-        throwable.printStackTrace();
-        if(throwable instanceof FrameworkException e) {
-            thread.interrupt();
-        }
-    };
     public static final int QUEUE_SIZE = 256;
 
     public static final Clock SYSTEM_CLOCK = Clock.systemDefaultZone();
@@ -31,17 +25,25 @@ public class Constants {
     public static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern(TIME_FORMAT);
     public static final ZoneOffset LOCAL_ZONE_OFFSET = OffsetTime.now().getOffset();
 
-    public static final byte b1 = (byte) '-';
+    /**
+     *   Ascii byte value
+     */
+    public static final byte HYPHEN = (byte) '-';
     public static final byte SPACE = (byte) ' ';
     public static final byte COLON = (byte) ':';
-    public static final byte b4 = (byte) '.';
-    public static final byte b5 = (byte) '{';
-    public static final byte b6 = (byte) '}';
-    public static final byte b7 = (byte) '[';
-    public static final byte b8 = (byte) ']';
+    public static final byte QUOTE = (byte) '"';
+    public static final byte PERIOD = (byte) '.';
+    public static final byte COMMA = (byte) ',';
+    public static final byte LCB = (byte) '{';
+    public static final byte RCB = (byte) '}';
+    public static final byte LSB = (byte) '[';
+    public static final byte RSB = (byte) ']';
+    public static final byte BS = (byte) '\b';
+    public static final byte FF = (byte) '\f';
+    public static final byte HT = (byte) '\t';
     public static final byte CR = (byte) '\r';
     public static final byte LF = (byte) '\n';
-    public static final byte b10 = (byte) '%';
+    public static final byte PERCENT = (byte) '%';
     public static final byte NUT = (byte) '\0';
     public static final byte B_ZERO = (byte) '0';
     public static final byte B_NINE = (byte) '9';
@@ -49,6 +51,9 @@ public class Constants {
     public static final byte B_F = (byte) 'F';
     public static final byte B_a = (byte) 'a';
     public static final byte B_f = (byte) 'f';
+    public static final byte ESCAPE = (byte) '\\';
+    public static final byte SLASH = (byte) '/';
+    public static final byte DEL = (byte) 0x7F;
     public static final String DEFAULT_HTTP_VERSION = "HTTP/1.1";
 
     public static final String TMP_LIB = "tenet-lib";
@@ -107,12 +112,6 @@ public class Constants {
     public static final String NULL_STRING = "null";
     public static final String L_BRACKET = "(";
     public static final String R_BRACKET = ")";
-    public static final String BLANK = " ";
-    public static final String HYPHEN = " - ";
-    public static final char L_BRACE = '{';
-    public static final char R_BRACE = '}';
-    public static final char L_SQUARE = '[';
-    public static final char R_SQUARE = ']';
     public static final String LINE_SEPARATOR = System.lineSeparator();
 
     public static final String ID = "id";
@@ -154,7 +153,7 @@ public class Constants {
     public static final Integer DEFAULT_MINT_APP_ID = 1020;
 
     public static final String SET = "set";
-
+    public static final String IS = "is";
     public static final String GET = "get";
 
     /**
@@ -268,8 +267,8 @@ public class Constants {
      * sql
      */
     public static final BigDecimal HUNDRED = BigDecimal.valueOf(100L);
-    public static final char SIGN = '$';
-    public static final char COMMA = ',';
+    public static final char SIGN_CHAR = '$';
+    public static final char COMMA_CHAR = ',';
     public static final int DEFAULT_BATCH = 256;
     public static final String WHERE = "#where{}";
     public static final int WHERE_LENGTH = 8;

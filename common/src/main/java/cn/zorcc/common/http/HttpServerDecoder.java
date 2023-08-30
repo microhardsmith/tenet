@@ -183,7 +183,7 @@ public final class HttpServerDecoder implements Decoder {
         if(readBuffer.readUntil(Constants.CR, Constants.LF) != Constants.EMPTY_BYTES) {
             throw new FrameworkException(ExceptionType.HTTP, "Unresolved http chunked data");
         }
-        byteArray.write(bytes);
+        byteArray.writeBytes(bytes);
         decodingStatus = DecodingStatus.DECODING_CHUNKED_DATA_LENGTH;
         return ResultStatus.CONTINUE;
     }

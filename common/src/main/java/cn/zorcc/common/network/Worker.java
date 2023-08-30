@@ -41,7 +41,7 @@ public final class Worker {
     private final MuxConfig muxConfig;
     private final int sequence;
     private final Mux mux;
-    private final Map<Socket, Object> socketMap;
+    private final Map<Socket, Actor> socketMap;
     private final Map<Channel, Sender> channelMap;
     private final Queue<ReaderTask> readerTaskQueue = new MpscUnboundedAtomicArrayQueue<>(Constants.QUEUE_SIZE);
     private final TransferQueue<WriterTask> writerTaskQueue = new LinkedTransferQueue<>();
@@ -72,7 +72,7 @@ public final class Worker {
         return mux;
     }
 
-    public Map<Socket, Object> socketMap() {
+    public Map<Socket, Actor> socketMap() {
         return socketMap;
     }
 
@@ -161,13 +161,7 @@ public final class Worker {
                             return true;
                         }else {
                             log.debug("Net worker awaiting for termination,  sequence : {}, socket count : {}", sequence, socketMap.size());
-                            for (Object obj : socketMap.values()) {
-                                switch (obj) {
-                                    case Acceptor acceptor -> acceptor.close();
-                                    case Channel channel -> channel.shutdown(readerTask.shutdown());
-                                    default -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-                                }
-                            }
+                            socketMap.values().forEach(actor -> actor.canShutdown(readerTask.shutdown()));
                         }
                     }else {
                         throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);

@@ -186,15 +186,18 @@ public final class LinuxNative implements Native {
     }
 
     @Override
-    public void waitForData(Map<Socket, Object> socketMap, MemorySegment buffer, MemorySegment events, int index) {
+    public void waitForData(Map<Socket, Actor> socketMap, MemorySegment buffer, MemorySegment events, int index) {
         int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
         Socket socket = new Socket(NativeUtil.getInt(events, index * eventSize + dataOffset + fdOffset));
-        if((event & (Constants.EPOLL_IN | Constants.EPOLL_HUP | Constants.EPOLL_RDHUP)) != 0) {
-            Native.shouldRead(socketMap, socket, buffer);
-        }else if((event & Constants.EPOLL_OUT) != 0) {
-            Native.shouldWrite(socketMap, socket);
-        }else {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        Actor actor = socketMap.get(socket);
+        if(actor != null) {
+            if((event & (Constants.EPOLL_IN | Constants.EPOLL_HUP | Constants.EPOLL_RDHUP)) != 0) {
+                actor.canRead(buffer);
+            }else if((event & Constants.EPOLL_OUT) != 0) {
+                actor.canWrite();
+            }else {
+                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+            }
         }
     }
 

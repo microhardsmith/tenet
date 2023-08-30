@@ -34,7 +34,7 @@ public class SslConnector implements Connector {
     }
 
     @Override
-    public void shouldRead(Acceptor acceptor) {
+    public void canRead(Acceptor acceptor, MemorySegment buffer) {
         int currentStatus = status.get();
         if (currentStatus == WANT_READ) {
             unregisterState(acceptor, Native.REGISTER_READ);
@@ -45,7 +45,7 @@ public class SslConnector implements Connector {
     }
 
     @Override
-    public void shouldWrite(Acceptor acceptor) {
+    public void canWrite(Acceptor acceptor) {
         int currentStatus = status.get();
         if (currentStatus == INITIAL) {
             unregisterState(acceptor, Native.REGISTER_WRITE);

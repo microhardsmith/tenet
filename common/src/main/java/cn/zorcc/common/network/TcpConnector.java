@@ -6,6 +6,8 @@ import cn.zorcc.common.exception.FrameworkException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.foreign.MemorySegment;
+
 /**
  *   Connector for normal TCP connection
  */
@@ -19,12 +21,12 @@ public class TcpConnector implements Connector {
     }
 
     @Override
-    public void shouldRead(Acceptor acceptor) {
+    public void canRead(Acceptor acceptor, MemorySegment buffer) {
         throw new FrameworkException(ExceptionType.NETWORK , Constants.UNREACHED);
     }
 
     @Override
-    public void shouldWrite(Acceptor acceptor) {
+    public void canWrite(Acceptor acceptor) {
         int errOpt = n.getErrOpt(acceptor.socket());
         if(errOpt == 0) {
             acceptor.toChannel(new TcpProtocol());

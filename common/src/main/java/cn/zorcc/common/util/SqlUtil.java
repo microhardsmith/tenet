@@ -20,7 +20,7 @@ public final class SqlUtil {
         if(count > 0) {
             sb.append(Constants.L_BRACKET);
             for(int i = startIndex; i < count + startIndex; i++) {
-                sb.append(Constants.SIGN).append(i).append(i == count + startIndex - 1 ? Constants.R_BRACKET : Constants.COMMA);
+                sb.append(Constants.SIGN_CHAR).append(i).append(i == count + startIndex - 1 ? Constants.R_BRACKET : Constants.COMMA_CHAR);
             }
             return sb;
         }else {

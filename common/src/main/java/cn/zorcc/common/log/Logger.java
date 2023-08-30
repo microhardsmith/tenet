@@ -123,7 +123,7 @@ public final class Logger extends LegacyAbstractLogger {
             int len = 0;
             for(int i = 0, index = 0; i < msgBytes.length; i++) {
                 byte b = msgBytes[i];
-                if(b == Constants.b5 && i + 1 < msgBytes.length && msgBytes[i + 1] == Constants.b6) {
+                if(b == Constants.LCB && i + 1 < msgBytes.length && msgBytes[i + 1] == Constants.RCB) {
                     // reaching {}, need to parse the arg
                     byte[] argBytes = list.get(index++);
                     System.arraycopy(argBytes, 0, result, len, argBytes.length);

@@ -5,6 +5,7 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Loc;
 
+import java.lang.foreign.MemorySegment;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -15,7 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   Acceptor and Channel will always use the same worker instance, only one would exist in its socketMap
  *   The acceptor must only be accessed in the worker's reader thread, acceptor will never touch worker's writer thread
  */
-public final class Acceptor {
+public final class Acceptor implements Actor {
     private static final Native n = Native.n;
     private static final AtomicInteger hashcodeGenerator = new AtomicInteger(Constants.ZERO);
     private final int hashcode = hashcodeGenerator.getAndIncrement();
@@ -56,6 +57,21 @@ public final class Acceptor {
 
     public AtomicInteger state() {
         return state;
+    }
+
+    @Override
+    public void canRead(MemorySegment buffer) {
+        connector.canRead(this, buffer);
+    }
+
+    @Override
+    public void canWrite() {
+        connector.canWrite(this);
+    }
+
+    @Override
+    public void canShutdown(Shutdown shutdown) {
+        close();
     }
 
     /**

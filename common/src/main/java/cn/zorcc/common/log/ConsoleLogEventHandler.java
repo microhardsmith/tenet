@@ -133,7 +133,7 @@ public final class ConsoleLogEventHandler implements EventHandler<LogEvent> {
         byte[] bytes = logConfig.getLogFormat().getBytes(StandardCharsets.UTF_8);
         for(int i = 0; i < bytes.length; i++) {
             byte b = bytes[i];
-            if(b == Constants.b10) {
+            if(b == Constants.PERCENT) {
                 if(arr.writeIndex() > 0) {
                     final byte[] array = arr.toArray();
                     result.add((writeBuffer, logEvent) -> writeBuffer.writeBytes(array));
@@ -141,7 +141,7 @@ public final class ConsoleLogEventHandler implements EventHandler<LogEvent> {
                 }
                 int j = i + 1;
                 for( ; ; ) {
-                    if(bytes[j] == Constants.b10) {
+                    if(bytes[j] == Constants.PERCENT) {
                         String s = new String(bytes, i + 1, j - i - 1);
                         switch (s) {
                             case "time" -> {
@@ -212,7 +212,7 @@ public final class ConsoleLogEventHandler implements EventHandler<LogEvent> {
                 }
                 i = j;
             }else {
-                arr.write(b);
+                arr.writeByte(b);
             }
         }
         if(arr.writeIndex() > 0) {

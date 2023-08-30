@@ -41,7 +41,7 @@ public class PgConnector implements Connector {
     }
 
     @Override
-    public void shouldRead(Acceptor acceptor) {
+    public void canRead(Acceptor acceptor, MemorySegment buffer) {
         final int i = status.get();
         if(i == SSL_WAIT) {
             try(Arena arena = Arena.ofConfined()) {
@@ -74,7 +74,7 @@ public class PgConnector implements Connector {
     }
 
     @Override
-    public void shouldWrite(Acceptor acceptor) {
+    public void canWrite(Acceptor acceptor) {
         final int i = status.get();
         if(i == INITIAL) {
             Socket socket = acceptor.socket();

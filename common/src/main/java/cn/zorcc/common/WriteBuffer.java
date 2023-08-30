@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets;
 /**
  *   Direct memory WriteBuffer, not thread-safe, custom Resizer could be chosen to modify the default expansion mechanism
  */
-public final class WriteBuffer implements AutoCloseable {
+public final class WriteBuffer implements AutoCloseable, Writer {
     private MemorySegment segment;
     private long size;
     private long writeIndex;
@@ -62,6 +62,7 @@ public final class WriteBuffer implements AutoCloseable {
         }
     }
 
+    @Override
     public void writeByte(byte b) {
         long nextIndex = writeIndex + 1;
         resize(nextIndex);
@@ -69,14 +70,24 @@ public final class WriteBuffer implements AutoCloseable {
         writeIndex = nextIndex;
     }
 
+    @Override
     public void writeBytes(byte... bytes) {
-        if(bytes.length == 0) {
-            return ;
-        }
         long nextIndex = writeIndex + bytes.length;
         resize(nextIndex);
         for(int i = 0; i < bytes.length; i++) {
             NativeUtil.setByte(segment, writeIndex + i, bytes[i]);
+        }
+        writeIndex = nextIndex;
+    }
+
+    @Override
+    public void writeBytes(byte[] data, int offset, int len) {
+        if(len < Constants.ZERO || offset + len > data.length) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
+        }
+        long nextIndex = writeIndex + len;
+        for(int i = 0; i < len; i++) {
+            NativeUtil.setByte(segment, writeIndex + i, data[offset + i]);
         }
         writeIndex = nextIndex;
     }

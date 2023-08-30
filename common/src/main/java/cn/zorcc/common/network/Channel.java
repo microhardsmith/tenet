@@ -11,13 +11,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  *   Network channel abstraction, could only get evolved from acceptor
  *   in channel state, the socket read and write operation would be taken over by Encoder, Decoder and Handler using Protocol
  */
-public final class Channel {
+public final class Channel implements Actor {
     private static final Logger log = LoggerFactory.getLogger(Channel.class);
     private static final Native n = Native.n;
     private final int hashcode;
@@ -80,6 +81,21 @@ public final class Channel {
 
     public Encoder encoder() {
         return encoder;
+    }
+
+    @Override
+    public void canRead(MemorySegment buffer) {
+        protocol.canRead(this, buffer);
+    }
+
+    @Override
+    public void canWrite() {
+        protocol.canWrite(this);
+    }
+
+    @Override
+    public void canShutdown(Shutdown shutdown) {
+        shutdown(shutdown);
     }
 
     /**

@@ -3,13 +3,11 @@ package cn.zorcc.app.http;
 import cn.zorcc.app.http.anno.*;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.Context;
-import cn.zorcc.common.MethodInvoker;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.exception.ServiceException;
-import cn.zorcc.common.serializer.JsonPoolSerializer;
-import cn.zorcc.common.util.ClassUtil;
+import cn.zorcc.common.util.ReflectUtil;
 import cn.zorcc.http.HttpReq;
 import io.netty.handler.codec.http.HttpMethod;
 import org.slf4j.Logger;
@@ -47,7 +45,6 @@ public class AppHttpEventHandler implements EventHandler<AppHttpEvent>, AppHttpM
             HttpMethod.POST, new UrlTree(),
             HttpMethod.DELETE, new UrlTree(),
             HttpMethod.PATCH, new UrlTree());
-    private final MethodInvoker methodInvoker = MethodInvoker.INSTANCE;
 
     public AppHttpEventHandler() {
         Context.loadContainer(this, AppHttpMapping.class);
@@ -67,7 +64,7 @@ public class AppHttpEventHandler implements EventHandler<AppHttpEvent>, AppHttpM
         HttpReq httpReq = event.httpReq();
         UrlTree urlTree = urlTreeMap.get(httpReq.method());
         if (urlTree.searchPath(event)) {
-            Object invokeResult = methodInvoker.invoke(event.methodIndex(), event.args());
+
 
         }
     }
@@ -83,7 +80,7 @@ public class AppHttpEventHandler implements EventHandler<AppHttpEvent>, AppHttpM
         Class<?> implClass = impl.getClass();
         log.info("Registering HttpMapping for class : {}", implClass.getSimpleName());
         String prefix = implClass.getAnnotation(HttpMapping.class).prefix();
-        for (Method method : ClassUtil.getAllMethod(implClass)) {
+        for (Method method : ReflectUtil.getAllMethod(implClass)) {
             processMethod(impl, method, prefix);
         }
     }
@@ -122,7 +119,7 @@ public class AppHttpEventHandler implements EventHandler<AppHttpEvent>, AppHttpM
      * @param path Http映射路径
      */
     private void registerUrlMapping(Object impl, Method method, HttpMethod httpMethod, String path) {
-        int methodIndex = methodInvoker.registerMethodMapping(impl, method);
+//        int methodIndex = methodInvoker.registerMethodMapping(impl, method);
         Parameter[] parameters = method.getParameters();
         Function<AppHttpEvent, AppHttpEvent> func = event -> {
             event.setArgIndex(Constants.ZERO);
@@ -217,7 +214,7 @@ public class AppHttpEventHandler implements EventHandler<AppHttpEvent>, AppHttpM
                     byte[] body = httpEvent.httpReq().body();
                     int argIndex = httpEvent.argIndex();
                     httpEvent.setArgIndex(argIndex + 1);
-                    httpEvent.args()[argIndex] = JsonPoolSerializer.INSTANCE.deserialize(body, parameterType);
+                    // TODO serialize
                     return httpEvent;
                 };
             }

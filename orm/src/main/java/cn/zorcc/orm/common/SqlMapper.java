@@ -1,6 +1,6 @@
 package cn.zorcc.orm.common;
 
-import cn.zorcc.common.Meta;
+import cn.zorcc.common.Gt;
 import cn.zorcc.common.Pair;
 import cn.zorcc.common.sql.Filler;
 import cn.zorcc.common.sql.Mapper;
@@ -24,12 +24,12 @@ public final class SqlMapper<T> implements Mapper<T> {
         return (Mapper<T>) mapperMap.computeIfAbsent(poClass, p -> new SqlMapper<>(poClass));
     }
     private final Class<T> clazz;
-    private final Meta meta;
+    private final Gt gt;
     private final TableDescription description;
 
     public SqlMapper(Class<T> clazz) {
         this.clazz = clazz;
-        this.meta = Meta.of(clazz);
+        this.gt = Gt.of(clazz);
         this.description = TableDescription.of(clazz);
     }
 
@@ -38,7 +38,7 @@ public final class SqlMapper<T> implements Mapper<T> {
         if(description.preFill() && po instanceof Filler filler) {
             filler.onInsert();
         }
-        Pair<List<String>, List<Object>> pair = meta.getAll(po, description.cols());
+        Pair<List<String>, List<Object>> pair = gt.getAll(po, description.cols());
         List<String> columns = pair.k();
         List<Object> args = pair.v();
         StringBuilder sb = new StringBuilder();

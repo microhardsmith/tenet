@@ -160,22 +160,22 @@ public final class FileLogEventHandler implements EventHandler<LogEvent> {
         byte[] bytes = logFormat.getBytes(StandardCharsets.UTF_8);
         for(int i = 0; i < bytes.length; i++) {
             byte b = bytes[i];
-            if(b == Constants.b10) {
+            if(b == Constants.PERCENT) {
                 if(arr.writeIndex() > 0) {
                     final byte[] array = arr.toArray();
-                    result.add((resizableByteArray, logEvent) -> resizableByteArray.write(array));
+                    result.add((resizableByteArray, logEvent) -> resizableByteArray.writeBytes(array));
                     arr.reset();
                 }
                 int j = i + 1;
                 for( ; ; ) {
-                    if(bytes[j] == Constants.b10) {
+                    if(bytes[j] == Constants.PERCENT) {
                         String s = new String(bytes, i + 1, j - i - 1);
                         switch (s) {
-                            case "time" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.write(logEvent.time()));
-                            case "level" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.write(logEvent.level()));
-                            case "className" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.write(logEvent.className()));
-                            case "threadName" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.write(logEvent.threadName()));
-                            case "msg" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.write(logEvent.msg()));
+                            case "time" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.writeBytes(logEvent.time()));
+                            case "level" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.writeBytes(logEvent.level()));
+                            case "className" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.writeBytes(logEvent.className()));
+                            case "threadName" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.writeBytes(logEvent.threadName()));
+                            case "msg" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.writeBytes(logEvent.msg()));
                             default -> throw new FrameworkException(ExceptionType.LOG, "Unresolved log format : %s".formatted(s));
                         }
                         break;
@@ -185,20 +185,20 @@ public final class FileLogEventHandler implements EventHandler<LogEvent> {
                 }
                 i = j;
             }else {
-                arr.write(b);
+                arr.writeByte(b);
             }
         }
         if(arr.writeIndex() > 0) {
             final byte[] array = arr.toArray();
-            result.add((resizableByteArray, logEvent) -> resizableByteArray.write(array));
+            result.add((resizableByteArray, logEvent) -> resizableByteArray.writeBytes(array));
             arr.reset();
         }
         // automatically add \n and throwable
         result.add((resizableByteArray, logEvent) -> {
-            resizableByteArray.write(Constants.LF);
+            resizableByteArray.writeByte(Constants.LF);
             byte[] throwable = logEvent.throwable();
             if(throwable != null) {
-                resizableByteArray.write(throwable);
+                resizableByteArray.writeBytes(throwable);
             }
         });
         return result;

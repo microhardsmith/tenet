@@ -14,14 +14,14 @@ public final class CompressUtil {
         throw new UnsupportedOperationException();
     }
 
+    @SuppressWarnings("unused")
     public static byte[] compressUsingGzip(final byte[] rawData) {
         return compressUsingGzip(rawData, Deflater.DEFAULT_COMPRESSION);
     }
+
     public static byte[] compressUsingGzip(final byte[] rawData, final int level) {
         try(ResizableByteArray resizableByteArray = new ResizableByteArray(Math.max(rawData.length >> 4, 32)); GZIPOutputStream gzipOutputStream = new GZIPOutputStream(resizableByteArray){{
-            if(level >= Deflater.BEST_SPEED && level <= Deflater.BEST_COMPRESSION) {
-                def.setLevel(level);
-            }
+            def.setLevel(level >= Deflater.BEST_SPEED && level <= Deflater.BEST_COMPRESSION ? level : Deflater.DEFAULT_COMPRESSION);
         }}) {
             gzipOutputStream.write(rawData);
             gzipOutputStream.finish();
@@ -44,6 +44,11 @@ public final class CompressUtil {
         }
     }
 
+    @SuppressWarnings("unused")
+    public static byte[] compressUsingDeflate(final byte[] rawData) {
+        return compressUsingDeflate(rawData, Deflater.DEFAULT_COMPRESSION);
+    }
+
     public static byte[] compressUsingDeflate(final byte[] rawData, final int level) {
         Deflater deflater = new Deflater(level >= Deflater.BEST_SPEED && level <= Deflater.BEST_COMPRESSION ? level : Deflater.DEFAULT_COMPRESSION);
         deflater.setInput(rawData);
@@ -54,9 +59,7 @@ public final class CompressUtil {
                 resizableByteArray.write(buffer, 0, len);
             }
             return resizableByteArray.toArray();
-        } catch (IOException e) {
-            throw new FrameworkException(ExceptionType.COMPRESS, "Unable to perform deflate compression", e);
-        }finally {
+        } finally {
             deflater.end();
         }
     }
@@ -71,7 +74,7 @@ public final class CompressUtil {
                 resizableByteArray.write(buffer, 0, decompressLen);
             }
             return resizableByteArray.toArray();
-        }catch (IOException | DataFormatException e) {
+        }catch (DataFormatException e) {
             throw new FrameworkException(ExceptionType.COMPRESS, "Unable to perform deflate decompression", e);
         }finally {
             inflater.end();

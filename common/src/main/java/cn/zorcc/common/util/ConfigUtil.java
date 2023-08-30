@@ -3,8 +3,6 @@ package cn.zorcc.common.util;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import com.esotericsoftware.reflectasm.ConstructorAccess;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,7 +31,8 @@ public class ConfigUtil {
         }
         ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
         try(InputStream jsonStream = contextClassLoader.getResourceAsStream(fileName)) {
-            return jsonStream == null ? ConstructorAccess.get(configClass).newInstance() : new ObjectMapper().readValue(jsonStream, configClass);
+            // TODO return jsonStream == null ? ConstructorAccess.get(configClass).newInstance() : new ObjectMapper().readValue(jsonStream, configClass);
+            return null;
         } catch (IOException e) {
             throw new FrameworkException(ExceptionType.CONFIG, "Can't resolve config file : " + fileName, e);
         }

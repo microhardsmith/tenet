@@ -13,10 +13,10 @@ public final class DefaultTimeResolver implements TimeResolver {
     private final byte[] bytes = new byte[Constants.TIME_FORMAT.length()];
 
     public DefaultTimeResolver() {
-        bytes[4] = bytes[7] = Constants.b1;
+        bytes[4] = bytes[7] = Constants.HYPHEN;
         bytes[10] = Constants.SPACE;
         bytes[13] = bytes[16] = Constants.COLON;
-        bytes[19] = Constants.b4;
+        bytes[19] = Constants.PERIOD;
     }
 
     @Override

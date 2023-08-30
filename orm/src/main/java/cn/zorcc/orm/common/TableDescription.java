@@ -7,7 +7,7 @@ import cn.zorcc.common.anno.Table;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.sql.Filler;
-import cn.zorcc.common.util.ClassUtil;
+import cn.zorcc.common.util.ReflectUtil;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -39,7 +39,7 @@ public record TableDescription(
         String delField = null;
         Object delArg = null;
         Object notDelArg = null;
-        List<Field> allFields = ClassUtil.getAllFields(clazz);
+        List<Field> allFields = ReflectUtil.getAllFields(clazz);
         List<Rank> ranks = new ArrayList<>(allFields.size());
         for (Field f : allFields) {
             if(f.isAnnotationPresent(Id.class)) {

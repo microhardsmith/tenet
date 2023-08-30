@@ -128,4 +128,9 @@ public final class ReadBuffer {
     public MemorySegment rest() {
         return readIndex == Constants.ZERO ? segment : segment.asSlice(readIndex, size - readIndex);
     }
+
+    @Override
+    public String toString() {
+        return new String(segment.toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8);
+    }
 }
