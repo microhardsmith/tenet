@@ -102,7 +102,7 @@ public final class HttpServer {
         private final ThreadFactory threadFactory = Thread.ofVirtual().name("http-", 0).factory();
         @Override
         public void onConnected(Channel channel) {
-            log.debug("Http connection established");
+            log.debug("Http connection established : {}", channel.loc());
         }
 
         @Override
@@ -133,12 +133,12 @@ public final class HttpServer {
 
         @Override
         public void onShutdown(Channel channel) {
-            log.debug("Http connection shutdown");
+            log.debug("Http connection shutdown : {}", channel.loc());
         }
 
         @Override
         public void onRemoved(Channel channel) {
-            log.debug("Http connection closed");
+            log.debug("Http connection closed : {}", channel.loc());
         }
     }
 }

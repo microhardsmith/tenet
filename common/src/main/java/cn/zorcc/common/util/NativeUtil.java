@@ -31,9 +31,9 @@ public final class NativeUtil {
      */
     private static final Map<String, SymbolLookup> cache = new ConcurrentHashMap<>();
     private static final VarHandle byteHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_BYTE);
-    private static final VarHandle shortHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_SHORT);
-    private static final VarHandle intHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_INT);
-    private static final VarHandle longHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_LONG);
+    private static final VarHandle shortHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_SHORT_UNALIGNED);
+    private static final VarHandle intHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_INT_UNALIGNED);
+    private static final VarHandle longHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_LONG_UNALIGNED);
     private static final MemorySegment stdout;
     private static final MemorySegment stderr;
     static {
@@ -121,9 +121,6 @@ public final class NativeUtil {
         return memorySegment == null || memorySegment.address() == 0L;
     }
 
-    /**
-     *  从MemorySegment中获取指定index的byte值
-     */
     public static byte getByte(MemorySegment memorySegment, long index) {
         return (byte) byteHandle.get(memorySegment, index);
     }

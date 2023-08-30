@@ -47,9 +47,9 @@ public final class HttpServerDecoder implements Decoder {
 
     /**
      *   decode http buffer, using state machine mechanism
-     *   if content is not complete, return INCOMPLETE
-     *   if needs to decode again, return CONTINUE
-     *   if current request if fully decoded, return FINISHED
+     *   if data are not complete, return INCOMPLETE
+     *   if data needs to be decoded again, return CONTINUE
+     *   if current request has been fully decoded, return FINISHED
      */
     private ResultStatus tryDecode(ReadBuffer readBuffer) {
         return switch (decodingStatus) {

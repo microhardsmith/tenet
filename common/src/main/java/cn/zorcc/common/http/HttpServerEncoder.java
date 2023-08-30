@@ -5,7 +5,6 @@ import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Encoder;
-import cn.zorcc.common.util.CompressUtil;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
