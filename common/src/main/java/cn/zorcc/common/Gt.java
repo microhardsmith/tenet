@@ -1,5 +1,6 @@
 package cn.zorcc.common;
 
+import cn.zorcc.common.anno.Format;
 import cn.zorcc.common.anno.Ordinal;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
@@ -40,14 +41,14 @@ public final class Gt<T> {
 
     private final Class<T> clazz;
     private final Supplier<T> constructor;
-    private final Map<String, MetaInfo> metaInfoMap;
-    private final List<MetaInfo> metaInfoList;
+    private final Map<String, GtInfo> metaInfoMap;
+    private final List<GtInfo> gtInfoList;
 
-    private Gt(Class<T> clazz, Supplier<T> constructor, Map<String, MetaInfo> metaInfoMap, List<MetaInfo> metaInfoList) {
+    private Gt(Class<T> clazz, Supplier<T> constructor, Map<String, GtInfo> metaInfoMap, List<GtInfo> gtInfoList) {
         this.clazz = clazz;
         this.constructor = constructor;
         this.metaInfoMap = metaInfoMap;
-        this.metaInfoList = metaInfoList;
+        this.gtInfoList = gtInfoList;
     }
 
     public Class<T> clazz() {
@@ -58,12 +59,12 @@ public final class Gt<T> {
         return constructor;
     }
 
-    public MetaInfo metaInfo(String fieldName) {
+    public GtInfo metaInfo(String fieldName) {
         return metaInfoMap.get(fieldName);
     }
 
-    public List<MetaInfo> metaInfoList() {
-        return metaInfoList;
+    public List<GtInfo> gtInfoList() {
+        return gtInfoList;
     }
 
     private static <T> Gt<T> register(Class<T> clazz) {
@@ -72,8 +73,8 @@ public final class Gt<T> {
                 throw new FrameworkException(ExceptionType.CONTEXT, "Unsupported class type");
             }
             Supplier<T> constructor = createConstructor(clazz);
-            Map<String, MetaInfo> metaInfoMap = new HashMap<>();
-            List<MetaInfo> metaInfoList = new ArrayList<>();
+            Map<String, GtInfo> metaInfoMap = new HashMap<>();
+            List<GtInfo> gtInfoList = new ArrayList<>();
             for (Field f : ReflectUtil.getAllFields(clazz).stream().sorted((o1, o2) -> {
                 Ordinal a1 = o1.getAnnotation(Ordinal.class);
                 Ordinal a2 = o2.getAnnotation(Ordinal.class);
@@ -98,11 +99,12 @@ public final class Gt<T> {
                     }
                     return Collections.unmodifiableMap(m);
                 }) : null;
-                MetaInfo metaInfo = new MetaInfo(fieldName, fieldType, gmh, smh, getter, setter, enumMap);
-                metaInfoMap.put(fieldName, metaInfo);
-                metaInfoList.add(metaInfo);
+                Format format = f.isAnnotationPresent(Format.class) ? f.getAnnotation(Format.class) : null;
+                GtInfo gtInfo = new GtInfo(fieldName, fieldType, gmh, smh, getter, setter, enumMap, format);
+                metaInfoMap.put(fieldName, gtInfo);
+                gtInfoList.add(gtInfo);
             }
-            return new Gt<>(clazz, constructor, Collections.unmodifiableMap(metaInfoMap), Collections.unmodifiableList(metaInfoList));
+            return new Gt<>(clazz, constructor, Collections.unmodifiableMap(metaInfoMap), Collections.unmodifiableList(gtInfoList));
         }catch (Throwable e) {
             throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED, e);
         }
@@ -173,9 +175,9 @@ public final class Gt<T> {
         List<String> columns = new ArrayList<>();
         List<Object> result = new ArrayList<>();
         for (String field : fields) {
-            MetaInfo metaInfo = metaInfoMap.get(field);
-            if(metaInfo != null) {
-                Object o = metaInfo.getter().apply(target);
+            GtInfo gtInfo = metaInfoMap.get(field);
+            if(gtInfo != null) {
+                Object o = gtInfo.getter().apply(target);
                 if(o != null) {
                     columns.add(field);
                     result.add(o);

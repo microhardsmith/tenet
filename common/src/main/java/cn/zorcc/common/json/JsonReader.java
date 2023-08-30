@@ -1,7 +1,7 @@
 package cn.zorcc.common.json;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.MetaInfo;
+import cn.zorcc.common.GtInfo;
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.ResizableByteArray;
 import cn.zorcc.common.exception.JsonParseException;
@@ -20,16 +20,16 @@ public class JsonReader<T> {
     private static final int BIG_SIZE = 1024;
     private final ReadBuffer rb;
     private final ResizableByteArray wb;
-    private final Deque<JsonNode<?>> jsonNodes = new ArrayDeque<>();
+    private final Deque<JsonReaderNode<?>> jsonReaderNodes = new ArrayDeque<>();
 
     public JsonReader(ReadBuffer readBuffer, Class<T> clazz) {
         this.rb = readBuffer;
         this.wb = new ResizableByteArray(estimateSize(readBuffer));
         byte b = readBuffer.readByte();
         if(b == Constants.LCB) {
-            jsonNodes.addLast(new JsonNode<>(this, clazz, false));
+            jsonReaderNodes.addLast(new JsonReaderNode<>(this, clazz, false));
         }else if(b == Constants.LSB) {
-            jsonNodes.addLast(new JsonNode<>(this, clazz, true));
+            jsonReaderNodes.addLast(new JsonReaderNode<>(this, clazz, true));
         }else {
             throw new JsonParseException(readBuffer);
         }
@@ -50,7 +50,7 @@ public class JsonReader<T> {
      *   Deserialize current readBuffer as a object value
      */
     public T deserializeAsObject() {
-        JsonNode<?> current = jsonNodes.getLast();
+        JsonReaderNode<?> current = jsonReaderNodes.getLast();
         if(current.getState() != JsonReaderState.Object) {
             throw new JsonParseException("Target readBuffer is not an array");
         }
@@ -63,7 +63,7 @@ public class JsonReader<T> {
      *   Deserialize current readBuffer as a list
      */
     public List<T> deserializeAsList() {
-        JsonNode<?> current = jsonNodes.getLast();
+        JsonReaderNode<?> current = jsonReaderNodes.getLast();
         if(current.getState() != JsonReaderState.Array) {
             throw new JsonParseException("Target readBuffer is not an array");
         }
@@ -202,8 +202,8 @@ public class JsonReader<T> {
     }
 
     void assignBoolean(Boolean value, ReadBuffer readBuffer) {
-        GtInfo gtInfo = jsonNodes.getLast();
-        MetaInfo metaInfo = gtInfo.gt().metaInfo(key);
+        GtInfo gtInfo = jsonReaderNodes.getLast();
+        GtInfo metaInfo = gtInfo.gt().metaInfo(key);
         if(metaInfo != null) {
             if(metaInfo.type() == Boolean.class) {
                 metaInfo.setter().accept(gtInfo.obj(), value);
@@ -215,8 +215,8 @@ public class JsonReader<T> {
     }
 
     void assignNull() {
-        GtInfo gtInfo = jsonNodes.getLast();
-        MetaInfo metaInfo = gtInfo.gt().metaInfo(key);
+        GtInfo gtInfo = jsonReaderNodes.getLast();
+        GtInfo metaInfo = gtInfo.gt().metaInfo(key);
         if(metaInfo != null) {
             metaInfo.setter().accept(gtInfo.obj(), null);
             key = Constants.EMPTY_STRING;
@@ -224,8 +224,8 @@ public class JsonReader<T> {
     }
 
     void assignString(String value, ReadBuffer readBuffer) {
-        GtInfo gtInfo = jsonNodes.getLast();
-        MetaInfo metaInfo = gtInfo.gt().metaInfo(key);
+        GtInfo gtInfo = jsonReaderNodes.getLast();
+        GtInfo metaInfo = gtInfo.gt().metaInfo(key);
         if(metaInfo != null) {
             Class<?> type = metaInfo.type();
             metaInfo.setter().accept(gtInfo.obj(), type.isEnum() ? metaInfo.enumMap().get(value) : stringToObject(type, value, readBuffer));

@@ -2,7 +2,7 @@ package cn.zorcc.common.json;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.Gt;
-import cn.zorcc.common.MetaInfo;
+import cn.zorcc.common.GtInfo;
 import cn.zorcc.common.Writer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
@@ -14,15 +14,62 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
-public final class JsonWriterNode<T> {
+public final class JsonWriterObjectNode<T> extends JsonNode {
+    private static final byte[] TRUE = "true".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] FALSE = "false".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] INFINITY = "Infinity".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] NAN = "NaN".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] NULL = "null".getBytes(StandardCharsets.UTF_8);
+
+    private final Writer writer;
     private final Gt<T> gt;
-    private final List<MetaInfo> metaInfoList;
-    private int index = Constants.ZERO;
+    private final List<GtInfo> gtInfoList;
+    private final T obj;
+    private int index = -1;
     private boolean notFirst = false;
 
-    public JsonWriterNode(Class<T> clazz) {
-        this.gt = Gt.of(clazz);
-        this.metaInfoList = gt.metaInfoList();
+    public JsonWriterObjectNode(Writer writer, T obj, Class<T> type) {
+        this.writer = writer;
+        this.gt = Gt.of(type);
+        this.gtInfoList = gt.gtInfoList();
+        this.obj = obj;
+    }
+
+    @Override
+    protected JsonNode process() {
+        if(index < Constants.ZERO) {
+            writer.writeByte(Constants.LCB);
+            index = Constants.ZERO;
+            return this;
+        }else if(index == gtInfoList.size()) {
+            return popNode();
+        }else {
+            return processInternal();
+        }
+    }
+
+    private JsonNode processInternal() {
+        for(int i = index; i < gtInfoList.size(); i++) {
+            GtInfo gtInfo = gtInfoList.get(i);
+            Object value = gtInfo.getter().apply(obj);
+            if(value != null) {
+                writeKey(writer, gtInfo.fieldName());
+                notFirst = true;
+                JsonNode appended = writeValue(writer, value);
+                if(appended != null) {
+                    return appended;
+                }
+            }
+        }
+        return null;
+    }
+
+    private JsonNode popNode() {
+        writer.writeByte(Constants.RCB);
+        JsonNode prevNode = this.prev;
+        this.prev = null;
+        prevNode.next = null;
+        return prevNode;
     }
 
     public void serialize(Writer writer) {
@@ -37,7 +84,7 @@ public final class JsonWriterNode<T> {
 //            for (MetaInfo metaInfo : metaInfoList) {
 //                Object field = metaInfo.getter().apply(obj);
 //                if(field != null) {
-//                    writeKey(resizableByteArray, metaInfo.name(), notFirst);
+//                    writeKey(resizableByteArray, metaInfo.fieldName(), notFirst);
 //                    writeValue(resizableByteArray, field);
 //                    notFirst = true;
 //                }
@@ -47,7 +94,7 @@ public final class JsonWriterNode<T> {
 //        }
     }
 
-    private static void writeKey(Writer writer, String key, boolean notFirst) {
+    private void writeKey(Writer writer, String key) {
         if(notFirst) {
             writer.writeByte(Constants.COMMA);
         }
@@ -59,7 +106,7 @@ public final class JsonWriterNode<T> {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T> void writeValue(Writer writer, T value) {
+    private <E> JsonNode writeValue(Writer writer, E value) {
         switch (value) {
             case null -> writer.writeBytes(NULL);
             case Byte b -> writer.writeByte(b);
@@ -77,17 +124,35 @@ public final class JsonWriterNode<T> {
             case LocalDate date -> writeLocalDate(writer, date);
             case LocalDateTime time -> writeLocalDateTime(writer, time);
             default -> {
-                JsonSerializer<T> serializer = (JsonSerializer<T>) getJsonSerializer(value.getClass());
-                if(serializer == null) {
-                    serializeAsObject(writer, value);
-                }else {
-                    serializer.serialize(writer, value);
-                }
+                Class<E> type = (Class<E>) value.getClass();
+                return writeObject(writer, value, type);
             }
+        }
+        return null;
+    }
+
+    private <E> JsonNode writeObject(Writer writer, E value, Class<E> type) {
+        JsonSerializer<E> serializer = JsonParser.getJsonSerializer(type);
+        if(serializer == null) {
+            if(Collection.class.isAssignableFrom(type) || type.isArray()) {
+                // TODO 添加数组节点
+                return null;
+            }else {
+                JsonWriterObjectNode<E> nextNode = new JsonWriterObjectNode<>(writer, value, type);
+                this.next = nextNode;
+                nextNode.prev = this;
+                return nextNode;
+            }
+        }else {
+            serializer.serialize(writer, value);
+            return null;
         }
     }
 
-    private static void writeShort(Writer writer, Short s) {
+    /**
+     *   Write a short value into the writer
+     */
+    private void writeShort(Writer writer, Short s) {
         short ss = s;
         while (ss > 0) {
             writer.writeByte((byte) (Constants.B_ZERO + ss % 10));
@@ -95,6 +160,9 @@ public final class JsonWriterNode<T> {
         }
     }
 
+    /**
+     *   Write an Integer value into the writer
+     */
     private static void writeInteger(Writer writer, Integer i) {
         int ii = i;
         while (ii > 0) {
@@ -103,6 +171,9 @@ public final class JsonWriterNode<T> {
         }
     }
 
+    /**
+     *   Write a Long value into the writer
+     */
     private static void writeLong(Writer writer, Long l) {
         long ll = l;
         while (ll > 0) {
@@ -111,16 +182,25 @@ public final class JsonWriterNode<T> {
         }
     }
 
+    /**
+     *   Write a String value into the writer
+     */
     private static void writeString(Writer writer, String s) {
         writeStrBytes(writer, s.getBytes(StandardCharsets.UTF_8));
     }
 
+    /**
+     *   Write String bytes into the writer
+     */
     private static void writeStrBytes(Writer writer, byte[] bytes) {
         writer.writeByte(Constants.QUOTE);
         writer.writeBytes(bytes);
         writer.writeByte(Constants.QUOTE);
     }
 
+    /**
+     *   Write a Float value into the writer
+     */
     private static void writeFloat(Writer writer, Float f) {
         if(f.isInfinite()) {
             writeStrBytes(writer, INFINITY);
@@ -207,5 +287,4 @@ public final class JsonWriterNode<T> {
     private static void writeLocalDateTime(Writer writer, LocalDateTime time) {
         writeStrBytes(writer, time.toString().getBytes(StandardCharsets.UTF_8));
     }
-
 }

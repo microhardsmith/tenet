@@ -8,15 +8,15 @@ import java.util.Deque;
 import java.util.List;
 
 public final class JsonWriter {
-    private final Deque<JsonWriterNode<?>> deque = new ArrayDeque<>();
+    private final Deque<JsonWriterObjectNode<?>> deque = new ArrayDeque<>();
     private final ResizableByteArray resizableByteArray = new ResizableByteArray();
 
-    public <T> void serializeAsObject(Writer writer, Object obj, Class<T> objClass) {
-        JsonWriterNode<T> node = new JsonWriterNode<>(objClass);
+    public <T> void serializeAsObject(Writer writer, T obj, Class<T> type) {
+        JsonWriterObjectNode<T> node = new JsonWriterObjectNode<>(writer, obj, type);
 
     }
 
-    public void serializeAsList(Writer writer, List<Object> list) {
+    public <T> void serializeAsList(Writer writer, List<T> list, Class<T> type) {
 
     }
 }

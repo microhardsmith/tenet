@@ -1,7 +1,7 @@
 package cn.zorcc.common.example;
 
 import cn.zorcc.common.Gt;
-import cn.zorcc.common.MetaInfo;
+import cn.zorcc.common.GtInfo;
 import cn.zorcc.common.ResizableByteArray;
 import cn.zorcc.common.json.JsonParser;
 
@@ -30,16 +30,16 @@ public class JsonExample {
     private static void testPrimitiveGt() {
         Gt<PrimitiveBean> gt = Gt.of(PrimitiveBean.class);
         PrimitiveBean primitiveBean = new PrimitiveBean();
-        MetaInfo metaInfo = gt.metaInfo("a");
-        metaInfo.setter().accept(primitiveBean, 42);
-        System.out.println(metaInfo.getter().apply(primitiveBean));
+        GtInfo gtInfo = gt.metaInfo("a");
+        gtInfo.setter().accept(primitiveBean, 42);
+        System.out.println(gtInfo.getter().apply(primitiveBean));
     }
 
     private static void testObjectGt() {
         Gt<Bean> gt = Gt.of(Bean.class);
         Bean bean = new Bean();
-        MetaInfo metaInfo = gt.metaInfo("b");
-        metaInfo.setter().accept(bean, "hello");
-        System.out.println(metaInfo.getter().apply(bean));
+        GtInfo gtInfo = gt.metaInfo("b");
+        gtInfo.setter().accept(bean, "hello");
+        System.out.println(gtInfo.getter().apply(bean));
     }
 }
