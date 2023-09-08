@@ -1,7 +1,7 @@
 package cn.zorcc.common.example;
 
-import cn.zorcc.common.Gt;
-import cn.zorcc.common.GtInfo;
+import cn.zorcc.common.Meta;
+import cn.zorcc.common.MetaInfo;
 import cn.zorcc.common.ResizableByteArray;
 import cn.zorcc.common.json.JsonParser;
 
@@ -22,24 +22,24 @@ public class JsonExample {
             bean.setB("hello");
             bean.setC(List.of(1L,2L,3L));
             bean.setTestEnum(TestEnum.A);
-            JsonParser.serializeAsObject(resizableByteArray, bean);
+            JsonParser.serializeObject(resizableByteArray, bean);
             System.out.println(new String(resizableByteArray.toArray()));
         }
     }
 
     private static void testPrimitiveGt() {
-        Gt<PrimitiveBean> gt = Gt.of(PrimitiveBean.class);
+        Meta<PrimitiveBean> meta = Meta.of(PrimitiveBean.class);
         PrimitiveBean primitiveBean = new PrimitiveBean();
-        GtInfo gtInfo = gt.metaInfo("a");
-        gtInfo.setter().accept(primitiveBean, 42);
-        System.out.println(gtInfo.getter().apply(primitiveBean));
+        MetaInfo metaInfo = meta.metaInfo("a");
+        metaInfo.setter().accept(primitiveBean, 42);
+        System.out.println(metaInfo.getter().apply(primitiveBean));
     }
 
     private static void testObjectGt() {
-        Gt<Bean> gt = Gt.of(Bean.class);
+        Meta<Bean> meta = Meta.of(Bean.class);
         Bean bean = new Bean();
-        GtInfo gtInfo = gt.metaInfo("b");
-        gtInfo.setter().accept(bean, "hello");
-        System.out.println(gtInfo.getter().apply(bean));
+        MetaInfo metaInfo = meta.metaInfo("b");
+        metaInfo.setter().accept(bean, "hello");
+        System.out.println(metaInfo.getter().apply(bean));
     }
 }

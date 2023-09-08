@@ -5,6 +5,8 @@ import cn.zorcc.common.exception.FrameworkException;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.lang.foreign.MemorySegment;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 /**
@@ -67,6 +69,22 @@ public final class ResizableByteArray extends OutputStream implements Writer {
     @Override
     public void writeBytes(byte[] data, int offset, int len) {
         write(data, offset, len);
+    }
+
+    @Override
+    public String asString() {
+        String s = new String(array, Constants.ZERO, writeIndex, StandardCharsets.UTF_8);
+        reset();
+        return s;
+    }
+
+    @Override
+    public ReadBuffer asReadBuffer() {
+        byte[] b = new byte[writeIndex];
+        System.arraycopy(array, Constants.ZERO, b, Constants.ZERO, writeIndex);
+        MemorySegment memorySegment = MemorySegment.ofArray(b);
+        reset();
+        return new ReadBuffer(memorySegment);
     }
 
     public byte[] rawArray() {

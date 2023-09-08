@@ -54,7 +54,7 @@
     <jackson.version>2.14.1</jackson.version>
     <kryo.version>5.3.0</kryo.version>
     <jmh.version>1.36</jmh.version>
-    <junit.version>5.9.2</junit.version>
+    <junit.version>5.10.0</junit.version>
     <rocksdb.version>7.6.0</rocksdb.version>
     <nimbus-jose-jwt.version>9.25.6</nimbus-jose-jwt.version>
     <oshi.version>6.3.1</oshi.version>

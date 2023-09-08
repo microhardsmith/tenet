@@ -6,4 +6,8 @@ public interface Writer {
     void writeBytes(byte... data);
 
     void writeBytes(byte[] data, int offset, int len);
+
+    String asString();
+
+    ReadBuffer asReadBuffer();
 }

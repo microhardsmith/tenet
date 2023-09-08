@@ -203,4 +203,18 @@ public final class WriteBuffer implements AutoCloseable, Writer {
     public void close() {
         policy.close(this);
     }
+
+    @Override
+    public String asString() {
+        byte[] bytes = content().toArray(ValueLayout.JAVA_BYTE);
+        writeIndex = Constants.ZERO;
+        return new String(bytes, StandardCharsets.UTF_8);
+    }
+
+    @Override
+    public ReadBuffer asReadBuffer() {
+        MemorySegment memorySegment = MemorySegment.ofArray(content().toArray(ValueLayout.JAVA_BYTE));
+        writeIndex = Constants.ZERO;
+        return new ReadBuffer(memorySegment);
+    }
 }

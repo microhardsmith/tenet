@@ -9,11 +9,24 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 public final class ReflectUtil {
+    private static final Map<Class<?>, Class<?>> wrapperMap = Map.of(byte.class, Byte.class,
+            short.class, Short.class,
+            int.class, Integer.class,
+            long.class, Long.class,
+            float.class, Float.class,
+            double.class, Double.class,
+            boolean.class, Boolean.class,
+            char.class, Character.class);
 
     private ReflectUtil() {
         throw new UnsupportedOperationException();
+    }
+
+    public static Class<?> getWrapperClass(Class<?> primitiveClass) {
+        return wrapperMap.get(primitiveClass);
     }
 
     /**

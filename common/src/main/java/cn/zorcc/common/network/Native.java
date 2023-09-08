@@ -164,7 +164,7 @@ public sealed interface Native permits WinNative, LinuxNative, MacNative {
     /**
      *   Network library environment variable
      */
-    String LIB = "lib";
+    String CORE_LIB = "lib";
 
     /**
      *   Global native network library

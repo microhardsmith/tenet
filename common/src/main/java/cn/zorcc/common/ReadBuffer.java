@@ -47,6 +47,10 @@ public final class ReadBuffer {
         return readIndex;
     }
 
+    public boolean checkRemainingLength(int len) {
+        return readIndex + len <= size;
+    }
+
     public byte readByte() {
         long nextIndex = readIndex + 1;
         if(nextIndex > size) {

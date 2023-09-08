@@ -124,7 +124,7 @@ public final class HttpServer {
             String acceptEncoding = httpRequest.getHttpHeader().get(HttpHeader.K_ACCEPT_ENCODING);
             if(acceptEncoding != null && acceptEncoding.contains("gzip")) {
                 headers.put(HttpHeader.K_CONTENT_ENCODING, HttpHeader.V_GZIP);
-                httpResponse.setData(CompressUtil.compressUsingGzip(body, Deflater.BEST_COMPRESSION));
+                httpResponse.setData(CompressUtil.compressUsingJdkGzip(body, Deflater.BEST_COMPRESSION));
             }else {
                 httpResponse.setData(body);
             }

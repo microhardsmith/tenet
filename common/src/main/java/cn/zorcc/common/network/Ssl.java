@@ -55,8 +55,13 @@ public final class Ssl {
     static {
         long nano = Clock.nano();
         crypto = NativeUtil.loadLibrary(CRYPTO_LIB);
+        if(crypto == null) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Crypto lib not found");
+        }
         ssl = NativeUtil.loadLibrary(SSL_LIB);
-
+        if(ssl == null) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Ssl lib not found");
+        }
         tlsMethod = NativeUtil.methodHandle(ssl, "TLS_method", FunctionDescriptor.of(ValueLayout.ADDRESS));
         sslCtxNewMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_new", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         sslCtxUseCertificateFileMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_use_certificate_file", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));

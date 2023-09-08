@@ -52,6 +52,7 @@ public final class Constants {
     public static final byte B_a = (byte) 'a';
     public static final byte B_f = (byte) 'f';
     public static final byte ESCAPE = (byte) '\\';
+    public static final byte UNICODE_CODE = (byte) 'u';
     public static final byte SLASH = (byte) '/';
     public static final byte DEL = (byte) 0x7F;
     public static final String DEFAULT_HTTP_VERSION = "HTTP/1.1";
@@ -155,6 +156,12 @@ public final class Constants {
     public static final String SET = "set";
     public static final String IS = "is";
     public static final String GET = "get";
+
+    /**
+     *   json
+     */
+    public static final String JSON_KEY_TYPE_ERR = "Unsupported json key type";
+    public static final String JSON_VALUE_TYPE_ERR = "Unsupported json value type";
 
     /**
      * cache

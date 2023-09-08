@@ -207,8 +207,8 @@ public final class HttpServerDecoder implements Decoder {
     private byte[] tryDecompress(byte[] rawData) {
         return switch (current.getHttpHeader().get(HttpHeader.K_CONTENT_ENCODING)) {
             case null -> rawData;
-            case HttpHeader.V_GZIP -> CompressUtil.decompressUsingGzip(rawData);
-            case HttpHeader.V_DEFLATE -> CompressUtil.decompressUsingDeflate(rawData);
+            case HttpHeader.V_GZIP -> CompressUtil.decompressUsingJdkGzip(rawData);
+            case HttpHeader.V_DEFLATE -> CompressUtil.decompressUsingJdkDeflate(rawData);
             default -> throw new FrameworkException(ExceptionType.HTTP, "Unsupported compression type detected");
         };
     }

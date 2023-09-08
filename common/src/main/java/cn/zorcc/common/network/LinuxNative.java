@@ -270,7 +270,10 @@ public final class LinuxNative implements Native {
 
     static  {
         long nano = Clock.nano();
-        SymbolLookup symbolLookup = NativeUtil.loadLibrary(Native.LIB);
+        SymbolLookup symbolLookup = NativeUtil.loadLibrary(Native.CORE_LIB);
+        if(symbolLookup == null) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Tenet core lib not found");
+        }
         epollCreateMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "l_epoll_create", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         epollCtlMethodHandle = NativeUtil.methodHandle(symbolLookup,

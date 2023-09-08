@@ -6,6 +6,7 @@ import java.lang.annotation.*;
 
 /**
  *   Annotation for determining serialization format
+ *   When the @Format annotation is applied to an array or Collection, it will be applied to all elements.
  */
 @Target({ElementType.FIELD})
 @Retention(RetentionPolicy.RUNTIME)
@@ -15,6 +16,11 @@ public @interface Format {
      *   Expected serialization type
      */
     Class<?> expectedType() default Void.class;
+
+    /**
+     *   Used for specify List or Map element type for deserialization
+     */
+    Class<?> elementType() default Void.class;
 
     /**
      *   Expected serialization string pattern

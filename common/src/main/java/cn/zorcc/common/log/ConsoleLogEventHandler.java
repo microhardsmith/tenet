@@ -34,7 +34,10 @@ public final class ConsoleLogEventHandler implements EventHandler<LogEvent> {
     private static final MemorySegment stderr = NativeUtil.stderr();
 
     public ConsoleLogEventHandler(LogConfig logConfig) {
-        SymbolLookup symbolLookup = NativeUtil.loadLibrary(Native.LIB);
+        SymbolLookup symbolLookup = NativeUtil.loadLibrary(Native.CORE_LIB);
+        if(symbolLookup == null) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Tenet core lib not found");
+        }
         this.print = NativeUtil.methodHandle(symbolLookup, "g_print", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         this.consumers = createConsoleConsumer(logConfig);
         // Console builder should have a larger size than logEvent, the constructor method should be guaranteed to be called in log thread to keep arena safe

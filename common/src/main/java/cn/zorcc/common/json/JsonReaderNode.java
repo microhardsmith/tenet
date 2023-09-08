@@ -1,71 +1,26 @@
 package cn.zorcc.common.json;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.Gt;
+import cn.zorcc.common.exception.JsonParseException;
 
-import java.util.ArrayList;
-import java.util.List;
+public abstract class JsonReaderNode extends JsonNode {
+    protected abstract void assign(Object value);
 
-public final class JsonReaderNode<T> {
-    private final JsonReader<?> reader;
-    private final Gt<T> gt;
-    private final T objField;
-    private final List<T> listField;
-    private int index;
-    private JsonReaderState state;
-    private String key;
+    protected abstract Object construct();
 
-    public JsonReaderNode(JsonReader<?> reader, Class<T> clazz, boolean asList) {
-        this.reader = reader;
-        this.gt = Gt.of(clazz);
-        if(asList) {
-            this.index = Constants.ZERO;
-            this.objField = null;
-            this.listField = new ArrayList<>();
+    @Override
+    protected JsonNode toPrev() {
+        JsonNode prevNode = super.toPrev();
+        if(prevNode instanceof JsonReaderNode readerNode) {
+            readerNode.assign(construct());
+            return readerNode;
         }else {
-            this.index = Integer.MIN_VALUE;
-            this.objField = gt.constructor().get();
-            this.listField = null;
+            throw new JsonParseException(Constants.UNREACHED);
         }
     }
 
-    public JsonReader<?> getReader() {
-        return reader;
-    }
-
-    public Gt<T> getGt() {
-        return gt;
-    }
-
-    public T getObjField() {
-        return objField;
-    }
-
-    public List<T> getListField() {
-        return listField;
-    }
-
-    public int getIndex() {
-        return index;
-    }
-
-    public void setIndex(int index) {
-        this.index = index;
-    }
-
-    public JsonReaderState getState() {
-        return state;
-    }
-
-    public void setState(JsonReaderState state) {
-        this.state = state;
-    }
-
-    public String getKey() {
-        return key;
-    }
-
-    public void setKey(String key) {
-        this.key = key;
+    @Override
+    public JsonNode process() {
+        return null;
     }
 }

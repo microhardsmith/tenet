@@ -47,7 +47,10 @@ public final class NativeUtil {
             ostype = OsType.Unknown;
         }
         try{
-            SymbolLookup symbolLookup = NativeUtil.loadLibrary(Native.LIB);
+            SymbolLookup symbolLookup = NativeUtil.loadLibrary(Native.CORE_LIB);
+            if(symbolLookup == null) {
+                throw new FrameworkException(ExceptionType.NETWORK, "Tenet core lib not found");
+            }
             MethodHandle stdoutHandle = NativeUtil.methodHandle(symbolLookup, "g_stdout", FunctionDescriptor.of(ValueLayout.ADDRESS));
             stdout = (MemorySegment) stdoutHandle.invokeExact();
             MethodHandle stderrHandle = NativeUtil.methodHandle(symbolLookup, "g_stderr", FunctionDescriptor.of(ValueLayout.ADDRESS));
@@ -95,13 +98,13 @@ public final class NativeUtil {
     }
 
     /**
-     *  Load a native library by environment variable, if system library was not found in environment variables, will throw a exception
+     *  Load a native library by environment variable, return null if system library was not found in environment variables
      */
     public static SymbolLookup loadLibrary(String identifier) {
         return cache.computeIfAbsent(identifier, i -> {
             String path = System.getProperty(i);
             if(path == null || path.isEmpty()) {
-                throw new FrameworkException(ExceptionType.NATIVE, "Environment variable not found : %s".formatted(i));
+                return null;
             }
             return SymbolLookup.libraryLookup(path, Arena.global());
         });

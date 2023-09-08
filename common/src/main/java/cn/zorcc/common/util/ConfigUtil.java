@@ -1,11 +1,15 @@
 package cn.zorcc.common.util;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.Meta;
+import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.json.JsonParser;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.foreign.MemorySegment;
 
 /**
  * 配置加载类
@@ -26,13 +30,12 @@ public class ConfigUtil {
         if (!fileName.endsWith(Constants.JSON_SUFFIX)) {
             throw new FrameworkException(ExceptionType.CONFIG, "Config file must be .json");
         }
-        if (!fileName.startsWith(Constants.SEPARATOR)) {
-            fileName = Constants.SEPARATOR.concat(fileName);
-        }
-        ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
-        try(InputStream jsonStream = contextClassLoader.getResourceAsStream(fileName)) {
-            // TODO return jsonStream == null ? ConstructorAccess.get(configClass).newInstance() : new ObjectMapper().readValue(jsonStream, configClass);
-            return null;
+        try(InputStream jsonStream = ConfigUtil.class.getClassLoader().getResourceAsStream(fileName)) {
+            if(jsonStream == null) {
+                return Meta.of(configClass).constructor().get();
+            }else {
+                return JsonParser.deserializeAsObject(new ReadBuffer(MemorySegment.ofArray(jsonStream.readAllBytes())), configClass);
+            }
         } catch (IOException e) {
             throw new FrameworkException(ExceptionType.CONFIG, "Can't resolve config file : " + fileName, e);
         }

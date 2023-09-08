@@ -256,7 +256,10 @@ public final class MacNative implements Native {
 
     static {
         long nano = Clock.nano();
-        SymbolLookup symbolLookup = NativeUtil.loadLibrary(Native.LIB);
+        SymbolLookup symbolLookup = NativeUtil.loadLibrary(Native.CORE_LIB);
+        if(symbolLookup == null) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Tenet core lib not found");
+        }
         kqueueMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "m_kqueue", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         keventCtlMethodHandle = NativeUtil.methodHandle(symbolLookup,
