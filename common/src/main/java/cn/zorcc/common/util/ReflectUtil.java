@@ -4,12 +4,19 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 
+import java.lang.invoke.CallSite;
+import java.lang.invoke.LambdaMetafactory;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 public final class ReflectUtil {
     private static final Map<Class<?>, Class<?>> wrapperMap = Map.of(byte.class, Byte.class,
@@ -71,5 +78,86 @@ public final class ReflectUtil {
 
     public static String setterName(String fieldName) {
         return Constants.SET + fieldName.substring(Constants.ZERO, Constants.ONE).toUpperCase() + fieldName.substring(Constants.ONE);
+    }
+
+
+    /**
+     *   Create a constructor method using lambda
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> Supplier<T> createConstructor(Class<T> type) {
+        try{
+            MethodHandle cmh = Constants.LOOKUP.findConstructor(type, MethodType.methodType(void.class));
+            MethodType methodType = cmh.type();
+            CallSite callSite = LambdaMetafactory.metafactory(Constants.LOOKUP,
+                    Constants.GET,
+                    MethodType.methodType(Supplier.class),
+                    methodType.erase(), cmh, methodType);
+            return (Supplier<T>) callSite.getTarget().invokeExact();
+        }catch (Throwable e) {
+            throw new FrameworkException(ExceptionType.CONTEXT, "Target class %s lacks a parameterless constructor".formatted(type.getName()), e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T> Function<Object[], T> createRecordConstructor(Class<T> recordClass, Field[] fields) {
+        try{
+            List<Class<?>> parameterTypes = new ArrayList<>();
+            for (Field f : fields) {
+                Class<?> fieldType = f.getType();
+                parameterTypes.add(fieldType.isPrimitive() ? ReflectUtil.getWrapperClass(fieldType) : fieldType);
+            }
+            MethodHandle cmh = Constants.LOOKUP.findConstructor(recordClass, MethodType.methodType(void.class, parameterTypes));
+            CallSite callSite = LambdaMetafactory.metafactory(Constants.LOOKUP,
+                    Constants.APPLY,
+                    MethodType.methodType(Function.class),
+                    MethodType.methodType(Object.class, Object[].class),
+                    cmh,
+                    MethodType.methodType(recordClass, parameterTypes));
+            return (Function<Object[], T>) callSite.getTarget().invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED, throwable);
+
+        }
+    }
+
+    /**
+     *   Create a getter method using lambda
+     */
+    @SuppressWarnings("unchecked")
+    public static Function<Object, Object> createGetter(MethodHandle mh, Class<?> fieldClass) {
+        try{
+            MethodType type = mh.type();
+            if(fieldClass.isPrimitive()) {
+                type = type.changeReturnType(ReflectUtil.getWrapperClass(fieldClass));
+            }
+            CallSite callSite = LambdaMetafactory.metafactory(Constants.LOOKUP,
+                    Constants.APPLY,
+                    MethodType.methodType(Function.class),
+                    type.erase(), mh, type);
+            return (Function<Object, Object>) callSite.getTarget().invokeExact();
+        }catch (Throwable e) {
+            throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED, e);
+        }
+    }
+
+    /**
+     *   Create a setter method using lambda
+     */
+    @SuppressWarnings("unchecked")
+    public static BiConsumer<Object, Object> createSetter(MethodHandle mh, Class<?> fieldClass) {
+        try{
+            MethodType type = mh.type();
+            if(fieldClass.isPrimitive()) {
+                type = type.changeParameterType(Constants.ONE, ReflectUtil.getWrapperClass(fieldClass));
+            }
+            CallSite callSite = LambdaMetafactory.metafactory(Constants.LOOKUP,
+                    Constants.ACCEPT,
+                    MethodType.methodType(BiConsumer.class),
+                    type.erase(), mh, type);
+            return (BiConsumer<Object, Object>) callSite.getTarget().invokeExact();
+        }catch (Throwable e) {
+            throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED, e);
+        }
     }
 }

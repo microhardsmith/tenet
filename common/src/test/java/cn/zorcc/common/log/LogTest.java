@@ -19,6 +19,6 @@ public class LogTest {
     @Test
     public void testPlainLog() throws InterruptedException {
         log.info("hello");
-        Thread.sleep(1000L);
+        Thread.sleep(200L);
     }
 }

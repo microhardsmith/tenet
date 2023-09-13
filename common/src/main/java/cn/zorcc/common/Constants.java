@@ -4,6 +4,7 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
 
+import java.lang.invoke.MethodHandles;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -15,6 +16,12 @@ import java.time.format.DateTimeFormatter;
  *   Constants pool
  */
 public final class Constants {
+    public static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
+    public static final String GET = "get";
+    public static final String SET = "set";
+    public static final String IS = "is";
+    public static final String APPLY = "apply";
+    public static final String ACCEPT = "accept";
     public static final String SINGLETON_MSG = "Violating singleton";
     public static final String CONFIG_FILE = "configFile";
     public static final int QUEUE_SIZE = 256;
@@ -152,10 +159,6 @@ public final class Constants {
 
     public static final Integer DEFAULT_GATEWAY_APP_ID = 1010;
     public static final Integer DEFAULT_MINT_APP_ID = 1020;
-
-    public static final String SET = "set";
-    public static final String IS = "is";
-    public static final String GET = "get";
 
     /**
      *   json

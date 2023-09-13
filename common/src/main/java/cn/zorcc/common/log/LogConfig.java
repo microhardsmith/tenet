@@ -29,7 +29,7 @@ public class LogConfig {
     /**
      *  日志格式字符串
      */
-    private String logFormat = "%time% %level% [%threadName%] %className% - %msg%";
+    private String logFormat = "{time} {level} [{threadName}] {className} - {msg}";
     /**
      * 是否将日志输出到控制台,默认为true,基于性能考虑可以考虑关闭该项(输出至文件会比输出至控制台快许多)
      */

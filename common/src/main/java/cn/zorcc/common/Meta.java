@@ -19,11 +19,7 @@ import java.util.function.Supplier;
  *   Gt stands for better accessing getter and setter methods
  */
 public final class Meta<T> {
-    private static final Map<Class<?>, Meta<?>> metaMap = new ConcurrentHashMap<>();
-    private static final MethodHandles.Lookup lookup = MethodHandles.lookup();
-    private static final String GET = "get";
-    private static final String APPLY = "apply";
-    private static final String ACCEPT = "accept";
+    private static final Map<Class<?>, Meta<?>> metaMap = new ConcurrentHashMap<>(Constants.KB);
     private static final Map<Class<?>, Map<String, Object>> enumCacheMap = new ConcurrentHashMap<>();
 
     @SuppressWarnings("unchecked")
@@ -37,11 +33,11 @@ public final class Meta<T> {
     private final List<MetaInfo> metaInfoList;
     private final Map<String, Object> enumMap;
 
-    private Meta(Class<T> clazz, Supplier<T> constructor, Map<String, MetaInfo> metaInfoMap, List<MetaInfo> metaInfoList, Map<String, Object> enumMap) {
+    private Meta(Class<T> clazz, Supplier<T> constructor, Map<String, MetaInfo> metaInfoMap, Map<String, Object> enumMap) {
         this.clazz = clazz;
         this.constructor = constructor;
         this.metaInfoMap = metaInfoMap;
-        this.metaInfoList = metaInfoList;
+        this.metaInfoList = metaInfoMap.values().stream().toList();
         this.enumMap = enumMap;
     }
 
@@ -70,15 +66,15 @@ public final class Meta<T> {
             if(type.isPrimitive() || type.isAnnotation() || type.isRecord() || type.isMemberClass()) {
                 throw new FrameworkException(ExceptionType.CONTEXT, "Unsupported class type");
             }
-            Map<String, Object> enumMap = type.isEnum() ? enumCacheMap.computeIfAbsent(type, c -> {
+            Map<String, Object> enumMap = type.isEnum() ? enumCacheMap.computeIfAbsent(type, t -> {
                 Map<String, Object> m = new HashMap<>();
-                for (Object enumConstant : type.getEnumConstants()) {
+                for (Object enumConstant : t.getEnumConstants()) {
                     m.put(enumConstant.toString(), enumConstant);
                 }
                 return Collections.unmodifiableMap(m);
             }) : null;
-            Supplier<T> constructor = createConstructor(type);
-            Map<String, MetaInfo> metaInfoMap = new HashMap<>();
+            Supplier<T> constructor = ReflectUtil.createConstructor(type);
+            Map<String, MetaInfo> metaInfoMap = new LinkedHashMap<>();
             for (Field f : ReflectUtil.getAllFields(type).stream().sorted((o1, o2) -> {
                 Ordinal a1 = o1.getAnnotation(Ordinal.class);
                 Ordinal a2 = o2.getAnnotation(Ordinal.class);
@@ -88,74 +84,18 @@ public final class Meta<T> {
                 Class<?> fieldType = f.getType();
                 Type genericType = f.getGenericType();
                 String getterMethodName = ReflectUtil.getterName(fieldType, fieldName);
-                Function<Object, Object> getter = createGetter(lookup.findVirtual(type, getterMethodName, MethodType.methodType(fieldType)), fieldType);
+                Function<Object, Object> getter =ReflectUtil.createGetter(Constants.LOOKUP.findVirtual(type, getterMethodName, MethodType.methodType(fieldType)), fieldType);
                 String setterMethodName = ReflectUtil.setterName(fieldName);
-                BiConsumer<Object, Object> setter = createSetter(lookup.findVirtual(type, setterMethodName, MethodType.methodType(void.class, fieldType)), fieldType);
+                BiConsumer<Object, Object> setter = ReflectUtil.createSetter(Constants.LOOKUP.findVirtual(type, setterMethodName, MethodType.methodType(void.class, fieldType)), fieldType);
                 MetaInfo metaInfo = new MetaInfo(fieldName, fieldType, genericType, getter, setter, f.isAnnotationPresent(Format.class) ? f.getAnnotation(Format.class) : null);
                 metaInfoMap.put(fieldName, metaInfo);
             }
-            return new Meta<>(type, constructor, Collections.unmodifiableMap(metaInfoMap), metaInfoMap.values().stream().toList(), enumMap);
-        }catch (Throwable e) {
-            throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED, e);
+            return new Meta<>(type, constructor, Collections.unmodifiableMap(metaInfoMap), enumMap);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED, throwable);
         }
     }
 
-    /**
-     *   Create a constructor method using lambda
-     */
-    @SuppressWarnings("unchecked")
-    private static <T> Supplier<T> createConstructor(Class<T> clazz) {
-        try{
-            MethodHandle cmh = lookup.findConstructor(clazz, MethodType.methodType(void.class));
-            CallSite callSite = LambdaMetafactory.metafactory(lookup,
-                    GET,
-                    MethodType.methodType(Supplier.class),
-                    cmh.type().generic(), cmh, cmh.type());
-            return (Supplier<T>) callSite.getTarget().invokeExact();
-        }catch (Throwable e) {
-            throw new FrameworkException(ExceptionType.CONTEXT, "Target class %s lacks a parameterless constructor".formatted(clazz.getName()), e);
-        }
-    }
-
-    /**
-     *   Create a getter method using lambda
-     */
-    @SuppressWarnings("unchecked")
-    private static Function<Object, Object> createGetter(MethodHandle mh, Class<?> fieldClass) {
-        try{
-            MethodType type = mh.type();
-            if(fieldClass.isPrimitive()) {
-                type = type.changeReturnType(ReflectUtil.getWrapperClass(fieldClass));
-            }
-            CallSite callSite = LambdaMetafactory.metafactory(lookup,
-                    APPLY,
-                    MethodType.methodType(Function.class),
-                    type.erase(), mh, type);
-            return (Function<Object, Object>) callSite.getTarget().invokeExact();
-        }catch (Throwable e) {
-            throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED, e);
-        }
-    }
-
-    /**
-     *   Create a setter method using lambda
-     */
-    @SuppressWarnings("unchecked")
-    private static BiConsumer<Object, Object> createSetter(MethodHandle mh, Class<?> fieldClass) {
-        try{
-            MethodType type = mh.type();
-            if(fieldClass.isPrimitive()) {
-                type = type.changeParameterType(Constants.ONE, ReflectUtil.getWrapperClass(fieldClass));
-            }
-            CallSite callSite = LambdaMetafactory.metafactory(lookup,
-                    ACCEPT,
-                    MethodType.methodType(BiConsumer.class),
-                    type.erase(), mh, type);
-            return (BiConsumer<Object, Object>) callSite.getTarget().invokeExact();
-        }catch (Throwable e) {
-            throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED, e);
-        }
-    }
 
     /**
      *   Obtain all the field names with their values from target

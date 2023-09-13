@@ -11,6 +11,7 @@ import cn.zorcc.common.util.StringUtil;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -138,49 +139,41 @@ public final class FileLogEventHandler implements EventHandler<LogEvent> {
 
     private static List<LogHandler> createLogHandlers(LogConfig logConfig) {
         List<LogHandler> logHandlers = new ArrayList<>();
-        byte[] format = logConfig.getLogFormat().getBytes(StandardCharsets.UTF_8);
-        int index = Constants.ZERO;
+        MemorySegment format = MemorySegment.ofArray(logConfig.getLogFormat().getBytes(StandardCharsets.UTF_8));
+        long index = Constants.ZERO;
         for( ; ; ) {
             index = searchNormalStr(format, index, logHandlers);
             if(index < Constants.ZERO) {
-                logHandlers.add((writeBuffer, logEvent) -> {
-                    writeBuffer.writeByte(Constants.LF);
-                    byte[] throwable = logEvent.throwable();
-                    if(throwable != null) {
-                        writeBuffer.writeBytes(throwable);
-                    }
-                });
                 return logHandlers;
-            }else {
-                index = searchFormattedStr(format, index, logHandlers);
+            }
+            index = searchFormattedStr(format, index, logHandlers);
+            if(index < Constants.ZERO) {
+                return logHandlers;
             }
         }
     }
 
-    private static int searchNormalStr(byte[] format, int startIndex, List<LogHandler> handlers) {
-        int nextIndex = StringUtil.searchBytes(format, Constants.PERCENT, startIndex, bytes -> handlers.add((writeBuffer, event) -> writeBuffer.writeBytes(bytes)));
-        if(nextIndex < Constants.ZERO && startIndex < format.length) {
-            final byte[] arr = Arrays.copyOfRange(format, startIndex, format.length);
-            handlers.add((writeBuffer, event) -> writeBuffer.writeBytes(arr));
+    private static long searchNormalStr(MemorySegment format, long startIndex, List<LogHandler> handlers) {
+        long nextIndex = StringUtil.searchBytes(format, Constants.LCB, startIndex, segment -> handlers.add((writeBuffer, event) -> writeBuffer.writeSegment(segment)));
+        if(nextIndex < Constants.ZERO && startIndex < format.byteSize()) {
+            MemorySegment tail = format.asSlice(startIndex, format.byteSize() - startIndex);
+            handlers.add((writeBuffer, event) -> writeBuffer.writeSegment(tail));
         }
         return nextIndex;
     }
 
-    private static int searchFormattedStr(byte[] format, int startIndex, List<LogHandler> handlers) {
-        int nextIndex = StringUtil.searchStr(format, Constants.PERCENT, startIndex, s -> {
-            LogHandler handler = switch (s) {
+    private static long searchFormattedStr(MemorySegment format, long startIndex, List<LogHandler> handlers) {
+        return StringUtil.searchBytes(format, Constants.RCB, startIndex, segment -> {
+            String str = new String(segment.toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8);
+            LogHandler handler = switch (str) {
                 case "time" -> (writeBuffer, logEvent) -> writeBuffer.writeBytes(logEvent.time());
                 case "level" -> (writeBuffer, logEvent) -> writeBuffer.writeBytes(logEvent.level());
                 case "className" -> (writeBuffer, logEvent) -> writeBuffer.writeBytes(logEvent.className());
                 case "threadName" -> (writeBuffer, logEvent) -> writeBuffer.writeBytes(logEvent.threadName());
                 case "msg" -> (writeBuffer, logEvent) -> writeBuffer.writeBytes(logEvent.msg());
-                default -> throw new FrameworkException(ExceptionType.LOG, "Unresolved log format : %s".formatted(s));
+                default -> throw new FrameworkException(ExceptionType.LOG, "Unresolved log format : %s".formatted(str));
             };
             handlers.add(handler);
         });
-        if(nextIndex < Constants.ZERO) {
-            throw new FrameworkException(ExceptionType.LOG, "Corrupted log format");
-        }
-        return nextIndex;
     }
 }
