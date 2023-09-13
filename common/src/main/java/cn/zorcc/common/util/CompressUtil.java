@@ -1,7 +1,7 @@
 package cn.zorcc.common.util;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.ResizableByteArray;
+import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 
@@ -296,25 +296,25 @@ public final class CompressUtil {
     }
 
     public static byte[] compressUsingJdkGzip(final byte[] rawData, final int level) {
-        try(ResizableByteArray resizableByteArray = new ResizableByteArray(); GZIPOutputStream gzipOutputStream = new GZIPOutputStream(resizableByteArray){{
+        try(WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer(); GZIPOutputStream gzipOutputStream = new GZIPOutputStream(writeBuffer){{
             def.setLevel(level >= Deflater.BEST_SPEED && level <= Deflater.BEST_COMPRESSION ? level : Deflater.DEFAULT_COMPRESSION);
         }}) {
             gzipOutputStream.write(rawData);
             gzipOutputStream.finish();
-            return resizableByteArray.toArray();
+            return writeBuffer.toArray();
         } catch (IOException e) {
             throw new FrameworkException(ExceptionType.COMPRESS, "Unable to perform gzip compression", e);
         }
     }
 
     public static byte[] decompressUsingJdkGzip(final byte[] compressedData) {
-        try (ResizableByteArray resizableByteArray = new ResizableByteArray(compressedData.length); GZIPInputStream gzipIn = new GZIPInputStream(new ByteArrayInputStream(compressedData))) {
+        try (WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer(); GZIPInputStream gzipIn = new GZIPInputStream(new ByteArrayInputStream(compressedData))) {
             byte[] buffer = new byte[CHUNK_SIZE];
             int bytesRead;
             while ((bytesRead = gzipIn.read(buffer)) != -1) {
-                resizableByteArray.write(buffer, 0, bytesRead);
+                writeBuffer.write(buffer, 0, bytesRead);
             }
-            return resizableByteArray.toArray();
+            return writeBuffer.toArray();
         }catch (IOException e) {
             throw new FrameworkException(ExceptionType.COMPRESS, "Unable to perform gzip decompression", e);
         }
@@ -330,12 +330,12 @@ public final class CompressUtil {
         deflater.setInput(rawData);
         deflater.finish();
         byte[] buffer = new byte[CHUNK_SIZE];
-        try(ResizableByteArray resizableByteArray = new ResizableByteArray()) {
+        try(WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer()) {
             while (!deflater.finished()) {
                 int len = deflater.deflate(buffer);
-                resizableByteArray.write(buffer, 0, len);
+                writeBuffer.writeBytes(buffer, Constants.ZERO, len);
             }
-            return resizableByteArray.toArray();
+            return writeBuffer.toArray();
         } finally {
             deflater.end();
         }
@@ -344,13 +344,13 @@ public final class CompressUtil {
     public static byte[] decompressUsingJdkDeflate(final byte[] compressedData) {
         Inflater inflater = new Inflater();
         inflater.setInput(compressedData);
-        try (ResizableByteArray resizableByteArray = new ResizableByteArray(compressedData.length)) {
+        try (WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer()) {
             byte[] buffer = new byte[CHUNK_SIZE];
             while (!inflater.finished()) {
                 int decompressLen = inflater.inflate(buffer);
-                resizableByteArray.write(buffer, 0, decompressLen);
+                writeBuffer.writeBytes(buffer, Constants.ZERO, decompressLen);
             }
-            return resizableByteArray.toArray();
+            return writeBuffer.toArray();
         }catch (DataFormatException e) {
             throw new FrameworkException(ExceptionType.COMPRESS, "Unable to perform deflate decompression", e);
         }finally {

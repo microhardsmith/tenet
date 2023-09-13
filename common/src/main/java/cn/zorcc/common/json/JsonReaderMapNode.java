@@ -2,7 +2,7 @@ package cn.zorcc.common.json;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ReadBuffer;
-import cn.zorcc.common.ResizableByteArray;
+import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.exception.JsonParseException;
 
 import java.lang.reflect.ParameterizedType;
@@ -16,7 +16,7 @@ public final class JsonReaderMapNode extends JsonReaderNode {
     private final Map<String, Object> map = new HashMap<>();
     private final Class<?> type;
     private final Type valueType;
-    private final ResizableByteArray writer = new ResizableByteArray();
+    private final WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer();
     private String currentKey;
 
     public JsonReaderMapNode(ReadBuffer readBuffer, Class<?> type, Type valueType) {
@@ -26,18 +26,15 @@ public final class JsonReaderMapNode extends JsonReaderNode {
     }
 
     @Override
-    public JsonNode process() {
-        byte fb = JsonParser.readNextByte(readBuffer);
-        if(fb == Constants.RCB) {
+    public JsonReaderNode tryDeserialize() {
+        if (checkFirstByte(readBuffer, Constants.RCB)) {
             return toPrev();
-        }else if(fb != Constants.COMMA) {
-            throw new JsonParseException(readBuffer);
         }
         for( ; ; ) {
-            JsonParser.readExpected(readBuffer, Constants.QUOTE);
-            currentKey = JsonParser.readStringUntil(readBuffer, writer, Constants.QUOTE);
-            JsonParser.readExpected(readBuffer, Constants.COLON);
-            byte b = JsonParser.readNextByte(readBuffer);
+            readExpected(readBuffer, Constants.QUOTE);
+            currentKey = readStringUntil(readBuffer, writeBuffer, Constants.QUOTE);
+            readExpected(readBuffer, Constants.COLON);
+            byte b = readNextByte(readBuffer);
             switch (b) {
                 case Constants.LCB -> {
                     if(valueType instanceof Class<?> c) {
@@ -64,42 +61,49 @@ public final class JsonReaderMapNode extends JsonReaderNode {
                 }
                 case Constants.QUOTE -> {
                     if(valueType instanceof Class<?> c && c == String.class) {
-                        JsonParser.readStringUntil(readBuffer, writer, Constants.QUOTE);
-                        map.put(currentKey, writer.asString());
-                        byte sep = JsonParser.readNextByte(readBuffer);
-                        if(sep == Constants.RCB) {
+                        String strValue = readStringUntil(readBuffer, writeBuffer, Constants.QUOTE);
+                        map.put(currentKey, strValue);
+                        if (checkSeparator(readBuffer, Constants.RCB)) {
                             return toPrev();
-                        }else if(sep != Constants.COMMA) {
-                            throw new JsonParseException(readBuffer);
                         }
                     }else {
                         throw new JsonParseException(Constants.JSON_VALUE_TYPE_ERR);
                     }
                 }
                 case (byte) 'n' -> {
-                    JsonParser.readFollowingNullValue(readBuffer);
+                    readFollowingNullValue(readBuffer);
                     map.put(currentKey, null);
+                    if (checkSeparator(readBuffer, Constants.RCB)) {
+                        return toPrev();
+                    }
                 }
                 case (byte) 't' -> {
                     if(valueType instanceof Class<?> c && c == Boolean.class) {
-                        JsonParser.readFollowingTrueValue(readBuffer);
+                        readFollowingTrueValue(readBuffer);
                         map.put(currentKey, Boolean.TRUE);
+                        if (checkSeparator(readBuffer, Constants.RCB)) {
+                            return toPrev();
+                        }
                     }else {
                         throw new JsonParseException(Constants.JSON_VALUE_TYPE_ERR);
                     }
                 }
                 case (byte) 'f' -> {
                     if(valueType instanceof Class<?> c && c == Boolean.class) {
-                        JsonParser.readFollowingFalseValue(readBuffer);
+                        readFollowingFalseValue(readBuffer);
                         map.put(currentKey, Boolean.FALSE);
+                        if (checkSeparator(readBuffer, Constants.RCB)) {
+                            return toPrev();
+                        }
                     }else {
                         throw new JsonParseException(Constants.JSON_VALUE_TYPE_ERR);
                     }
                 }
                 default -> {
                     if(valueType instanceof Class<?> c && (c.isPrimitive() || Number.class.isAssignableFrom(c))) {
-                        byte sep = JsonParser.readUntilMatch(readBuffer, writer, Constants.COMMA, Constants.RCB);
-                        map.put(currentKey, JsonParser.convertJsonNumberValue(c, writer.asString()));
+                        writeBuffer.writeByte(b);
+                        byte sep = readUntilMatch(readBuffer, writeBuffer, Constants.COMMA, Constants.RCB);
+                        map.put(currentKey, convertJsonNumberValue(c, writeBuffer.toString()));
                         if(sep == Constants.RCB) {
                             return toPrev();
                         }else if(sep != Constants.COMMA) {
@@ -114,12 +118,12 @@ public final class JsonReaderMapNode extends JsonReaderNode {
     }
 
     @Override
-    public void assign(Object value) {
+    public void setJsonObject(Object value) {
         map.put(currentKey, value);
     }
 
     @Override
-    public Object construct() {
-        return JsonParser.convertJsonMapValue(type, map);
+    public Object getJsonObject() {
+        return convertJsonMapValue(type, map);
     }
 }

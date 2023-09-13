@@ -3,53 +3,39 @@ package cn.zorcc.common.json;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.Meta;
 import cn.zorcc.common.MetaInfo;
-import cn.zorcc.common.Writer;
+import cn.zorcc.common.WriteBuffer;
 
 import java.util.List;
 
-public final class JsonWriterObjectNode extends JsonNode {
-    private final Writer writer;
+public final class JsonWriterObjectNode extends JsonWriterNode {
+    private final WriteBuffer writeBuffer;
     private final Meta<?> meta;
     private final Object obj;
     private int index = Constants.ZERO;
-    private boolean notFirst = false;
 
-    public JsonWriterObjectNode(Writer writer, Object obj, Class<?> type) {
-        this.writer = writer;
+    public JsonWriterObjectNode(WriteBuffer writeBuffer, Object obj, Class<?> type) {
+        this.writeBuffer = writeBuffer;
         this.meta = Meta.of(type);
         this.obj = obj;
-        writer.writeByte(Constants.LCB);
+        writeBuffer.writeByte(Constants.LCB);
     }
 
     @Override
-    public JsonNode process() {
-        if(index == meta.metaInfoList().size()) {
-            return processPrev();
-        }else {
-            return processCurrent();
-        }
-    }
-
-    private JsonNode processCurrent() {
+    protected JsonWriterNode trySerialize() {
         final List<MetaInfo> metaInfoList = meta.metaInfoList();
         while (index < metaInfoList.size()) {
             MetaInfo metaInfo = metaInfoList.get(index);
             index = index + 1;
             Object value = metaInfo.getter().apply(obj);
             if(value != null) {
-                JsonParser.writeKey(writer, metaInfo.fieldName(), notFirst);
-                notFirst = true;
-                JsonNode appended = JsonParser.writeValue(this, writer, value, metaInfo.format());
+                writeKey(writeBuffer, metaInfo.fieldName());
+                JsonWriterNode appended = writeValue(writeBuffer, value, metaInfo.format());
                 if(appended != null) {
                     return appended;
                 }
             }
         }
-        return processPrev();
-    }
-
-    private JsonNode processPrev() {
-        writer.writeByte(Constants.RCB);
+        writeBuffer.writeByte(Constants.RCB);
         return toPrev();
     }
 }

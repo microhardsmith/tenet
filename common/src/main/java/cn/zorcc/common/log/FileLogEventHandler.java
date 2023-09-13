@@ -1,54 +1,42 @@
 package cn.zorcc.common.log;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.ResizableByteArray;
+import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.util.FileUtil;
+import cn.zorcc.common.util.StringUtil;
 
 import java.io.IOException;
-import java.io.OutputStream;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.OpenOption;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
  *   Print log to the file,
  */
 public final class FileLogEventHandler implements EventHandler<LogEvent> {
-    private static final OpenOption[] options = new OpenOption[] {
-            StandardOpenOption.CREATE_NEW,
-            StandardOpenOption.SPARSE,
-            StandardOpenOption.WRITE
-    };
+    private static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss-SSS");
     private final String logDirPath;
     private final String logFileName;
-    private final int maxFileSize;
-    private final int maxRecordingTime;
-    private final ResizableByteArray buffer;
-    private final List<IOConsumer> consumers;
-    /**
-     *   Timestamp milli when last stream was allocated
-     */
-    private long allocMilli;
-    /**
-     *   Timestamp milli when last log event occur
-     */
-    private long eventMilli;
-    /**
-     *   Current file output stream
-     */
-    private OutputStream stream;
-    /**
-     *   File write index
-     */
-    private long index;
+    private final long maxFileSize;
+    private final long maxRecordingTime;
+    private final List<LogHandler> handlers;
+    private final Arena reservedArena = Arena.ofConfined();
+    private final MemorySegment reserved;
+    private long allocationTimestamp;
+    private long lastEventTimestamp;
+    private long lastFlushTimestamp;
+    private MemorySegment fileStream;
+    private long currentWrittenIndex;
     public FileLogEventHandler(LogConfig logConfig) {
         try{
             String dir = logConfig.getLogFileDir();
@@ -59,148 +47,140 @@ public final class FileLogEventHandler implements EventHandler<LogEvent> {
             }
             this.logFileName = logConfig.getLogFileName();
             this.maxFileSize = logConfig.getMaxFileSize();
-            if(maxFileSize > 0 && maxFileSize <= Constants.MB) {
-                throw new FrameworkException(ExceptionType.LOG, "Max log file-size is too small, will possibly overflow");
+            if(maxFileSize <= Constants.MB) {
+                throw new FrameworkException(ExceptionType.LOG, "The log file size limit is too small");
             }
-            this.maxRecordingTime = logConfig.getMaxRecordingTime() <= 0 ? -1 : logConfig.getMaxRecordingTime();
-            this.buffer = new ResizableByteArray(logConfig.getFileBuffer());
-            this.consumers = createIOConsumer(logConfig.getLogFormat());
-            allocateNewStream();
+            this.maxRecordingTime = logConfig.getMaxRecordingTime() <= Constants.ZERO ? Long.MIN_VALUE : logConfig.getMaxRecordingTime();
+            this.reserved = reservedArena.allocate(logConfig.getFileBuffer());
+            this.handlers = createLogHandlers(logConfig);
+            openNewLogOutputFile();
         }catch (IOException e) {
             throw new FrameworkException(ExceptionType.LOG, "Unable to create log file");
-        }
-    }
-
-    /**
-     *  Write and flush current byte-array into the file
-     *  if timestamp or filesize exceed the limit, reallocate the output-stream
-     */
-    private void writeAndFlush() {
-        try{
-            int bufferIndex = buffer.writeIndex();
-            if(bufferIndex > 0) {
-                if((maxFileSize > 0 && index + bufferIndex > maxFileSize) || (maxRecordingTime > 0 && eventMilli - allocMilli > maxRecordingTime)) {
-                    stream.close();
-                    allocateNewStream();
-                }
-                stream.write(buffer.rawArray(), 0, bufferIndex);
-                stream.flush();
-                index = index + bufferIndex;
-                buffer.reset();
-            }
-        }catch (IOException e) {
-            throw new FrameworkException(ExceptionType.LOG, "Failed to write to file", e);
-        }
-    }
-
-    private static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss-SSS");
-    /**
-     *   Allocate a new file output-stream
-     */
-    private void allocateNewStream() {
-        try{
-            LocalDateTime now = LocalDateTime.now();
-            allocMilli = now.toInstant(Constants.LOCAL_ZONE_OFFSET).toEpochMilli();
-            Path path = Path.of(logDirPath +
-                    Constants.SEPARATOR +
-                    logFileName + "-" +
-                    dateTimeFormatter.format(now) +
-                    Constants.LOG_FILE_TYPE);
-            if(Files.exists(path)) {
-                throw new FrameworkException(ExceptionType.LOG, "Target log file already exist");
-            }
-            stream = Files.newOutputStream(path, options);
-            index = 0L;
-        }catch (IOException e) {
-            throw new FrameworkException(ExceptionType.LOG, "IOException caught when allocate", e);
-        }
-    }
-
-    /**
-     *   Flush and close current file output-stream
-     */
-    private void flushAndClose() {
-        try{
-            int bufferIndex = buffer.writeIndex();
-            if(bufferIndex > 0) {
-                stream.write(buffer.rawArray(), 0, bufferIndex);
-                stream.flush();
-            }
-            stream.close();
-        }catch (IOException e) {
-            throw new FrameworkException(ExceptionType.LOG, "IOException caught when shutting down FileLogEventHandler");
         }
     }
 
     @Override
     public void handle(LogEvent event) {
         if(event == LogEvent.flushEvent) {
-            writeAndFlush();
+            flushFile();
         }else if(event == LogEvent.shutdownEvent) {
-            flushAndClose();
+            closeFile();
         }else {
-            eventMilli = event.timestamp();
-            for (IOConsumer consumer : consumers) {
-                consumer.accept(buffer, event);
-            }
+            writeFile(event);
         }
     }
 
-    @FunctionalInterface
-    interface IOConsumer {
-        void accept(ResizableByteArray buffer, LogEvent event);
-    }
 
     /**
-     *   Parsing log-format to a lambda consumer list
+     *  Write and flush current byte-array into the file
+     *  if timestamp or file-size exceed the limit, reallocate the output-stream
      */
-    private static List<IOConsumer> createIOConsumer(String logFormat) {
-        List<IOConsumer> result = new ArrayList<>();
-        ResizableByteArray arr = new ResizableByteArray(Constants.KB);
-        byte[] bytes = logFormat.getBytes(StandardCharsets.UTF_8);
-        for(int i = 0; i < bytes.length; i++) {
-            byte b = bytes[i];
-            if(b == Constants.PERCENT) {
-                if(arr.writeIndex() > 0) {
-                    final byte[] array = arr.toArray();
-                    result.add((resizableByteArray, logEvent) -> resizableByteArray.writeBytes(array));
-                    arr.reset();
+    private void writeFile(LogEvent event) {
+        try(WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(reserved)) {
+            for (LogHandler logHandler : handlers) {
+                logHandler.process(writeBuffer, event);
+            }
+            long written = writeBuffer.writeIndex();
+            if(written > Constants.ZERO) {
+                lastEventTimestamp = event.timestamp();
+                FileUtil.fwrite(writeBuffer.content(), fileStream);
+                currentWrittenIndex += written;
+                if((maxFileSize > Constants.ZERO && currentWrittenIndex > maxFileSize) || (maxRecordingTime > Constants.ZERO && lastEventTimestamp - allocationTimestamp > maxRecordingTime)) {
+                    FileUtil.fflush(fileStream);
+                    FileUtil.fclose(fileStream);
+                    openNewLogOutputFile();
                 }
-                int j = i + 1;
-                for( ; ; ) {
-                    if(bytes[j] == Constants.PERCENT) {
-                        String s = new String(bytes, i + 1, j - i - 1);
-                        switch (s) {
-                            case "time" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.writeBytes(logEvent.time()));
-                            case "level" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.writeBytes(logEvent.level()));
-                            case "className" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.writeBytes(logEvent.className()));
-                            case "threadName" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.writeBytes(logEvent.threadName()));
-                            case "msg" -> result.add((resizableByteArray, logEvent) -> resizableByteArray.writeBytes(logEvent.msg()));
-                            default -> throw new FrameworkException(ExceptionType.LOG, "Unresolved log format : %s".formatted(s));
-                        }
-                        break;
-                    }else if(++j == bytes.length){
-                        throw new FrameworkException(ExceptionType.LOG, "LogFormat corrupted");
+            }
+        }
+    }
+
+    private void flushFile() {
+        if(lastFlushTimestamp < lastEventTimestamp) {
+            FileUtil.fflush(fileStream);
+            lastFlushTimestamp = lastEventTimestamp;
+        }
+    }
+
+
+    /**
+     *   Flush and close current file output-stream
+     */
+    private void closeFile() {
+        if(lastFlushTimestamp < lastEventTimestamp) {
+            FileUtil.fflush(fileStream);
+        }
+        FileUtil.fclose(fileStream);
+        reservedArena.close();
+    }
+
+
+    /**
+     *   Allocate a new file stream
+     */
+    private void openNewLogOutputFile() {
+        try(Arena arena = Arena.ofConfined()) {
+            LocalDateTime now = LocalDateTime.now();
+            allocationTimestamp = now.toInstant(Constants.LOCAL_ZONE_OFFSET).toEpochMilli();
+            String absolutePath = logDirPath +
+                    Constants.SEPARATOR +
+                    logFileName + "-" +
+                    dateTimeFormatter.format(now) +
+                    Constants.LOG_FILE_TYPE;
+            if(Files.exists(Path.of(absolutePath))) {
+                throw new FrameworkException(ExceptionType.LOG, "Target log file already exist");
+            }
+            MemorySegment path = arena.allocateUtf8String(absolutePath);
+            MemorySegment mode = arena.allocateUtf8String("a");
+            fileStream = FileUtil.fopen(path, mode);
+            currentWrittenIndex = Constants.ZERO;
+        }
+    }
+
+    private static List<LogHandler> createLogHandlers(LogConfig logConfig) {
+        List<LogHandler> logHandlers = new ArrayList<>();
+        byte[] format = logConfig.getLogFormat().getBytes(StandardCharsets.UTF_8);
+        int index = Constants.ZERO;
+        for( ; ; ) {
+            index = searchNormalStr(format, index, logHandlers);
+            if(index < Constants.ZERO) {
+                logHandlers.add((writeBuffer, logEvent) -> {
+                    writeBuffer.writeByte(Constants.LF);
+                    byte[] throwable = logEvent.throwable();
+                    if(throwable != null) {
+                        writeBuffer.writeBytes(throwable);
                     }
-                }
-                i = j;
+                });
+                return logHandlers;
             }else {
-                arr.writeByte(b);
+                index = searchFormattedStr(format, index, logHandlers);
             }
         }
-        if(arr.writeIndex() > 0) {
-            final byte[] array = arr.toArray();
-            result.add((resizableByteArray, logEvent) -> resizableByteArray.writeBytes(array));
-            arr.reset();
+    }
+
+    private static int searchNormalStr(byte[] format, int startIndex, List<LogHandler> handlers) {
+        int nextIndex = StringUtil.searchBytes(format, Constants.PERCENT, startIndex, bytes -> handlers.add((writeBuffer, event) -> writeBuffer.writeBytes(bytes)));
+        if(nextIndex < Constants.ZERO && startIndex < format.length) {
+            final byte[] arr = Arrays.copyOfRange(format, startIndex, format.length);
+            handlers.add((writeBuffer, event) -> writeBuffer.writeBytes(arr));
         }
-        // automatically add \n and throwable
-        result.add((resizableByteArray, logEvent) -> {
-            resizableByteArray.writeByte(Constants.LF);
-            byte[] throwable = logEvent.throwable();
-            if(throwable != null) {
-                resizableByteArray.writeBytes(throwable);
-            }
+        return nextIndex;
+    }
+
+    private static int searchFormattedStr(byte[] format, int startIndex, List<LogHandler> handlers) {
+        int nextIndex = StringUtil.searchStr(format, Constants.PERCENT, startIndex, s -> {
+            LogHandler handler = switch (s) {
+                case "time" -> (writeBuffer, logEvent) -> writeBuffer.writeBytes(logEvent.time());
+                case "level" -> (writeBuffer, logEvent) -> writeBuffer.writeBytes(logEvent.level());
+                case "className" -> (writeBuffer, logEvent) -> writeBuffer.writeBytes(logEvent.className());
+                case "threadName" -> (writeBuffer, logEvent) -> writeBuffer.writeBytes(logEvent.threadName());
+                case "msg" -> (writeBuffer, logEvent) -> writeBuffer.writeBytes(logEvent.msg());
+                default -> throw new FrameworkException(ExceptionType.LOG, "Unresolved log format : %s".formatted(s));
+            };
+            handlers.add(handler);
         });
-        return result;
+        if(nextIndex < Constants.ZERO) {
+            throw new FrameworkException(ExceptionType.LOG, "Corrupted log format");
+        }
+        return nextIndex;
     }
 }

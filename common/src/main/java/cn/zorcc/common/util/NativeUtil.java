@@ -29,13 +29,20 @@ public final class NativeUtil {
     /**
      *   Global dynamic library cache to avoid repeated loading
      */
-    private static final Map<String, SymbolLookup> cache = new ConcurrentHashMap<>();
+    private static final Map<String, SymbolLookup> libraryCache = new ConcurrentHashMap<>();
+    /**
+     *   Global native method cache to avoid repeated capturing
+     */
+    private static final Map<String, MethodHandle> nativeMethodCache = new ConcurrentHashMap<>();
+    private static final Arena globalArena = Arena.global();
+    private static final Arena autoArena = Arena.ofAuto();
     private static final VarHandle byteHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_BYTE);
     private static final VarHandle shortHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_SHORT_UNALIGNED);
     private static final VarHandle intHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_INT_UNALIGNED);
     private static final VarHandle longHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_LONG_UNALIGNED);
     private static final MemorySegment stdout;
     private static final MemorySegment stderr;
+
     static {
         if(OS_NAME.contains("windows")) {
             ostype = OsType.Windows;
@@ -62,6 +69,14 @@ public final class NativeUtil {
 
     private NativeUtil() {
         throw new UnsupportedOperationException();
+    }
+
+    public static Arena globalArena() {
+        return globalArena;
+    }
+
+    public static Arena autoArena() {
+        return autoArena;
     }
 
     public static MemorySegment stdout() {
@@ -101,7 +116,7 @@ public final class NativeUtil {
      *  Load a native library by environment variable, return null if system library was not found in environment variables
      */
     public static SymbolLookup loadLibrary(String identifier) {
-        return cache.computeIfAbsent(identifier, i -> {
+        return libraryCache.computeIfAbsent(identifier, i -> {
             String path = System.getProperty(i);
             if(path == null || path.isEmpty()) {
                 return null;
@@ -110,14 +125,18 @@ public final class NativeUtil {
         });
     }
 
-    /**
-     *  Load function from system library, such as strlen
-     */
     public static MethodHandle nativeMethodHandle(String methodName, FunctionDescriptor functionDescriptor) {
-        return linker.downcallHandle(linker.defaultLookup()
-                .find(methodName)
-                .orElseThrow(() -> new FrameworkException(ExceptionType.NATIVE, "Unable to locate [%s] native method".formatted(methodName))),
-                functionDescriptor);
+        return nativeMethodHandle(methodName, functionDescriptor, false);
+    }
+
+    /**
+     *  Load function from system library, such as strlen()
+     */
+    public static MethodHandle nativeMethodHandle(String methodName, FunctionDescriptor functionDescriptor, boolean isTrivial) {
+        return nativeMethodCache.computeIfAbsent(methodName, k -> {
+            MemorySegment method = linker.defaultLookup().find(k).orElseThrow(() -> new FrameworkException(ExceptionType.NATIVE, "Unable to locate [%s] native method".formatted(methodName)));
+            return isTrivial ? linker.downcallHandle(method, functionDescriptor, Linker.Option.isTrivial()): linker.downcallHandle(method, functionDescriptor);
+        });
     }
 
     public static boolean checkNullPointer(MemorySegment memorySegment) {

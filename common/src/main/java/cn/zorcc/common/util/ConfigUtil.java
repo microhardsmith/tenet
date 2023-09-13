@@ -30,7 +30,7 @@ public class ConfigUtil {
         if (!fileName.endsWith(Constants.JSON_SUFFIX)) {
             throw new FrameworkException(ExceptionType.CONFIG, "Config file must be .json");
         }
-        try(InputStream jsonStream = ConfigUtil.class.getClassLoader().getResourceAsStream(fileName)) {
+        try(InputStream jsonStream = ConfigUtil.class.getResourceAsStream(fileName)) {
             if(jsonStream == null) {
                 return Meta.of(configClass).constructor().get();
             }else {

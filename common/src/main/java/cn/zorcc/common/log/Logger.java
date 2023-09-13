@@ -109,24 +109,24 @@ public final class Logger extends LegacyAbstractLogger {
      */
     public static byte[] processMsg(String msg, Object[] args) {
         byte[] msgBytes = msg.getBytes(StandardCharsets.UTF_8);
-        if(args == null || args.length == 0) {
+        if(args == null || args.length == Constants.ZERO) {
             return msgBytes;
         } else {
             List<byte[]> list = new ArrayList<>(args.length);
-            int reserved = 0;
+            int reserved = Constants.ZERO;
             for (Object arg : args) {
                 byte[] b = arg.toString().getBytes(StandardCharsets.UTF_8);
                 list.add(b);
                 reserved += b.length;
             }
             byte[] result = new byte[reserved + msgBytes.length];
-            int len = 0;
-            for(int i = 0, index = 0; i < msgBytes.length; i++) {
+            int len = Constants.ZERO;
+            for(int i = Constants.ZERO, index = Constants.ZERO; i < msgBytes.length; i++) {
                 byte b = msgBytes[i];
-                if(b == Constants.LCB && i + 1 < msgBytes.length && msgBytes[i + 1] == Constants.RCB) {
+                if(b == Constants.LCB && i + Constants.ONE < msgBytes.length && msgBytes[i + Constants.ONE] == Constants.RCB) {
                     // reaching {}, need to parse the arg
                     byte[] argBytes = list.get(index++);
-                    System.arraycopy(argBytes, 0, result, len, argBytes.length);
+                    System.arraycopy(argBytes, Constants.ZERO, result, len, argBytes.length);
                     len += argBytes.length;
                     i++; // escape "{}"
                 }else {

@@ -15,4 +15,11 @@ public record MetaInfo(
         Format format
 ) {
 
+    public Object invokeGetter(Object target) {
+        return getter.apply(target);
+    }
+
+    public void invokeSetter(Object target, Object field) {
+        setter.accept(target, field);
+    }
 }

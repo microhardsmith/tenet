@@ -3,6 +3,7 @@ package cn.zorcc.common.jmh;
 import cn.zorcc.common.util.CompressUtil;
 import cn.zorcc.common.util.NativeUtil;
 import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.runner.RunnerException;
@@ -16,12 +17,16 @@ import java.lang.foreign.ValueLayout;
 
 public class CompressionJmhTest extends JmhTest {
     private static final Arena globalArena = Arena.global();
+    @Param({"/small.json", "medium.json", "/large.json"})
+    private String jsonFile;
+    @Param({"1", "5", "9"})
+    private int level;
     private byte[] original;
     private MemorySegment originalSegment;
 
     @Setup
     public void setup() {
-        try(InputStream stream = CompressionJmhTest.class.getResourceAsStream("/large.json")){
+        try(InputStream stream = CompressionJmhTest.class.getResourceAsStream(jsonFile)) {
             assert stream != null;
             this.original = stream.readAllBytes();
             this.originalSegment = globalArena.allocateArray(ValueLayout.JAVA_BYTE, original.length);
@@ -33,31 +38,27 @@ public class CompressionJmhTest extends JmhTest {
         }
     }
 
-    public CompressionJmhTest() {
-
-    }
-
     @Benchmark
     public void jdkDeflateTest(Blackhole bh) {
-        byte[] bytes = CompressUtil.compressUsingJdkDeflate(original, 9);
+        byte[] bytes = CompressUtil.compressUsingJdkDeflate(original, level);
         bh.consume(CompressUtil.decompressUsingJdkDeflate(bytes));
     }
 
     @Benchmark
     public void libDeflateTest(Blackhole bh) {
-        MemorySegment m1 = CompressUtil.compressUsingDeflate(originalSegment, 9);
+        MemorySegment m1 = CompressUtil.compressUsingDeflate(originalSegment, level);
         bh.consume(CompressUtil.decompressUsingDeflate(m1));
     }
 
     @Benchmark
     public void jdkGzipTest(Blackhole bh) {
-        byte[] bytes = CompressUtil.compressUsingJdkGzip(original, 9);
+        byte[] bytes = CompressUtil.compressUsingJdkGzip(original, level);
         bh.consume(CompressUtil.decompressUsingJdkGzip(bytes));
     }
 
     @Benchmark
     public void libGzipTest(Blackhole bh) {
-        MemorySegment m1 = CompressUtil.compressUsingGzip(originalSegment, 9);
+        MemorySegment m1 = CompressUtil.compressUsingGzip(originalSegment, level);
         bh.consume(CompressUtil.decompressUsingGzip(m1));
     }
 

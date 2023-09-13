@@ -103,7 +103,7 @@ public final class Channel implements Actor {
      */
     public void onReadBuffer(ReadBuffer buffer) {
         if(tempBuffer != null) {
-            tempBuffer.write(buffer.rest());
+            tempBuffer.writeSegment(buffer.rest());
             ReadBuffer readBuffer = new ReadBuffer(tempBuffer.content());
             tryRead(readBuffer);
             if(readBuffer.readIndex() < readBuffer.size()) {
@@ -115,8 +115,8 @@ public final class Channel implements Actor {
         }else {
             tryRead(buffer);
             if(buffer.readIndex() < buffer.size()) {
-                tempBuffer = new WriteBuffer(Arena.ofConfined(), buffer.size());
-                tempBuffer.write(buffer.rest());
+                tempBuffer = WriteBuffer.newDefaultWriteBuffer(Arena.ofConfined(), buffer.size());
+                tempBuffer.writeSegment(buffer.rest());
             }
         }
     }

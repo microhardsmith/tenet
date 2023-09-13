@@ -1,7 +1,7 @@
 package cn.zorcc.common.json;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.Writer;
+import cn.zorcc.common.WriteBuffer;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -10,40 +10,27 @@ import java.util.Map;
  *   Represent a Map structure when writing into target writer
  *   Note that using Map structure for serialization won't be able to assign the target Format for built-in types like Integer or String
  */
-public final class JsonWriterMapNode extends JsonNode {
-    private final Writer writer;
+public final class JsonWriterMapNode extends JsonWriterNode {
+    private final WriteBuffer writeBuffer;
     private final Iterator<? extends Map.Entry<?, ?>> iterator;
-    private boolean notFirst = false;
 
-    public JsonWriterMapNode(Writer writer, Map<?, ?> map) {
-        this.writer = writer;
+    public JsonWriterMapNode(WriteBuffer writeBuffer, Map<?, ?> map) {
+        this.writeBuffer = writeBuffer;
         this.iterator = map.entrySet().iterator();
+        writeBuffer.writeByte(Constants.LCB);
     }
 
     @Override
-    public JsonNode process() {
-        if(iterator.hasNext()) {
-            return processCurrent();
-        }else {
-            return processPrev();
-        }
-    }
-
-    private JsonNode processCurrent() {
+    protected JsonWriterNode trySerialize() {
         while (iterator.hasNext()) {
             Map.Entry<?, ?> entry = iterator.next();
-            JsonParser.writeKey(writer, entry.getKey().toString(), notFirst);
-            notFirst = true;
-            JsonNode appended = JsonParser.writeValue(this, writer, entry.getValue());
+            writeKey(writeBuffer, entry.getKey().toString());
+            JsonWriterNode appended = writeValue(writeBuffer, entry.getValue());
             if(appended != null) {
                 return appended;
             }
         }
-        return processPrev();
-    }
-
-    private JsonNode processPrev() {
-        writer.writeByte(Constants.RCB);
+        writeBuffer.writeByte(Constants.RCB);
         return toPrev();
     }
 }

@@ -1,6 +1,8 @@
 package cn.zorcc.common.network;
 
-import cn.zorcc.common.*;
+import cn.zorcc.common.Constants;
+import cn.zorcc.common.Mix;
+import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.ThreadUtil;
@@ -272,12 +274,12 @@ public final class Worker {
         private List<SenderTask> tasks;
 
         public void sendMix(Channel channel, MemorySegment reserved, Mix mix, WriterCallback callback) {
-            try(final WriteBuffer writeBuffer = new WriteBuffer(reserved, new ReservedWriteBufferPolicy())) {
+            try(final WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(reserved)) {
                 WriteBuffer wb = writeBuffer;
                 for (Object msg : mix.objects()) {
                     wb = channel.encoder().encode(wb, msg);
                 }
-                if(wb.writeIndex() > 0) {
+                if(wb.writeIndex() > Constants.ZERO) {
                     doSend(channel, wb, callback);
                 }
                 if(wb != writeBuffer) {
@@ -290,9 +292,9 @@ public final class Worker {
         }
 
         public void sendMsg(Channel channel, MemorySegment reserved, Object msg, WriterCallback callback) {
-            try(final WriteBuffer writeBuffer = new WriteBuffer(reserved, new ReservedWriteBufferPolicy())) {
+            try(final WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(reserved)) {
                 WriteBuffer wb = channel.encoder().encode(writeBuffer, msg);
-                if(wb.writeIndex() > 0) {
+                if(wb.writeIndex() > Constants.ZERO) {
                     doSend(channel, wb, callback);
                 }
                 if(wb != writeBuffer) {
@@ -391,8 +393,8 @@ public final class Worker {
          */
         private void copyLocally(WriteBuffer writeBuffer, WriterCallback callback) {
             Arena arena = Arena.ofConfined();
-            WriteBuffer wb = new WriteBuffer(arena.allocateArray(ValueLayout.JAVA_BYTE, writeBuffer.size()), new IgnoreWriteBufferPolicy(arena));
-            wb.write(writeBuffer.content());
+            WriteBuffer wb = WriteBuffer.newFixedWriteBuffer(arena, writeBuffer.size());
+            wb.writeSegment(writeBuffer.content());
             tasks.add(new SenderTask(wb, callback));
         }
 

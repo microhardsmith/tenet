@@ -2,7 +2,7 @@ package cn.zorcc.common.http;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ReadBuffer;
-import cn.zorcc.common.ResizableByteArray;
+import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Decoder;
@@ -29,7 +29,7 @@ public final class HttpServerDecoder implements Decoder {
     }
     private DecodingStatus decodingStatus = DecodingStatus.INITIAL;
     private long len;
-    private ResizableByteArray byteArray;
+    private WriteBuffer tempBuffer;
     private HttpRequest current;
     @Override
     public Object decode(ReadBuffer readBuffer) {
@@ -122,7 +122,7 @@ public final class HttpServerDecoder implements Decoder {
             }
             String transferEncoding = httpHeader.get(HttpHeader.K_TRANSFER_ENCODING);
             if(HttpHeader.V_CHUNKED.equals(transferEncoding)){
-                byteArray = new ResizableByteArray(4 * Constants.KB);
+                tempBuffer = WriteBuffer.newHeapWriteBuffer(4 * Constants.KB);
                 decodingStatus = DecodingStatus.DECODING_CHUNKED_DATA_LENGTH;
                 return ResultStatus.CONTINUE;
             }
@@ -155,7 +155,7 @@ public final class HttpServerDecoder implements Decoder {
         if(bytes == null) {
             return ResultStatus.INCOMPLETE;
         }else if (bytes == Constants.EMPTY_BYTES) {
-            current.setData(tryDecompress(byteArray.toArray()));
+            current.setData(tryDecompress(tempBuffer.toArray()));
             decodingStatus = DecodingStatus.INITIAL;
             return ResultStatus.FINISHED;
         }else {
@@ -183,7 +183,7 @@ public final class HttpServerDecoder implements Decoder {
         if(readBuffer.readUntil(Constants.CR, Constants.LF) != Constants.EMPTY_BYTES) {
             throw new FrameworkException(ExceptionType.HTTP, "Unresolved http chunked data");
         }
-        byteArray.writeBytes(bytes);
+        tempBuffer.writeBytes(bytes);
         decodingStatus = DecodingStatus.DECODING_CHUNKED_DATA_LENGTH;
         return ResultStatus.CONTINUE;
     }

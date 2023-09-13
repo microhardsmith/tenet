@@ -11,10 +11,10 @@ import java.lang.reflect.Type;
 /**
  *   Helper class to get generic type from parameters
  */
-public abstract class TypeRef<T> {
+public abstract class JsonTypeRef<T> {
     private final Type type;
 
-    protected TypeRef() {
+    protected JsonTypeRef() {
         Type t = getClass().getGenericSuperclass();
         if (t instanceof ParameterizedType parameterizedType) {
             Type[] actualTypeArguments = parameterizedType.getActualTypeArguments();

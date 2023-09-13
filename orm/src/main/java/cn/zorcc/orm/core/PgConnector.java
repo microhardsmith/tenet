@@ -81,7 +81,7 @@ public class PgConnector implements Connector {
             int errOpt = n.getErrOpt(socket);
             if(errOpt == 0) {
                 long len = 8L;
-                WriteBuffer writeBuffer = new WriteBuffer(Arena.ofConfined(), len);
+                WriteBuffer writeBuffer = WriteBuffer.newDefaultWriteBuffer(Arena.ofConfined(), len);
                 writeBuffer.writeInt(8);
                 writeBuffer.writeInt(PgConstants.SSL_CODE);
                 write(acceptor, writeBuffer);

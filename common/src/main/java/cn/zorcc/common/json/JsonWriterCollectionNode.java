@@ -1,50 +1,34 @@
 package cn.zorcc.common.json;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.Writer;
+import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.anno.Format;
 
 import java.util.Iterator;
 
-public class JsonWriterCollectionNode extends JsonNode {
-    private final Writer writer;
+public class JsonWriterCollectionNode extends JsonWriterNode {
+    private final WriteBuffer writeBuffer;
     private final Iterator<?> iterator;
     private final Format format;
-    private boolean notFirst = false;
 
-    public JsonWriterCollectionNode(Writer writer, Iterator<?> iterator, Format format) {
-        this.writer = writer;
+    public JsonWriterCollectionNode(WriteBuffer writeBuffer, Iterator<?> iterator, Format format) {
+        this.writeBuffer = writeBuffer;
         this.iterator = iterator;
         this.format = format;
-        writer.writeByte(Constants.LSB);
+        writeBuffer.writeByte(Constants.LSB);
     }
 
     @Override
-    public JsonNode process() {
-        if(iterator.hasNext()) {
-            return processCurrent();
-        }else {
-            return processPrev();
-        }
-    }
-
-    private JsonNode processCurrent() {
+    protected JsonWriterNode trySerialize() {
         while (iterator.hasNext()) {
-            if(notFirst) {
-                writer.writeByte(Constants.COMMA);
-            }
+            writeSep(writeBuffer);
             Object element = iterator.next();
-            JsonNode jsonNode = JsonParser.writeValue(this, writer, element, format);
-            notFirst = true;
+            JsonWriterNode jsonNode = writeValue(writeBuffer, element, format);
             if(jsonNode != null) {
                 return jsonNode;
             }
         }
-        return processPrev();
-    }
-
-    private JsonNode processPrev() {
-        writer.writeByte(Constants.RSB);
+        writeBuffer.writeByte(Constants.RSB);
         return toPrev();
     }
 }

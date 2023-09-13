@@ -18,11 +18,6 @@ public @interface Format {
     Class<?> expectedType() default Void.class;
 
     /**
-     *   Used for specify List or Map element type for deserialization
-     */
-    Class<?> elementType() default Void.class;
-
-    /**
      *   Expected serialization string pattern
      */
     String expectedPattern() default Constants.EMPTY_STRING;

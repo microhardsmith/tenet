@@ -96,7 +96,7 @@ public final class Constants {
     /**
      * log配置文件名称
      */
-    public static final String DEFAULT_LOG_CONFIG_NAME = "log-config.json";
+    public static final String DEFAULT_LOG_CONFIG_NAME = "/log.json";
     public static final int DEFAULT_LOG_QUEUE_SIZE = NativeUtil.getCpuCores() << 2;
     public static final int DEFAULT_STRING_BUILDER_SIZE = 128;
     public static final int KB = 1024;

@@ -69,7 +69,7 @@ public class LogConfig {
     /**
      *  日志文件缓冲区大小,单位byte
      */
-    private int fileBuffer = 64 * Constants.KB;
+    private long fileBuffer = 64 * Constants.KB;
     /**
      * 日志文件目录路径,如果未指定则使用项目目录下新建log目录存储
      */
@@ -82,12 +82,12 @@ public class LogConfig {
      * 日志文件大小限制设置,超过将重命名旧日志文件为当前时间,将新日志写入新文件中,单位字节
      * 设置该值小于等于0则使用默认 1GB 的大小限制
      */
-    private int maxFileSize = Constants.GB;
+    private long maxFileSize = Constants.GB;
     /**
      *  日志记录时间间隔,默认每隔一天新建日志文件进行写入,单位毫秒
      *  设置该值小于等于0表示不限制日志时间
      */
-    private int maxRecordingTime = Constants.DAY;
+    private long maxRecordingTime = Constants.DAY;
     /**
      *  是否启用滚动更新
      */
@@ -221,11 +221,11 @@ public class LogConfig {
         this.usingFile = usingFile;
     }
 
-    public int getFileBuffer() {
+    public long getFileBuffer() {
         return fileBuffer;
     }
 
-    public void setFileBuffer(int fileBuffer) {
+    public void setFileBuffer(long fileBuffer) {
         this.fileBuffer = fileBuffer;
     }
 
@@ -245,19 +245,19 @@ public class LogConfig {
         this.logFileName = logFileName;
     }
 
-    public int getMaxFileSize() {
+    public long getMaxFileSize() {
         return maxFileSize;
     }
 
-    public void setMaxFileSize(int maxFileSize) {
+    public void setMaxFileSize(long maxFileSize) {
         this.maxFileSize = maxFileSize;
     }
 
-    public int getMaxRecordingTime() {
+    public long getMaxRecordingTime() {
         return maxRecordingTime;
     }
 
-    public void setMaxRecordingTime(int maxRecordingTime) {
+    public void setMaxRecordingTime(long maxRecordingTime) {
         this.maxRecordingTime = maxRecordingTime;
     }
 

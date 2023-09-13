@@ -1,61 +1,40 @@
 package cn.zorcc.common.log;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.ReservedWriteBufferPolicy;
-import cn.zorcc.common.ResizableByteArray;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.network.Native;
+import cn.zorcc.common.util.FileUtil;
 import cn.zorcc.common.util.NativeUtil;
+import cn.zorcc.common.util.StringUtil;
 
-import java.lang.foreign.*;
-import java.lang.invoke.MethodHandle;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
  *   Print log to the console, using C's puts and fflush mechanism
  *   Using fputs and fflush from C to replace Java's PrintStream regarding to benchmark, could be several times faster that normal System.out.println():
- *      PrintTest.testNative  avgt   25   759.945 ±  28.064  ns/op
- *      PrintTest.testSout    avgt   25  2758.746 ± 108.389  ns/op
+ *      PrintTest.testNative       avgt   25   759.945 ±  28.064  ns/op
+ *      PrintTest.testSystemOut    avgt   25  2758.746 ± 108.389  ns/op
  */
 public final class ConsoleLogEventHandler implements EventHandler<LogEvent> {
-    /**
-     *  Corresponding to `void g_print(char* str, FILE* stream)`
-     */
-    private final MethodHandle print;
-    private final List<ConsoleConsumer> consumers;
-    private final Arena arena;
-    private final WriteBuffer buffer;
     private static final MemorySegment stdout = NativeUtil.stdout();
     private static final MemorySegment stderr = NativeUtil.stderr();
+    private final List<LogHandler> handlers;
+    private final Arena reservedArena;
+    private final MemorySegment reserved;
 
     public ConsoleLogEventHandler(LogConfig logConfig) {
-        SymbolLookup symbolLookup = NativeUtil.loadLibrary(Native.CORE_LIB);
-        if(symbolLookup == null) {
-            throw new FrameworkException(ExceptionType.NETWORK, "Tenet core lib not found");
-        }
-        this.print = NativeUtil.methodHandle(symbolLookup, "g_print", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-        this.consumers = createConsoleConsumer(logConfig);
+        this.handlers = createLogHandlers(logConfig);
         // Console builder should have a larger size than logEvent, the constructor method should be guaranteed to be called in log thread to keep arena safe
-        this.arena = Arena.ofConfined();
-        this.buffer = new WriteBuffer(arena.allocateArray(ValueLayout.JAVA_BYTE, logConfig.getBufferSize() << 1), new ReservedWriteBufferPolicy());
-    }
-
-    /**
-     *  Print to the console, note that C style string needs to manually add a '\0' to the end
-     */
-    private void print(MemorySegment stream) {
-        try{
-            MemorySegment content = buffer.content();
-            print.invokeExact(content, stream);
-            buffer.close();
-        }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.LOG, "Exception caught when invoking print()", throwable);
-        }
+        this.reservedArena = Arena.ofConfined();
+        this.reserved = reservedArena.allocateArray(ValueLayout.JAVA_BYTE, logConfig.getBufferSize() << Constants.ONE);
     }
 
     /**
@@ -105,125 +84,142 @@ public final class ConsoleLogEventHandler implements EventHandler<LogEvent> {
     public void handle(LogEvent event) {
         // Ignore flush or shutdown since the console will be flushed every time
         if(event == LogEvent.shutdownEvent) {
-            arena.close();
-        }else if(event != LogEvent.flushEvent) {
-            for (ConsoleConsumer consumer : consumers) {
-                consumer.accept(buffer, event);
-            }
-            buffer.writeByte(Constants.LF);
-            buffer.writeByte(Constants.NUT);
-            print(stdout);
-            byte[] throwable = event.throwable();
-            if(throwable != null) {
-                buffer.writeBytes(throwable);
-                buffer.writeByte(Constants.NUT);
-                print(stderr);
-            }
+            reservedArena.close();
+        }else if(event == LogEvent.flushEvent) {
+            FileUtil.fflush(stdout);
+        } else {
+            print(event);
         }
     }
 
-    @FunctionalInterface
-    interface ConsoleConsumer {
-        void accept(WriteBuffer buffer, LogEvent event);
+    private void print(LogEvent event) {
+        try(WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(reserved)) {
+            for (LogHandler handler : handlers) {
+                handler.process(writeBuffer, event);
+            }
+            if(writeBuffer.writeIndex() > Constants.ZERO) {
+                writeBuffer.writeByte(Constants.LF);
+                FileUtil.fwrite(writeBuffer.content(), stdout);
+            }
+        }
+        byte[] throwable = event.throwable();
+        if(throwable != null) {
+            try(WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(reserved)) {
+                writeBuffer.writeBytes(throwable);
+                FileUtil.fwrite(writeBuffer.content(), stderr);
+                FileUtil.fflush(stdout);
+                FileUtil.fflush(stderr);
+            }
+        }
     }
 
     /**
      *   Parsing log-format to a lambda consumer list
      */
-    private static List<ConsoleConsumer> createConsoleConsumer(LogConfig logConfig) {
-        List<ConsoleConsumer> result = new ArrayList<>();
-        ResizableByteArray arr = new ResizableByteArray(Constants.KB);
-        byte[] bytes = logConfig.getLogFormat().getBytes(StandardCharsets.UTF_8);
-        for(int i = 0; i < bytes.length; i++) {
-            byte b = bytes[i];
-            if(b == Constants.PERCENT) {
-                if(arr.writeIndex() > 0) {
-                    final byte[] array = arr.toArray();
-                    result.add((writeBuffer, logEvent) -> writeBuffer.writeBytes(array));
-                    arr.reset();
-                }
-                int j = i + 1;
-                for( ; ; ) {
-                    if(bytes[j] == Constants.PERCENT) {
-                        String s = new String(bytes, i + 1, j - i - 1);
-                        switch (s) {
-                            case "time" -> {
-                                byte[] timeColorBytes = colorBytes(logConfig.getTimeColor());
-                                if(timeColorBytes != null) {
-                                    result.add((writeBuffer, logEvent) -> {
-                                        writeBuffer.writeBytes(Constants.ANSI_PREFIX);
-                                        writeBuffer.writeBytes(timeColorBytes);
-                                        writeBuffer.writeBytes(logEvent.time());
-                                        writeBuffer.writeBytes(Constants.ANSI_SUFFIX);
-                                    });
-                                }else {
-                                    result.add((writeBuffer, logEvent) -> writeBuffer.writeBytes(logEvent.time()));
-                                }
-                            }
-                            case "level" -> result.add((writeBuffer, logEvent) -> {
-                                byte[] level = logEvent.level();
-                                writeBuffer.writeBytes(Constants.ANSI_PREFIX);
-                                writeBuffer.writeBytes(levelColorBytes(level));
-                                writeBuffer.writeBytes(level, logConfig.getLevelLen());
-                                writeBuffer.writeBytes(Constants.ANSI_SUFFIX);
-                            });
-                            case "className" -> {
-                                byte[] classNameColorBytes = colorBytes(logConfig.getClassNameColor());
-                                if(classNameColorBytes != null) {
-                                    result.add((writeBuffer, logEvent) -> {
-                                        writeBuffer.writeBytes(Constants.ANSI_PREFIX);
-                                        writeBuffer.writeBytes(classNameColorBytes);
-                                        writeBuffer.writeBytes(logEvent.className(), logConfig.getClassNameLen());
-                                        writeBuffer.writeBytes(Constants.ANSI_SUFFIX);
-                                    });
-                                }else {
-                                    result.add((writeBuffer, logEvent) -> writeBuffer.writeBytes(logEvent.className(), logConfig.getClassNameLen()));
-                                }
-                            }
-                            case "threadName" -> {
-                                byte[] threadNameColorBytes = colorBytes(logConfig.getThreadNameColor());
-                                if(threadNameColorBytes != null) {
-                                    result.add((writeBuffer, logEvent) -> {
-                                        writeBuffer.writeBytes(Constants.ANSI_PREFIX);
-                                        writeBuffer.writeBytes(threadNameColorBytes);
-                                        writeBuffer.writeBytes(logEvent.threadName(), logConfig.getThreadNameLen());
-                                        writeBuffer.writeBytes(Constants.ANSI_SUFFIX);
-                                    });
-                                }else {
-                                    result.add((writeBuffer, logEvent) -> writeBuffer.writeBytes(logEvent.threadName(), logConfig.getThreadNameLen()));
-                                }
-                            }
-                            case "msg" -> {
-                                byte[] msgColorBytes = colorBytes(logConfig.getMsgColor());
-                                if(msgColorBytes != null) {
-                                    result.add((writeBuffer, logEvent) -> {
-                                        writeBuffer.writeBytes(Constants.ANSI_PREFIX);
-                                        writeBuffer.writeBytes(msgColorBytes);
-                                        writeBuffer.writeBytes(logEvent.msg());
-                                        writeBuffer.writeBytes(Constants.ANSI_SUFFIX);
-                                    });
-                                }else {
-                                    result.add((writeBuffer, logEvent) -> writeBuffer.writeBytes(logEvent.msg()));
-                                }
-                            }
-                            default -> throw new FrameworkException(ExceptionType.LOG, "Unresolved log format : %s".formatted(s));
-                        }
-                        break;
-                    }else if(++j == bytes.length){
-                        throw new FrameworkException(ExceptionType.LOG, "LogFormat corrupted");
-                    }
-                }
-                i = j;
+    private static List<LogHandler> createLogHandlers(LogConfig logConfig) {
+        List<LogHandler> logHandlers = new ArrayList<>();
+        byte[] format = logConfig.getLogFormat().getBytes(StandardCharsets.UTF_8);
+        int index = Constants.ZERO;
+        for( ; ; ) {
+            index = searchNormalStr(format, index, logHandlers);
+            if(index < Constants.ZERO) {
+                return logHandlers;
             }else {
-                arr.writeByte(b);
+                index = searchFormattedStr(format, index, logHandlers, logConfig);
             }
         }
-        if(arr.writeIndex() > 0) {
-            final byte[] array = arr.toArray();
-            result.add((writeBuffer, logEvent) -> writeBuffer.writeBytes(array));
-            arr.reset();
+    }
+
+    private static int searchNormalStr(byte[] format, int startIndex, List<LogHandler> handlers) {
+        int nextIndex = StringUtil.searchBytes(format, Constants.PERCENT, startIndex, bytes -> handlers.add((writeBuffer, event) -> writeBuffer.writeBytes(bytes)));
+        if(nextIndex < Constants.ZERO && startIndex < format.length) {
+            final byte[] arr = Arrays.copyOfRange(format, startIndex, format.length);
+            handlers.add((writeBuffer, event) -> writeBuffer.writeBytes(arr));
         }
-        // the puts method in C will automatically add \n for our output
-        return result;
+        return nextIndex;
+    }
+
+    private static int searchFormattedStr(byte[] format, int startIndex, List<LogHandler> handlers, LogConfig logConfig) {
+        int nextIndex = StringUtil.searchStr(format, Constants.PERCENT, startIndex, s -> {
+            LogHandler handler = switch (s) {
+                case "time" -> timeHandler(logConfig);
+                case "level" -> levelHandler(logConfig);
+                case "className" -> classNameHandler(logConfig);
+                case "threadName" -> threadNameHandler(logConfig);
+                case "msg" -> msgHandler(logConfig);
+                default -> throw new FrameworkException(ExceptionType.LOG, "Unresolved log format : %s".formatted(s));
+            };
+            handlers.add(handler);
+        });
+        if(nextIndex < Constants.ZERO) {
+            throw new FrameworkException(ExceptionType.LOG, "Corrupted log format");
+        }
+        return nextIndex;
+    }
+
+    private static LogHandler timeHandler(LogConfig logConfig) {
+        byte[] timeColorBytes = colorBytes(logConfig.getTimeColor());
+        if (timeColorBytes != null) {
+            return (writeBuffer, logEvent) -> {
+                writeBuffer.writeBytes(Constants.ANSI_PREFIX);
+                writeBuffer.writeBytes(timeColorBytes);
+                writeBuffer.writeBytes(logEvent.time());
+                writeBuffer.writeBytes(Constants.ANSI_SUFFIX);
+            };
+        } else {
+            return (writeBuffer, logEvent) -> writeBuffer.writeBytes(logEvent.time());
+        }
+    }
+
+    private static LogHandler levelHandler(LogConfig logConfig) {
+        return (writeBuffer, logEvent) -> {
+            byte[] level = logEvent.level();
+            writeBuffer.writeBytes(Constants.ANSI_PREFIX);
+            writeBuffer.writeBytes(levelColorBytes(level));
+            writeBuffer.writeBytesWithPadding(level, logConfig.getLevelLen(), Constants.SPACE);
+            writeBuffer.writeBytes(Constants.ANSI_SUFFIX);
+        };
+    }
+
+    private static LogHandler classNameHandler(LogConfig logConfig) {
+        byte[] classNameColorBytes = colorBytes(logConfig.getClassNameColor());
+        if (classNameColorBytes != null) {
+            return (writeBuffer, logEvent) -> {
+                writeBuffer.writeBytes(Constants.ANSI_PREFIX);
+                writeBuffer.writeBytes(classNameColorBytes);
+                writeBuffer.writeBytesWithPadding(logEvent.className(), logConfig.getClassNameLen(), Constants.SPACE);
+                writeBuffer.writeBytes(Constants.ANSI_SUFFIX);
+            };
+        } else {
+            return (writeBuffer, logEvent) -> writeBuffer.writeBytesWithPadding(logEvent.className(), logConfig.getClassNameLen(), Constants.SPACE);
+        }
+    }
+
+    private static LogHandler threadNameHandler(LogConfig logConfig) {
+        byte[] threadNameColorBytes = colorBytes(logConfig.getThreadNameColor());
+        if (threadNameColorBytes != null) {
+            return (writeBuffer, logEvent) -> {
+                writeBuffer.writeBytes(Constants.ANSI_PREFIX);
+                writeBuffer.writeBytes(threadNameColorBytes);
+                writeBuffer.writeBytesWithPadding(logEvent.threadName(), logConfig.getThreadNameLen(), Constants.SPACE);
+                writeBuffer.writeBytes(Constants.ANSI_SUFFIX);
+            };
+        } else {
+            return (writeBuffer, logEvent) -> writeBuffer.writeBytesWithPadding(logEvent.threadName(), logConfig.getThreadNameLen(), Constants.SPACE);
+        }
+    }
+
+    private static LogHandler msgHandler(LogConfig logConfig) {
+        byte[] msgColorBytes = colorBytes(logConfig.getMsgColor());
+        if (msgColorBytes != null) {
+            return (writeBuffer, logEvent) -> {
+                writeBuffer.writeBytes(Constants.ANSI_PREFIX);
+                writeBuffer.writeBytes(msgColorBytes);
+                writeBuffer.writeBytes(logEvent.msg());
+                writeBuffer.writeBytes(Constants.ANSI_SUFFIX);
+            };
+        } else {
+            return (writeBuffer, logEvent) -> writeBuffer.writeBytes(logEvent.msg());
+        }
     }
 }

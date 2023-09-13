@@ -1,6 +1,5 @@
 package cn.zorcc.common.util;
 
-import cn.zorcc.common.Writer;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -20,7 +19,7 @@ public class ResourcesLoadingTest {
 
     @Test
     public void testProjectClass() {
-        try(InputStream inputStream = Writer.class.getResourceAsStream("/large.json")) {
+        try(InputStream inputStream = ConfigUtil.class.getResourceAsStream("/large.json")) {
             Assertions.assertNotNull(inputStream);
         }catch (IOException e) {
             throw new RuntimeException(e);

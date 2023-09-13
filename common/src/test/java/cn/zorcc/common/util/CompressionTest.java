@@ -8,7 +8,7 @@ import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.util.zip.Deflater;
 
-public class CompressTest {
+public class CompressionTest {
     private static final String str = "hello world";
     @Test
     public void testJdkDeflateCompress() {
