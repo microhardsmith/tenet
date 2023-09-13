@@ -4,10 +4,7 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 
-import java.lang.invoke.CallSite;
-import java.lang.invoke.LambdaMetafactory;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodType;
+import java.lang.invoke.*;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -100,24 +97,12 @@ public final class ReflectUtil {
     }
 
     @SuppressWarnings("unchecked")
-    public static <T> Function<Object[], T> createRecordConstructor(Class<T> recordClass, Field[] fields) {
+    public static <T> Function<Object[], T> createRecordConstructor(Class<T> recordClass, List<Class<?>> parameterTypes) {
         try{
-            List<Class<?>> parameterTypes = new ArrayList<>();
-            for (Field f : fields) {
-                Class<?> fieldType = f.getType();
-                parameterTypes.add(fieldType.isPrimitive() ? ReflectUtil.getWrapperClass(fieldType) : fieldType);
-            }
-            MethodHandle cmh = Constants.LOOKUP.findConstructor(recordClass, MethodType.methodType(void.class, parameterTypes));
-            CallSite callSite = LambdaMetafactory.metafactory(Constants.LOOKUP,
-                    Constants.APPLY,
-                    MethodType.methodType(Function.class),
-                    MethodType.methodType(Object.class, Object[].class),
-                    cmh,
-                    MethodType.methodType(recordClass, parameterTypes));
-            return (Function<Object[], T>) callSite.getTarget().invokeExact();
+            MethodHandle cmh = MethodHandles.lookup().findConstructor(recordClass, MethodType.methodType(void.class, parameterTypes)).asSpreader(Object[].class, parameterTypes.size());
+            return (Function<Object[], T>) MethodHandleProxies.asInterfaceInstance(Function.class, cmh);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED, throwable);
-
         }
     }
 

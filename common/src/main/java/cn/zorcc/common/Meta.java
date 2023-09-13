@@ -6,7 +6,7 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.ReflectUtil;
 
-import java.lang.invoke.*;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.lang.reflect.Type;
 import java.util.*;
@@ -23,8 +23,8 @@ public final class Meta<T> {
     private static final Map<Class<?>, Map<String, Object>> enumCacheMap = new ConcurrentHashMap<>();
 
     @SuppressWarnings("unchecked")
-    public static <T> Meta<T> of(Class<T> clazz) {
-        return (Meta<T>) metaMap.computeIfAbsent(clazz, Meta::register);
+    public static <T> Meta<T> of(Class<T> objectClass) {
+        return (Meta<T>) metaMap.computeIfAbsent(objectClass, Meta::register);
     }
 
     private final Class<T> clazz;
@@ -61,21 +61,21 @@ public final class Meta<T> {
         return enumMap;
     }
 
-    private static <T> Meta<T> register(Class<T> type) {
+    private static <T> Meta<T> register(Class<T> objectClass) {
         try{
-            if(type.isPrimitive() || type.isAnnotation() || type.isRecord() || type.isMemberClass()) {
+            if(objectClass.isPrimitive() || objectClass.isAnnotation() || objectClass.isRecord() || objectClass.isMemberClass()) {
                 throw new FrameworkException(ExceptionType.CONTEXT, "Unsupported class type");
             }
-            Map<String, Object> enumMap = type.isEnum() ? enumCacheMap.computeIfAbsent(type, t -> {
+            Map<String, Object> enumMap = objectClass.isEnum() ? enumCacheMap.computeIfAbsent(objectClass, t -> {
                 Map<String, Object> m = new HashMap<>();
                 for (Object enumConstant : t.getEnumConstants()) {
                     m.put(enumConstant.toString(), enumConstant);
                 }
                 return Collections.unmodifiableMap(m);
             }) : null;
-            Supplier<T> constructor = ReflectUtil.createConstructor(type);
+            Supplier<T> constructor = ReflectUtil.createConstructor(objectClass);
             Map<String, MetaInfo> metaInfoMap = new LinkedHashMap<>();
-            for (Field f : ReflectUtil.getAllFields(type).stream().sorted((o1, o2) -> {
+            for (Field f : ReflectUtil.getAllFields(objectClass).stream().sorted((o1, o2) -> {
                 Ordinal a1 = o1.getAnnotation(Ordinal.class);
                 Ordinal a2 = o2.getAnnotation(Ordinal.class);
                 return (a1 == null || a2 == null) ? Constants.ZERO : Integer.compare(a1.sequence(), a2.sequence());
@@ -84,13 +84,13 @@ public final class Meta<T> {
                 Class<?> fieldType = f.getType();
                 Type genericType = f.getGenericType();
                 String getterMethodName = ReflectUtil.getterName(fieldType, fieldName);
-                Function<Object, Object> getter =ReflectUtil.createGetter(Constants.LOOKUP.findVirtual(type, getterMethodName, MethodType.methodType(fieldType)), fieldType);
+                Function<Object, Object> getter =ReflectUtil.createGetter(Constants.LOOKUP.findVirtual(objectClass, getterMethodName, MethodType.methodType(fieldType)), fieldType);
                 String setterMethodName = ReflectUtil.setterName(fieldName);
-                BiConsumer<Object, Object> setter = ReflectUtil.createSetter(Constants.LOOKUP.findVirtual(type, setterMethodName, MethodType.methodType(void.class, fieldType)), fieldType);
+                BiConsumer<Object, Object> setter = ReflectUtil.createSetter(Constants.LOOKUP.findVirtual(objectClass, setterMethodName, MethodType.methodType(void.class, fieldType)), fieldType);
                 MetaInfo metaInfo = new MetaInfo(fieldName, fieldType, genericType, getter, setter, f.isAnnotationPresent(Format.class) ? f.getAnnotation(Format.class) : null);
                 metaInfoMap.put(fieldName, metaInfo);
             }
-            return new Meta<>(type, constructor, Collections.unmodifiableMap(metaInfoMap), enumMap);
+            return new Meta<>(objectClass, constructor, Collections.unmodifiableMap(metaInfoMap), enumMap);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED, throwable);
         }
