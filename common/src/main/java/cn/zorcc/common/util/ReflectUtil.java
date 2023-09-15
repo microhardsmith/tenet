@@ -100,7 +100,14 @@ public final class ReflectUtil {
     public static <T> Function<Object[], T> createRecordConstructor(Class<T> recordClass, List<Class<?>> parameterTypes) {
         try{
             MethodHandle cmh = MethodHandles.lookup().findConstructor(recordClass, MethodType.methodType(void.class, parameterTypes)).asSpreader(Object[].class, parameterTypes.size());
-            return (Function<Object[], T>) MethodHandleProxies.asInterfaceInstance(Function.class, cmh);
+            MethodType methodType = cmh.type();
+            CallSite callSite = LambdaMetafactory.metafactory(Constants.LOOKUP,
+                    Constants.APPLY,
+                    MethodType.methodType(Function.class, MethodHandle.class),
+                    methodType.erase(),
+                    MethodHandles.exactInvoker(methodType), // target MethodHandle.invokeExact
+                    methodType);
+            return (Function<Object[], T>) callSite.getTarget().invokeExact(cmh);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED, throwable);
         }

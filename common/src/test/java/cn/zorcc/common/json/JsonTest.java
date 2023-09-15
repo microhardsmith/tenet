@@ -2,8 +2,8 @@ package cn.zorcc.common.json;
 
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
-import cn.zorcc.common.bean.Book;
-import cn.zorcc.common.bean.City;
+import cn.zorcc.common.beans.Book;
+import cn.zorcc.common.beans.City;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 

@@ -1,4 +1,4 @@
-package cn.zorcc.common.bean;
+package cn.zorcc.common.beans;
 
 import java.util.List;
 import java.util.Map;

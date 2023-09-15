@@ -5,12 +5,9 @@ import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.exception.JsonParseException;
 
-import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 
 public final class JsonReaderCollectionNode extends JsonReaderNode {
     private final ReadBuffer readBuffer;
@@ -36,27 +33,10 @@ public final class JsonReaderCollectionNode extends JsonReaderNode {
             byte b = readNextByte(readBuffer);
             switch (b) {
                 case Constants.LCB -> {
-                    if(elementType instanceof Class<?> c) {
-                        return toNext(new JsonReaderObjectNode(readBuffer, c));
-                    }else if(elementType instanceof ParameterizedType parameterizedType && parameterizedType.getRawType() instanceof Class<?> c && Map.class.isAssignableFrom(c)) {
-                        Type[] actualTypeArguments = parameterizedType.getActualTypeArguments();
-                        if(actualTypeArguments[Constants.ZERO] instanceof Class<?> keyClass && keyClass == String.class) {
-                            return toNext(new JsonReaderMapNode(readBuffer, c, actualTypeArguments[Constants.ONE]));
-                        }else {
-                            throw new JsonParseException(Constants.JSON_KEY_TYPE_ERR);
-                        }
-                    }else {
-                        throw new JsonParseException(Constants.JSON_VALUE_TYPE_ERR);
-                    }
+                    return newObjectOrRecordNode(readBuffer, elementType);
                 }
                 case Constants.LSB -> {
-                    if(elementType instanceof Class<?> c && c.isArray()) {
-                        return toNext(new JsonReaderCollectionNode(readBuffer, c, c.componentType()));
-                    }else if(elementType instanceof ParameterizedType pt && pt.getRawType() instanceof Class<?> c && Collection.class.isAssignableFrom(c)) {
-                        return toNext(new JsonReaderCollectionNode(readBuffer, c, pt.getActualTypeArguments()[Constants.ZERO]));
-                    }else {
-                        throw new JsonParseException(Constants.JSON_VALUE_TYPE_ERR);
-                    }
+                    return newCollectionNode(readBuffer, elementType);
                 }
                 case Constants.QUOTE -> {
                     if(elementType instanceof Class<?> c && c == String.class) {

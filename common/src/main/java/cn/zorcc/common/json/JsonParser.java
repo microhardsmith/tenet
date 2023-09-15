@@ -16,13 +16,16 @@ public final class JsonParser {
         throw new UnsupportedOperationException();
     }
 
+    /**
+     *   Serialize a record or a plain object into the target writeBuffer
+     */
     public static void serializeAsObject(WriteBuffer writeBuffer, Object target) {
         Class<?> targetClass = target.getClass();
-        if(targetClass.isPrimitive() || targetClass.isAnnotation() || targetClass.isRecord() || targetClass.isMemberClass()) {
+        if(targetClass.isPrimitive() || targetClass.isAnnotation() || targetClass.isMemberClass()) {
             throw new FrameworkException(ExceptionType.JSON, "Unsupported type");
         }
-        JsonWriterObjectNode jsonWriterObjectNode = new JsonWriterObjectNode(writeBuffer, target, targetClass);
-        jsonWriterObjectNode.serialize();
+        JsonWriterNode jsonWriterNode = targetClass.isRecord() ? new JsonWriterRecordNode(writeBuffer, target, targetClass) : new JsonWriterObjectNode(writeBuffer, target, targetClass);
+        jsonWriterNode.serialize();
     }
 
     public static <T> void serializeAsCollection(WriteBuffer writeBuffer, Collection<T> collection) {
@@ -30,20 +33,21 @@ public final class JsonParser {
     }
 
     public static <T> void serializeAsCollection(WriteBuffer writeBuffer, Collection<T> collection, Format format) {
-        new JsonWriterCollectionNode(writeBuffer, collection.iterator(), format).serialize();
+        JsonWriterNode jsonWriterNode = new JsonWriterCollectionNode(writeBuffer, collection.iterator(), format);
+        jsonWriterNode.serialize();
     }
 
     /**
-     *   Deserialize a object from the data
+     *   Deserialize a record or a plain object from the readBuffer
      */
     @SuppressWarnings("unchecked")
     public static <T> T deserializeAsObject(ReadBuffer readBuffer, Class<T> type) {
         if(readBuffer.readByte() != Constants.LCB) {
             throw new JsonParseException(readBuffer);
         }
-        JsonReaderObjectNode jsonReaderObjectNode = new JsonReaderObjectNode(readBuffer, type);
-        jsonReaderObjectNode.deserialize();
-        return (T) jsonReaderObjectNode.getJsonObject();
+        JsonReaderNode jsonReaderNode = type.isRecord() ? new JsonReaderRecordNode(readBuffer, type) : new JsonReaderObjectNode(readBuffer, type);
+        jsonReaderNode.deserialize();
+        return (T) jsonReaderNode.getJsonObject();
     }
 
     /**
@@ -54,8 +58,8 @@ public final class JsonParser {
         if(readBuffer.readByte() != Constants.LSB) {
             throw new JsonParseException(readBuffer);
         }
-        JsonReaderCollectionNode jsonReaderCollectionNode = new JsonReaderCollectionNode(readBuffer, List.class, typeRef.type());
-        jsonReaderCollectionNode.deserialize();
-        return (List<T>) jsonReaderCollectionNode.getJsonObject();
+        JsonReaderNode jsonReaderNode = new JsonReaderCollectionNode(readBuffer, List.class, typeRef.type());
+        jsonReaderNode.deserialize();
+        return (List<T>) jsonReaderNode.getJsonObject();
     }
 }

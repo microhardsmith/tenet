@@ -49,8 +49,8 @@ public final class Record<T> {
         return constructor.apply(args);
     }
 
-    public void assign(Object[] args, String fieldName, Object value) {
-        Integer index = elementIndexMap.get(fieldName);
+    public void assign(Object[] args, RecordInfo recordInfo, Object value) {
+        Integer index = elementIndexMap.get(recordInfo.fieldName());
         if(index != null) {
             args[index] = value;
         }

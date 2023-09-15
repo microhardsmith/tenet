@@ -5,9 +5,7 @@ import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.exception.JsonParseException;
 
-import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -37,27 +35,10 @@ public final class JsonReaderMapNode extends JsonReaderNode {
             byte b = readNextByte(readBuffer);
             switch (b) {
                 case Constants.LCB -> {
-                    if(valueType instanceof Class<?> c) {
-                        return toNext(new JsonReaderObjectNode(readBuffer, c));
-                    }else if(valueType instanceof ParameterizedType parameterizedType && parameterizedType.getRawType() instanceof Class<?> c && Map.class.isAssignableFrom(c)) {
-                        Type[] actualTypeArguments = parameterizedType.getActualTypeArguments();
-                        if(actualTypeArguments[Constants.ZERO] instanceof Class<?> keyClass && keyClass == String.class) {
-                            return toNext(new JsonReaderMapNode(readBuffer, c, actualTypeArguments[Constants.ONE]));
-                        }else {
-                            throw new JsonParseException(Constants.JSON_KEY_TYPE_ERR);
-                        }
-                    }else {
-                        throw new JsonParseException(Constants.JSON_VALUE_TYPE_ERR);
-                    }
+                    return newObjectOrRecordNode(readBuffer, valueType);
                 }
                 case Constants.LSB -> {
-                    if(valueType instanceof Class<?> c && c.isArray()) {
-                        return toNext(new JsonReaderCollectionNode(readBuffer, c, c.componentType()));
-                    }else if(valueType instanceof ParameterizedType pt && pt.getRawType() instanceof Class<?> c && Collection.class.isAssignableFrom(c)) {
-                        return toNext(new JsonReaderCollectionNode(readBuffer, c, pt.getActualTypeArguments()[Constants.ZERO]));
-                    }else {
-                        throw new JsonParseException(Constants.JSON_VALUE_TYPE_ERR);
-                    }
+                    return newCollectionNode(readBuffer, valueType);
                 }
                 case Constants.QUOTE -> {
                     if(valueType instanceof Class<?> c && c == String.class) {

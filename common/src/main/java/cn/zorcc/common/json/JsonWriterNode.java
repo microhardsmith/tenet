@@ -645,6 +645,8 @@ public abstract class JsonWriterNode {
             return writeArray(writeBuffer, value, type, format);
         }else if(value instanceof Map<?,?> map) {
             return toNext(new JsonWriterMapNode(writeBuffer, map));
+        }else if(type.isRecord()) {
+            return toNext(new JsonWriterRecordNode(writeBuffer, value, type));
         }else {
             return toNext(new JsonWriterObjectNode(writeBuffer, value, type));
         }
