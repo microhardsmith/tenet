@@ -24,6 +24,7 @@ public final class JsonWriterMapNode extends JsonWriterNode {
     protected JsonWriterNode trySerialize() {
         while (iterator.hasNext()) {
             Map.Entry<?, ?> entry = iterator.next();
+            writeSep(writeBuffer);
             writeKey(writeBuffer, entry.getKey().toString());
             JsonWriterNode appended = writeValue(writeBuffer, entry.getValue());
             if(appended != null) {

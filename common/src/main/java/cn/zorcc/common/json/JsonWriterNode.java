@@ -17,6 +17,10 @@ import java.util.Collection;
 import java.util.Map;
 
 public abstract class JsonWriterNode {
+    /**
+     *   This variable is used to limit the maximum value of the nodes in a doubly linked list, thereby detecting potential cases of circular references
+     */
+    private static final int CIRCULAR_REFERENCE_LIMITATION = 4 * Constants.KB;
     private static final byte[] TRUE = "true".getBytes(StandardCharsets.UTF_8);
     private static final byte[] FALSE = "false".getBytes(StandardCharsets.UTF_8);
     private static final byte[] INFINITY = "Infinity".getBytes(StandardCharsets.UTF_8);
@@ -27,6 +31,7 @@ public abstract class JsonWriterNode {
     private JsonWriterNode prev;
     private JsonWriterNode next;
     private boolean notFirst = false;
+    private int pos = Constants.ZERO;
 
     /**
      *   Unlink current JsonWriterNode with the prev node and return it
@@ -51,6 +56,10 @@ public abstract class JsonWriterNode {
         if(next != null) {
             throw new FrameworkException(ExceptionType.JSON, Constants.UNREACHED);
         }
+        if(pos > CIRCULAR_REFERENCE_LIMITATION) {
+            throw new JsonParseException("Possibly circular reference detected");
+        }
+        n.pos = this.pos + Constants.ONE;
         next = n;
         n.prev = this;
         return n;
@@ -68,14 +77,14 @@ public abstract class JsonWriterNode {
     /**
      *   Write null into the writeBuffer
      */
-    public static void writeNull(WriteBuffer writeBuffer) {
+    private static void writeNull(WriteBuffer writeBuffer) {
         writeBuffer.writeBytes(NULL);
     }
 
     /**
      *   Write a byte value into the writeBuffer
      */
-    public static void writeByte(WriteBuffer writeBuffer, Byte b, Format format) {
+    private static void writeByte(WriteBuffer writeBuffer, Byte b, Format format) {
         if(format == null) {
             writeBuffer.writeByte(b);
         }else {
@@ -92,7 +101,7 @@ public abstract class JsonWriterNode {
     /**
      *   Write a short value into the writeBuffer
      */
-    public static void writeChar(WriteBuffer writeBuffer, Character c, Format format) {
+    private static void writeChar(WriteBuffer writeBuffer, Character c, Format format) {
         if(format == null) {
             writePrimitiveChar(writeBuffer, c);
         }else {
@@ -107,7 +116,7 @@ public abstract class JsonWriterNode {
         }
     }
 
-    public static void writePrimitiveChar(WriteBuffer writeBuffer, char c) {
+    private static void writePrimitiveChar(WriteBuffer writeBuffer, char c) {
         writeBuffer.writeByte(Constants.QUOTE);
         writeBuffer.writeUtf8Data(c);
         writeBuffer.writeByte(Constants.QUOTE);
@@ -116,7 +125,7 @@ public abstract class JsonWriterNode {
     /**
      *   Write a short value into the writeBuffer
      */
-    public static void writeShort(WriteBuffer writeBuffer, Short s, Format format) {
+    private static void writeShort(WriteBuffer writeBuffer, Short s, Format format) {
         if(format == null) {
             writePrimitiveShort(writeBuffer ,s);
         }else {
@@ -131,7 +140,7 @@ public abstract class JsonWriterNode {
         }
     }
 
-    public static void writePrimitiveShort(WriteBuffer writeBuffer, short s) {
+    private static void writePrimitiveShort(WriteBuffer writeBuffer, short s) {
         while (s > Constants.ZERO) {
             writeBuffer.writeByte((byte) (Constants.B_ZERO + s % 10));
             s /= 10;
@@ -141,7 +150,7 @@ public abstract class JsonWriterNode {
     /**
      *   Write an Integer value into the writeBuffer
      */
-    public static void writeInteger(WriteBuffer writeBuffer, Integer i, Format format) {
+    private static void writeInteger(WriteBuffer writeBuffer, Integer i, Format format) {
         if(format == null) {
             writePrimitiveInt(writeBuffer, i);
         }else {
@@ -156,7 +165,7 @@ public abstract class JsonWriterNode {
         }
     }
 
-    public static void writePrimitiveInt(WriteBuffer writeBuffer, int i) {
+    private static void writePrimitiveInt(WriteBuffer writeBuffer, int i) {
         try(WriteBuffer tempBuffer = WriteBuffer.newHeapWriteBuffer(INTEGER_BYTE_LENGTH)) {
             while (i > Constants.ZERO) {
                 tempBuffer.writeByte((byte) (Constants.B_ZERO + i % 10));
@@ -173,7 +182,7 @@ public abstract class JsonWriterNode {
     /**
      *   Write a Long value into the writeBuffer
      */
-    public static void writeLong(WriteBuffer writeBuffer, Long l, Format format) {
+    private static void writeLong(WriteBuffer writeBuffer, Long l, Format format) {
         if(format == null) {
             writePrimitiveLong(writeBuffer, l);
         }else {
@@ -188,7 +197,7 @@ public abstract class JsonWriterNode {
         }
     }
 
-    public static void writePrimitiveLong(WriteBuffer writeBuffer, long l) {
+    private static void writePrimitiveLong(WriteBuffer writeBuffer, long l) {
         try(WriteBuffer tempBuffer = WriteBuffer.newHeapWriteBuffer(LONG_BYTE_LENGTH)) {
             while (l > Constants.ZERO) {
                 tempBuffer.writeByte((byte) (Constants.B_ZERO + l % 10));
@@ -205,14 +214,14 @@ public abstract class JsonWriterNode {
     /**
      *   Write a String value into the writeBuffer
      */
-    public static void writeString(WriteBuffer writeBuffer, String s) {
+    private static void writeString(WriteBuffer writeBuffer, String s) {
         writeStrBytes(writeBuffer, s.getBytes(StandardCharsets.UTF_8));
     }
 
     /**
      *   Write String bytes into the writeBuffer
      */
-    public static void writeStrBytes(WriteBuffer writeBuffer, byte... bytes) {
+    private static void writeStrBytes(WriteBuffer writeBuffer, byte... bytes) {
         writeBuffer.writeByte(Constants.QUOTE);
         writeBuffer.writeBytes(bytes);
         writeBuffer.writeByte(Constants.QUOTE);
@@ -221,7 +230,7 @@ public abstract class JsonWriterNode {
     /**
      *   Write a Float value into the writeBuffer
      */
-    public static void writeFloat(WriteBuffer writeBuffer, Float f, Format format) {
+    private static void writeFloat(WriteBuffer writeBuffer, Float f, Format format) {
         if(format == null) {
             writePrimitiveFloat(writeBuffer, f);
         }else {
@@ -236,7 +245,7 @@ public abstract class JsonWriterNode {
         }
     }
 
-    public static void writePrimitiveFloat(WriteBuffer writeBuffer, float f) {
+    private static void writePrimitiveFloat(WriteBuffer writeBuffer, float f) {
         if(Float.isInfinite(f)) {
             writeStrBytes(writeBuffer, INFINITY);
         }else if(Float.isNaN(f)) {
@@ -249,7 +258,7 @@ public abstract class JsonWriterNode {
     /**
      *   Write a Double value into the writeBuffer
      */
-    public static void writeDouble(WriteBuffer writeBuffer, Double d, Format format) {
+    private static void writeDouble(WriteBuffer writeBuffer, Double d, Format format) {
         if(format == null) {
             writePrimitiveDouble(writeBuffer, d);
         }else {
@@ -264,7 +273,7 @@ public abstract class JsonWriterNode {
         }
     }
 
-    public static void writePrimitiveDouble(WriteBuffer writeBuffer, double d) {
+    private static void writePrimitiveDouble(WriteBuffer writeBuffer, double d) {
         if(Double.isInfinite(d)) {
             writeStrBytes(writeBuffer, INFINITY);
         }else if(Double.isNaN(d)) {
@@ -277,7 +286,7 @@ public abstract class JsonWriterNode {
     /**
      *   Write a Boolean value into the writeBuffer
      */
-    public static void writeBoolean(WriteBuffer writeBuffer, Boolean b, Format format) {
+    private static void writeBoolean(WriteBuffer writeBuffer, Boolean b, Format format) {
         if(format == null) {
             writePrimitiveBoolean(writeBuffer, b);
         }else {
@@ -290,7 +299,7 @@ public abstract class JsonWriterNode {
         }
     }
 
-    public static void writePrimitiveBoolean(WriteBuffer writeBuffer, boolean b) {
+    private static void writePrimitiveBoolean(WriteBuffer writeBuffer, boolean b) {
         if(b) {
             writeBuffer.writeBytes(TRUE);
         }else {
@@ -301,14 +310,14 @@ public abstract class JsonWriterNode {
     /**
      *   Write a Enum value into the writeBuffer
      */
-    public static void writeEnum(WriteBuffer writeBuffer, Enum<?> e) {
+    private static void writeEnum(WriteBuffer writeBuffer, Enum<?> e) {
         writeStrBytes(writeBuffer, e.name().getBytes(StandardCharsets.UTF_8));
     }
 
     /**
      *   Write a LocalDate value into the writeBuffer
      */
-    public static void writeLocalDate(WriteBuffer writeBuffer, LocalDate ld, Format format) {
+    private static void writeLocalDate(WriteBuffer writeBuffer, LocalDate ld, Format format) {
         if(format == null) {
             writeStrBytes(writeBuffer, ld.toString().getBytes(StandardCharsets.UTF_8));
         }else {
@@ -321,7 +330,7 @@ public abstract class JsonWriterNode {
     /**
      *   Write a LocalTime value into the writeBuffer
      */
-    public static void writeLocalTime(WriteBuffer writeBuffer, LocalTime lt, Format format) {
+    private static void writeLocalTime(WriteBuffer writeBuffer, LocalTime lt, Format format) {
         if(format == null) {
             writeStrBytes(writeBuffer, lt.toString().getBytes(StandardCharsets.UTF_8));
         }else {
@@ -334,7 +343,7 @@ public abstract class JsonWriterNode {
     /**
      *   Write a OffsetTime value into the writeBuffer
      */
-    public static void writeOffsetTime(WriteBuffer writeBuffer, OffsetTime ot, Format format) {
+    private static void writeOffsetTime(WriteBuffer writeBuffer, OffsetTime ot, Format format) {
         if(format == null) {
             writeStrBytes(writeBuffer, ot.toString().getBytes(StandardCharsets.UTF_8));
         }else {
@@ -347,7 +356,7 @@ public abstract class JsonWriterNode {
     /**
      *   Write a LocalDateTime value into the writeBuffer
      */
-    public static void writeLocalDateTime(WriteBuffer writeBuffer, LocalDateTime ldt, Format format) {
+    private static void writeLocalDateTime(WriteBuffer writeBuffer, LocalDateTime ldt, Format format) {
         if(format == null) {
             writeStrBytes(writeBuffer, ldt.toString().getBytes(StandardCharsets.UTF_8));
         }else {
@@ -360,7 +369,7 @@ public abstract class JsonWriterNode {
     /**
      *   Write a ZonedDateTime value into the writeBuffer
      */
-    public static void writeZonedDateTime(WriteBuffer writeBuffer, ZonedDateTime zdt, Format format) {
+    private static void writeZonedDateTime(WriteBuffer writeBuffer, ZonedDateTime zdt, Format format) {
         if(format == null) {
             writeStrBytes(writeBuffer, zdt.toString().getBytes(StandardCharsets.UTF_8));
         }else {
@@ -373,7 +382,7 @@ public abstract class JsonWriterNode {
     /**
      *   Write a OffsetDateTime value into the writeBuffer
      */
-    public static void writeOffsetDateTime(WriteBuffer writeBuffer, OffsetDateTime odt, Format format) {
+    private static void writeOffsetDateTime(WriteBuffer writeBuffer, OffsetDateTime odt, Format format) {
         if(format == null) {
             writeStrBytes(writeBuffer, odt.toString().getBytes(StandardCharsets.UTF_8));
         }else {
@@ -386,7 +395,7 @@ public abstract class JsonWriterNode {
     /**
      *   Write a primitive type array into the writeBuffer
      */
-    public static void writePrimitiveArray(WriteBuffer writeBuffer, Object value, Format format) {
+    private static void writePrimitiveArray(WriteBuffer writeBuffer, Object value, Format format) {
         switch (value) {
             case byte[] byteArray -> writeByteArray(writeBuffer, byteArray, format);
             case boolean[] booleanArray -> writeBooleanArray(writeBuffer, booleanArray, format);
@@ -583,26 +592,19 @@ public abstract class JsonWriterNode {
         writeBuffer.writeByte(Constants.RSB);
     }
 
-    /**
-     *   Write a key into the writeBuffer
-     */
-    protected void writeKey(WriteBuffer writeBuffer, String key) {
-        if(notFirst) {
-            writeBuffer.writeByte(Constants.COMMA);
-        }
-        writeBuffer.writeByte(Constants.QUOTE);
-        writeBuffer.writeBytes(key.getBytes(StandardCharsets.UTF_8));
-        writeBuffer.writeByte(Constants.QUOTE);
-        writeBuffer.writeByte(Constants.COLON);
-        writeBuffer.writeByte(Constants.SPACE);
-        notFirst = true;
-    }
-
     protected void writeSep(WriteBuffer writeBuffer) {
         if(notFirst) {
             writeBuffer.writeByte(Constants.COMMA);
         }
         notFirst = true;
+    }
+
+    protected void writeKey(WriteBuffer writeBuffer, String key) {
+        writeBuffer.writeByte(Constants.QUOTE);
+        writeBuffer.writeBytes(key.getBytes(StandardCharsets.UTF_8));
+        writeBuffer.writeByte(Constants.QUOTE);
+        writeBuffer.writeByte(Constants.COLON);
+        writeBuffer.writeByte(Constants.SPACE);
     }
 
     protected JsonWriterNode writeValue(WriteBuffer writeBuffer, Object value) {

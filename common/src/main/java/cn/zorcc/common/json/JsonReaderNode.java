@@ -90,10 +90,10 @@ public abstract class JsonReaderNode {
     }
 
     /**
-     *   Determine whether or not should we skip a byte
+     *   Determine whether or not should we parse a meaningful byte
      */
-    public static boolean shouldSkip(byte b) {
-        return b == Constants.SPACE || (b >= Constants.HT && b <= Constants.CR);
+    public static boolean shouldParse(byte b) {
+        return b != Constants.SPACE && (b < Constants.HT || b > Constants.CR);
     }
 
     /**
@@ -130,7 +130,7 @@ public abstract class JsonReaderNode {
     public static void readExpected(ReadBuffer readBuffer, byte expected) {
         while (readBuffer.readIndex() < readBuffer.size()) {
             byte b = readBuffer.readByte();
-            if(!shouldSkip(b)) {
+            if(shouldParse(b)) {
                 if(b == expected){
                     return ;
                 }else {
@@ -180,7 +180,7 @@ public abstract class JsonReaderNode {
     public static byte readNextByte(ReadBuffer readBuffer) {
         while (readBuffer.readIndex() < readBuffer.size()) {
             byte b = readBuffer.readByte();
-            if(!shouldSkip(b)) {
+            if(shouldParse(b)) {
                 return b;
             }
         }
@@ -383,7 +383,6 @@ public abstract class JsonReaderNode {
             throw new JsonParseException(Constants.JSON_VALUE_TYPE_ERR);
         }
     }
-
 
     protected JsonReaderNode newCollectionNode(ReadBuffer readBuffer, Class<?> type, Type genericType) {
         if(type.isArray()) {

@@ -1,36 +1,36 @@
 package cn.zorcc.common.json;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.Meta;
-import cn.zorcc.common.MetaInfo;
+import cn.zorcc.common.Record;
+import cn.zorcc.common.RecordInfo;
 import cn.zorcc.common.WriteBuffer;
 
 import java.util.List;
 
-public final class JsonWriterObjectNode extends JsonWriterNode {
+public final class JsonWriterRecordNode extends JsonWriterNode {
     private final WriteBuffer writeBuffer;
-    private final Meta<?> meta;
+    private final Record<?> record;
     private final Object obj;
     private int index = Constants.ZERO;
 
-    public JsonWriterObjectNode(WriteBuffer writeBuffer, Object obj, Class<?> type) {
+    public JsonWriterRecordNode(WriteBuffer writeBuffer, Object obj, Class<?> type) {
         this.writeBuffer = writeBuffer;
-        this.meta = Meta.of(type);
+        this.record = Record.of(type);
         this.obj = obj;
         writeBuffer.writeByte(Constants.LCB);
     }
 
     @Override
     protected JsonWriterNode trySerialize() {
-        final List<MetaInfo> metaInfoList = meta.metaInfoList();
-        while (index < metaInfoList.size()) {
-            MetaInfo metaInfo = metaInfoList.get(index);
+        final List<RecordInfo> recordInfoList = record.recordInfoList();
+        while (index < recordInfoList.size()) {
+            RecordInfo recordInfo = recordInfoList.get(index);
             index = index + 1;
-            Object value = metaInfo.getter().apply(obj);
+            Object value = recordInfo.getter().apply(obj);
             if(value != null) {
                 writeSep(writeBuffer);
-                writeKey(writeBuffer, metaInfo.fieldName());
-                JsonWriterNode appended = writeValue(writeBuffer, value, metaInfo.format());
+                writeKey(writeBuffer, recordInfo.fieldName());
+                JsonWriterNode appended = writeValue(writeBuffer, value, recordInfo.format());
                 if(appended != null) {
                     return appended;
                 }
