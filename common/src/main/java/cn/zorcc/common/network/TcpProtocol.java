@@ -22,12 +22,12 @@ public final class TcpProtocol implements Protocol {
     public void canRead(Channel channel, MemorySegment segment) {
         long len = segment.byteSize();
         long received = n.recv(channel.socket(), segment, len);
-        if(received > 0) {
+        if(received > Constants.ZERO) {
             channel.onReadBuffer(new ReadBuffer(received == len ? segment : segment.asSlice(Constants.ZERO, received)));
         }else {
-            if(received < 0) {
+            if(received < Constants.ZERO) {
                 // usually connection reset by peer
-                log.debug("{} tcp recv err, errno : {}", channel.loc(), n.errno());
+                log.debug(STR."\{channel.loc()} tcp recv err, errno : \{n.errno()}");
             }
             channel.close();
         }

@@ -14,7 +14,7 @@ public final class JsonReaderRecordNode extends JsonReaderNode {
     public JsonReaderRecordNode(ReadBuffer readBuffer, Class<?> type) {
         this.readBuffer = readBuffer;
         this.record = Record.of(type);
-        this.args = new Object[record.elementSize()];
+        this.args = record.createElementArray();
     }
 
     @Override

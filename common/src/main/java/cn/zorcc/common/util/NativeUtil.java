@@ -4,7 +4,6 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.enums.OsType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.network.Native;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
@@ -21,9 +20,16 @@ public final class NativeUtil {
     /**
      *   Global NULL pointer, don't use it if the application would modify the actual address of this pointer
      */
-    public static final MemorySegment NULL_POINTER = MemorySegment.ofAddress(0L).reinterpret(ValueLayout.ADDRESS.byteSize(), Arena.global(), null);
-    private static final String OS_NAME = System.getProperty("os.name").toLowerCase();
-    private static final OsType ostype;
+    public static final MemorySegment NULL_POINTER = MemorySegment.ofAddress(Constants.ZERO).reinterpret(ValueLayout.ADDRESS.byteSize(), Arena.global(), null);
+    /**
+     *   Current operating system name
+     */
+    private static final String osName = System.getProperty("os.name").toLowerCase();
+    /**
+     *   Current dynamic library path that tenet application will look up for
+     */
+    private static final String libPath = System.getProperty(Constants.TENET_LIBRARY_PATH);
+    private static final OsType osType;
     private static final int CPU_CORES = Runtime.getRuntime().availableProcessors();
     private static final Linker linker = Linker.nativeLinker();
     /**
@@ -44,31 +50,44 @@ public final class NativeUtil {
     private static final MemorySegment stderr;
 
     static {
-        if(OS_NAME.contains("windows")) {
-            ostype = OsType.Windows;
-        }else if(OS_NAME.contains("linux")) {
-            ostype = OsType.Linux;
-        }else if(OS_NAME.contains("mac") && OS_NAME.contains("os")) {
-            ostype = OsType.MacOS;
-        }else {
-            ostype = OsType.Unknown;
+        osType = detectOsType();
+        if(libPath == null || libPath.isEmpty()) {
+            throw new FrameworkException(ExceptionType.NATIVE, STR."\{Constants.TENET_LIBRARY_PATH} not found in environment variables");
         }
         try{
-            SymbolLookup symbolLookup = NativeUtil.loadLibrary(Native.CORE_LIB);
-            if(symbolLookup == null) {
-                throw new FrameworkException(ExceptionType.NETWORK, "Tenet core lib not found");
-            }
-            MethodHandle stdoutHandle = NativeUtil.methodHandle(symbolLookup, "g_stdout", FunctionDescriptor.of(ValueLayout.ADDRESS));
+            SymbolLookup symbolLookup = NativeUtil.loadLibrary(Constants.TENET);
+            MethodHandle stdoutHandle = NativeUtil.methodHandle(symbolLookup, "get_stdout", FunctionDescriptor.of(ValueLayout.ADDRESS));
             stdout = (MemorySegment) stdoutHandle.invokeExact();
-            MethodHandle stderrHandle = NativeUtil.methodHandle(symbolLookup, "g_stderr", FunctionDescriptor.of(ValueLayout.ADDRESS));
+            MethodHandle stderrHandle = NativeUtil.methodHandle(symbolLookup, "get_stderr", FunctionDescriptor.of(ValueLayout.ADDRESS));
             stderr = (MemorySegment) stderrHandle.invokeExact();
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Unable to load stdout and stderr", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    private static OsType detectOsType() {
+        if(osName.contains("windows")) {
+            return OsType.Windows;
+        }else if(osName.contains("linux")) {
+            return OsType.Linux;
+        }else if(osName.contains("mac") && osName.contains("os")) {
+            return OsType.MacOS;
+        }else {
+            return OsType.Unknown;
         }
     }
 
     private NativeUtil() {
         throw new UnsupportedOperationException();
+    }
+
+    private static String getDynamicLibraryName(String identifier) {
+        return switch (osType) {
+            case Windows -> STR."lib\{identifier}.dll";
+            case Linux -> STR."lib\{identifier}.so";
+            case MacOS -> STR."lib\{identifier}.dylib";
+            default -> throw new FrameworkException(ExceptionType.NATIVE, "Unrecognized operating system");
+        };
     }
 
     public static Arena globalArena() {
@@ -88,16 +107,16 @@ public final class NativeUtil {
     }
 
     public static String osName() {
-        return OS_NAME;
+        return osName;
     }
 
     public static OsType ostype() {
-        return ostype;
+        return osType;
     }
 
     /**
      *   Return current CPU cores
-     *   Note that usually a physical core could carry two threads at the same time, the return value is actually the logical core numbers.
+     *   Note that usually a physical CPU core could usually carry two threads at the same time, the return value is actually the logical core numbers.
      */
     public static int getCpuCores() {
         return CPU_CORES;
@@ -116,13 +135,7 @@ public final class NativeUtil {
      *  Load a native library by environment variable, return null if system library was not found in environment variables
      */
     public static SymbolLookup loadLibrary(String identifier) {
-        return libraryCache.computeIfAbsent(identifier, i -> {
-            String path = System.getProperty(i);
-            if(path == null || path.isEmpty()) {
-                return null;
-            }
-            return SymbolLookup.libraryLookup(path, Arena.global());
-        });
+        return libraryCache.computeIfAbsent(identifier, i -> SymbolLookup.libraryLookup(libPath + Constants.SEPARATOR + getDynamicLibraryName(i), Arena.global()));
     }
 
     public static MethodHandle nativeMethodHandle(String methodName, FunctionDescriptor functionDescriptor) {
@@ -134,13 +147,13 @@ public final class NativeUtil {
      */
     public static MethodHandle nativeMethodHandle(String methodName, FunctionDescriptor functionDescriptor, boolean isTrivial) {
         return nativeMethodCache.computeIfAbsent(methodName, k -> {
-            MemorySegment method = linker.defaultLookup().find(k).orElseThrow(() -> new FrameworkException(ExceptionType.NATIVE, "Unable to locate [%s] native method".formatted(methodName)));
+            MemorySegment method = linker.defaultLookup().find(k).orElseThrow(() -> new FrameworkException(ExceptionType.NATIVE, STR."Unable to locate [\{methodName}] native method"));
             return isTrivial ? linker.downcallHandle(method, functionDescriptor, Linker.Option.isTrivial()): linker.downcallHandle(method, functionDescriptor);
         });
     }
 
     public static boolean checkNullPointer(MemorySegment memorySegment) {
-        return memorySegment == null || memorySegment.address() == 0L;
+        return memorySegment == null || memorySegment.address() == Constants.ZERO;
     }
 
     public static byte getByte(MemorySegment memorySegment, long index) {

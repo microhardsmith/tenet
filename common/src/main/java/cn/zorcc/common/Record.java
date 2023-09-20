@@ -22,15 +22,15 @@ public final class Record<T> {
     }
 
     private final Class<T> clazz;
-    private final int elementSize;
+    private final Object[] elementArray;
     private final Map<String, Integer> elementIndexMap;
     private final Function<Object[], T> constructor;
     private final Map<String, RecordInfo> recordInfoMap;
     private final List<RecordInfo> recordInfoList;
 
-    public Record(Class<T> clazz, int elementSize, Map<String, Integer> elementIndexMap, Function<Object[], T> constructor, Map<String, RecordInfo> recordInfoMap) {
+    public Record(Class<T> clazz, Object[] elementArray, Map<String, Integer> elementIndexMap, Function<Object[], T> constructor, Map<String, RecordInfo> recordInfoMap) {
         this.clazz = clazz;
-        this.elementSize = elementSize;
+        this.elementArray = elementArray;
         this.elementIndexMap = elementIndexMap;
         this.constructor = constructor;
         this.recordInfoMap = recordInfoMap;
@@ -41,8 +41,8 @@ public final class Record<T> {
         return clazz;
     }
 
-    public int elementSize() {
-        return elementSize;
+    public Object[] createElementArray() {
+        return Arrays.copyOf(elementArray, elementArray.length);
     }
 
     public T construct(Object[] args) {
@@ -71,11 +71,15 @@ public final class Record<T> {
             }
             Field[] fields = recordClass.getDeclaredFields();
             List<Class<?>> parameterTypes = new ArrayList<>();
+            Object[] elementArray = new Object[fields.length];
             Map<String, Integer> elementIndexMap = new HashMap<>();
             int index = Constants.ZERO;
             for (Field f : fields) {
                 Class<?> fieldType = f.getType();
                 parameterTypes.add(fieldType);
+                if(fieldType.isPrimitive()) {
+                    elementArray[index] = getDefaultValue(fieldType);
+                }
                 elementIndexMap.put(f.getName(), index++);
             }
             Function<Object[], T> constructor = ReflectUtil.createRecordConstructor(recordClass, parameterTypes);
@@ -91,11 +95,32 @@ public final class Record<T> {
                 Function<Object, Object> getter = ReflectUtil.createGetter(Constants.LOOKUP.findVirtual(recordClass, fieldName, MethodType.methodType(fieldClass)), fieldClass);
                 recordInfoMap.put(fieldName, new RecordInfo(fieldName, fieldClass, genericType, getter, f.isAnnotationPresent(Format.class) ? f.getAnnotation(Format.class) : null));
             }
-            return new Record<>(recordClass, fields.length, elementIndexMap, constructor, Collections.unmodifiableMap(recordInfoMap));
+            return new Record<>(recordClass, elementArray, elementIndexMap, constructor, Collections.unmodifiableMap(recordInfoMap));
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED, throwable);
         }
     }
 
+    private static Object getDefaultValue(Class<?> clazz) {
+        if (clazz == boolean.class) {
+            return Boolean.FALSE;
+        } else if (clazz == byte.class) {
+            return (byte) 0;
+        } else if (clazz == short.class) {
+            return (short) 0;
+        } else if (clazz == int.class) {
+            return 0;
+        } else if (clazz == long.class) {
+            return 0L;
+        } else if (clazz == float.class) {
+            return 0.0f;
+        } else if (clazz == double.class) {
+            return 0.0;
+        } else if (clazz == char.class) {
+            return '\u0000';
+        } else {
+            throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
+        }
+    }
 
 }

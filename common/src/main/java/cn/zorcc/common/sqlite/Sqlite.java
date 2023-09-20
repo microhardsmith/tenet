@@ -57,9 +57,6 @@ public final class Sqlite {
     static {
         long nano = Clock.nano();
         SymbolLookup symbolLookup = NativeUtil.loadLibrary(SQLITE_LIB);
-        if(symbolLookup == null) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Sqlite lib not found");
-        }
         MethodHandle versionHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_libversion", FunctionDescriptor.of(ValueLayout.ADDRESS));
         try{
             MemorySegment versionPtr = ((MemorySegment) versionHandle.invokeExact()).reinterpret(Long.MAX_VALUE);

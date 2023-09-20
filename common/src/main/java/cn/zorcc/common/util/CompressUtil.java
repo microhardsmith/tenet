@@ -11,15 +11,19 @@ import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.util.zip.*;
 
+/**
+ *   This class provide easy access to gzip and deflate compression and decompression using JDK's implementation or libdeflate's implementation
+ *   In general, JDK's implementation is a little faster when dataset is small, could be twice slower if the dataset was larger
+ *   The compression and decompression speed of gzip and deflate algorithm are quite slow compared to other technic like zstd
+ */
 public final class CompressUtil {
-    private static final Arena autoArena = Arena.ofAuto();
+    private static final Arena autoArena = NativeUtil.autoArena();
     public static final int LIBDEFLATE_SUCCESS = 0;
     public static final int LIBDEFLATE_BAD_DATA = 1;
     public static final int LIBDEFLATE_SHORT_OUTPUT = 2;
     public static final int LIBDEFLATE_INSUFFICIENT_SPACE = 3;
-    public static final int FASTEST_LEVEL = 1;
-    public static final int SLOWEST_LEVEL = 12;
-    private static final String DEFLATE_LIB = "deflate";
+    public static final int LIBDEFLATE_FASTEST_LEVEL = 1;
+    public static final int LIBDEFLATE_SLOWEST_LEVEL = 12;
     private static final int CHUNK_SIZE = 4 * Constants.KB;
     private static final int ESTIMATE_RATIO = 3;
     private static final MethodHandle allocCompressor;
@@ -34,10 +38,7 @@ public final class CompressUtil {
     private static final MethodHandle gzipDecompress;
 
     static {
-        SymbolLookup symbolLookup = NativeUtil.loadLibrary(DEFLATE_LIB);
-        if(symbolLookup == null) {
-            throw new FrameworkException(ExceptionType.COMPRESS, "libdeflate not found");
-        }
+        SymbolLookup symbolLookup = NativeUtil.loadLibrary(Constants.DEFLATE);
         allocCompressor = NativeUtil.methodHandle(symbolLookup, "libdeflate_alloc_compressor", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         freeCompressor = NativeUtil.methodHandle(symbolLookup, "libdeflate_free_compressor", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         allocDecompressor = NativeUtil.methodHandle(symbolLookup, "libdeflate_alloc_decompressor", FunctionDescriptor.of(ValueLayout.ADDRESS));
@@ -49,6 +50,7 @@ public final class CompressUtil {
         deflateDecompress = NativeUtil.methodHandle(symbolLookup, "libdeflate_deflate_decompress", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
         gzipDecompress = NativeUtil.methodHandle(symbolLookup, "libdeflate_gzip_decompress", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
     }
+
     private CompressUtil() {
         throw new UnsupportedOperationException();
     }
@@ -176,7 +178,7 @@ public final class CompressUtil {
 
     public static MemorySegment compressUsingDeflate(MemorySegment input, int level) {
         MemorySegment in = toNativeSegment(input);
-        if(level < FASTEST_LEVEL || level > SLOWEST_LEVEL) {
+        if(level < LIBDEFLATE_FASTEST_LEVEL || level > LIBDEFLATE_SLOWEST_LEVEL) {
             throw new FrameworkException(ExceptionType.COMPRESS, "Unsupported level");
         }
         long inBytes = in.byteSize();
@@ -196,7 +198,7 @@ public final class CompressUtil {
 
     public static MemorySegment compressUsingGzip(MemorySegment input, int level) {
         MemorySegment in = toNativeSegment(input);
-        if(level < FASTEST_LEVEL || level > SLOWEST_LEVEL) {
+        if(level < LIBDEFLATE_FASTEST_LEVEL || level > LIBDEFLATE_SLOWEST_LEVEL) {
             throw new FrameworkException(ExceptionType.COMPRESS, "Unsupported level");
         }
         long inBytes = in.byteSize();
@@ -231,12 +233,8 @@ public final class CompressUtil {
                         long written = NativeUtil.getLong(actualOutBytes, Constants.ZERO);
                         return out.asSlice(Constants.ZERO, written);
                     }
-                    case LIBDEFLATE_BAD_DATA -> {
-                        throw new FrameworkException(ExceptionType.COMPRESS, "Bad data");
-                    }
-                    case LIBDEFLATE_SHORT_OUTPUT -> {
-                        throw new FrameworkException(ExceptionType.COMPRESS, originalSize > 0 ? "Fewer originalSize expected" : Constants.UNREACHED);
-                    }
+                    case LIBDEFLATE_BAD_DATA -> throw new FrameworkException(ExceptionType.COMPRESS, "Bad data");
+                    case LIBDEFLATE_SHORT_OUTPUT -> throw new FrameworkException(ExceptionType.COMPRESS, originalSize > Constants.ZERO ? "Fewer originalSize expected" : Constants.UNREACHED);
                     case LIBDEFLATE_INSUFFICIENT_SPACE -> {
                         if(originalSize > 0) {
                             throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
@@ -261,26 +259,21 @@ public final class CompressUtil {
         MemorySegment decompressor = allocDecompressor();
         try{
             MemorySegment out = autoArena.allocateArray(ValueLayout.JAVA_BYTE, originalSize > 0 ? originalSize : inBytes * ESTIMATE_RATIO);
-            MemorySegment actualOutBytes = originalSize > 0 ? NativeUtil.NULL_POINTER : autoArena.allocate(ValueLayout.JAVA_LONG);
+            MemorySegment actualOutBytes = originalSize > Constants.ZERO ? NativeUtil.NULL_POINTER : autoArena.allocate(ValueLayout.JAVA_LONG);
             for( ; ; ) {
                 switch (gzipDecompress(decompressor, in, inBytes, out, out.byteSize(), actualOutBytes)) {
                     case LIBDEFLATE_SUCCESS -> {
                         long written = NativeUtil.getLong(actualOutBytes, Constants.ZERO);
                         return out.asSlice(Constants.ZERO, written);
                     }
-                    case LIBDEFLATE_BAD_DATA -> {
-                        throw new FrameworkException(ExceptionType.COMPRESS, "Bad data");
-                    }
-                    case LIBDEFLATE_SHORT_OUTPUT -> {
-                        throw new FrameworkException(ExceptionType.COMPRESS, originalSize > 0 ? "Fewer originalSize expected" : Constants.UNREACHED);
-                    }
+                    case LIBDEFLATE_BAD_DATA -> throw new FrameworkException(ExceptionType.COMPRESS, "Bad data");
+                    case LIBDEFLATE_SHORT_OUTPUT -> throw new FrameworkException(ExceptionType.COMPRESS, originalSize > Constants.ZERO ? "Fewer originalSize expected" : Constants.UNREACHED);
                     case LIBDEFLATE_INSUFFICIENT_SPACE -> {
-                        if(originalSize > 0) {
+                        if(originalSize > Constants.ZERO) {
                             throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
                         }else {
                             out = autoArena.allocateArray(ValueLayout.JAVA_BYTE, out.byteSize() << 1);
                         }
-
                     }
                 }
             }

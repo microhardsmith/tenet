@@ -75,7 +75,7 @@ public class RecordTest {
     @Test
     public void testRecord() {
         Record<Alpha> r = Record.of(Alpha.class);
-        Object[] objects = new Object[r.elementSize()];
+        Object[] objects = r.createElementArray();
         Assertions.assertEquals(objects.length, 8);
         objects[0] = a1;
         objects[1] = a2;

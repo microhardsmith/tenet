@@ -162,24 +162,12 @@ public sealed interface Native permits WinNative, LinuxNative, MacNative {
     }
 
     /**
-     *   Network library environment variable
-     */
-    String CORE_LIB = "lib";
-
-    /**
      *   Global native network library
      */
-    Native n = createNative();
-
-    /**
-     *   Create native library based on target operating system
-     */
-    private static Native createNative() {
-        return switch (NativeUtil.ostype()) {
-            case Windows -> new WinNative();
-            case Linux -> new LinuxNative();
-            case MacOS -> new MacNative();
-            default -> throw new FrameworkException(ExceptionType.NETWORK, "Unsupported operating system");
-        };
-    }
+    Native n = switch (NativeUtil.ostype()) {
+        case Windows -> new WinNative();
+        case Linux -> new LinuxNative();
+        case MacOS -> new MacNative();
+        default -> throw new FrameworkException(ExceptionType.NETWORK, "Unsupported operating system");
+    };
 }

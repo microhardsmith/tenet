@@ -16,6 +16,14 @@ import java.time.format.DateTimeFormatter;
  *   Constants pool
  */
 public final class Constants {
+    /**
+     *   dynamic library
+     */
+    public static final String TENET = "tenet";
+    public static final String CRYPTO = "crypto";
+    public static final String SSL = "ssl";
+    public static final String DEFLATE = "deflate";
+    public static final String TENET_LIBRARY_PATH = "TENET_LIBRARY_PATH";
     public static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
     public static final String GET = "get";
     public static final String SET = "set";

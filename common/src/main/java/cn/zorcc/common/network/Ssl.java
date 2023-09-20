@@ -21,11 +21,6 @@ import java.util.concurrent.TimeUnit;
  */
 public final class Ssl {
     private static final Logger log = LoggerFactory.getLogger(Ssl.class);
-    /**
-     *   Environment variable that must be configured when launching the application
-     */
-    public static final String CRYPTO_LIB = "crypto";
-    public static final String SSL_LIB = "ssl";
     @SuppressWarnings("unused")
     private static final SymbolLookup crypto;
     private static final SymbolLookup ssl;
@@ -54,14 +49,8 @@ public final class Ssl {
 
     static {
         long nano = Clock.nano();
-        crypto = NativeUtil.loadLibrary(CRYPTO_LIB);
-        if(crypto == null) {
-            throw new FrameworkException(ExceptionType.NETWORK, "Crypto lib not found");
-        }
-        ssl = NativeUtil.loadLibrary(SSL_LIB);
-        if(ssl == null) {
-            throw new FrameworkException(ExceptionType.NETWORK, "Ssl lib not found");
-        }
+        crypto = NativeUtil.loadLibrary(Constants.CRYPTO);
+        ssl = NativeUtil.loadLibrary(Constants.SSL);
         tlsMethod = NativeUtil.methodHandle(ssl, "TLS_method", FunctionDescriptor.of(ValueLayout.ADDRESS));
         sslCtxNewMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_new", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         sslCtxUseCertificateFileMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_use_certificate_file", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));

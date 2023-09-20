@@ -270,10 +270,7 @@ public final class LinuxNative implements Native {
 
     static  {
         long nano = Clock.nano();
-        SymbolLookup symbolLookup = NativeUtil.loadLibrary(Native.CORE_LIB);
-        if(symbolLookup == null) {
-            throw new FrameworkException(ExceptionType.NETWORK, "Tenet core lib not found");
-        }
+        SymbolLookup symbolLookup = NativeUtil.loadLibrary(Constants.TENET);
         epollCreateMethodHandle = NativeUtil.methodHandle(symbolLookup,
                 "l_epoll_create", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         epollCtlMethodHandle = NativeUtil.methodHandle(symbolLookup,
@@ -327,7 +324,7 @@ public final class LinuxNative implements Native {
                     "l_send_block_code", FunctionDescriptor.of(ValueLayout.JAVA_INT)).invokeExact();
         }catch (Throwable throwable) {
             // should never happen
-            throw new FrameworkException(ExceptionType.NATIVE, "Failed to initialize constants", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
         log.info("Initializing Native successfully, platform : {}, time consuming : {} ms", NativeUtil.osName(), TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
     }
