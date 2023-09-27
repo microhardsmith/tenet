@@ -144,8 +144,7 @@ public sealed interface Native permits WinNative, LinuxNative, MacNative {
      */
     default int check(int value, String errMsg) {
         if(value == -1) {
-            int err = errno();
-            throw new FrameworkException(ExceptionType.NETWORK, "Failed to %s with err code : %d", errMsg, err);
+            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to \{errMsg} with err code : \{errno()}");
         }
         return value;
     }
@@ -155,8 +154,7 @@ public sealed interface Native permits WinNative, LinuxNative, MacNative {
      */
     default long check(long value, String errMsg) {
         if(value == -1L) {
-            int err = errno();
-            throw new FrameworkException(ExceptionType.NETWORK, "Failed to %s with err code : %d", errMsg, err);
+            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to \{errMsg} with err code : \{errno()}");
         }
         return value;
     }

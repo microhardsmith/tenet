@@ -1,5 +1,6 @@
 package cn.zorcc.common.wheel;
 
+import cn.zorcc.common.AbstractLifeCycle;
 import cn.zorcc.common.Clock;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
@@ -15,10 +16,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 
-public final class WheelImpl implements Wheel {
+public final class WheelImpl extends AbstractLifeCycle implements Wheel {
     private static final AtomicLong counter = new AtomicLong(Constants.ZERO);
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
-    private static final AtomicBoolean startFlag = new AtomicBoolean(false);
     private final int mask;
     private final long tick;
     private final long tickNano;
@@ -35,14 +35,14 @@ public final class WheelImpl implements Wheel {
         if(slots < 256) {
             throw new FrameworkException(ExceptionType.WHEEL, "Slots are too small for a wheel");
         }
-        if((slots & (slots - 1)) != 0) {
+        if((slots & (slots - Constants.ONE)) != Constants.ZERO) {
             throw new FrameworkException(ExceptionType.WHEEL, "Slots must be power of two");
         }
-        this.mask = slots - 1;
+        this.mask = slots - Constants.ONE;
         this.tick = tick;
         this.tickNano = TimeUnit.MILLISECONDS.toNanos(tick);
         this.bound = slots * tick;
-        this.cMask = mask >> 1;
+        this.cMask = mask >> Constants.ONE;
         this.queue = new MpscUnboundedAtomicArrayQueue<>(slots);
         this.wheel = new JobImpl[slots];
         for(int i = 0; i < slots; i++) {
@@ -53,18 +53,16 @@ public final class WheelImpl implements Wheel {
         // still there is a platform thread constantly waiting for lock and go to sleep and so on. So use platform thread would be more simplified
         this.wheelThread = ThreadUtil.platform("Wheel", this::run);
     }
+
     public static final Wheel instance = new WheelImpl(Wheel.slots, Wheel.tick);
 
     @Override
-    public void init() {
-        if(!startFlag.compareAndSet(false, true)) {
-            throw new FrameworkException(ExceptionType.WHEEL, "Wheel already started");
-        }
+    public void doInit() {
         wheelThread.start();
     }
 
     @Override
-    public void shutdown() {
+    public void doExit() {
         wheelThread.interrupt();
     }
 
@@ -110,7 +108,7 @@ public final class WheelImpl implements Wheel {
                     break;
                 }
                 // if delay is smaller than current milli, we should run it in current slot, so we select tasks before running wheel
-                final long delayMillis = Math.max(job.execMilli - milli, 0L);
+                final long delayMillis = Math.max(job.execMilli - milli, Constants.ZERO);
                 if(delayMillis >= bound) {
                     waitSet.add(job);
                 }else {
@@ -120,13 +118,13 @@ public final class WheelImpl implements Wheel {
             }
 
             // check if we need to scan the waiting queue
-            if((slot & cMask) == 0) {
-                Iterator<JobImpl> iter = waitSet.iterator();
-                while (iter.hasNext()) {
-                    JobImpl job = iter.next();
+            if((slot & cMask) == Constants.ZERO) {
+                Iterator<JobImpl> iterator = waitSet.iterator();
+                while (iterator.hasNext()) {
+                    JobImpl job = iterator.next();
                     final long delayMillis = job.execMilli - milli;
                     if(delayMillis < bound) {
-                        iter.remove();
+                        iterator.remove();
                         job.pos = (int) ((slot + (delayMillis / tick)) & mask);
                         insert(job);
                     }else {
@@ -239,7 +237,7 @@ public final class WheelImpl implements Wheel {
         private JobImpl next;
         private final Runnable mission;
         private final AtomicBoolean owner = new AtomicBoolean(false);
-        private final AtomicLong count = new AtomicLong(0L);
+        private final AtomicLong count = new AtomicLong(Constants.ZERO);
         private final long period;
 
         JobImpl(long execMilli, long period, Runnable runnable) {

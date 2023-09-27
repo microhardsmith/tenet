@@ -1,26 +1,22 @@
-package cn.zorcc.common.network;
+package cn.zorcc.common.binding;
 
-import cn.zorcc.common.Clock;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SymbolLookup;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
-import java.util.concurrent.TimeUnit;
 
 /**
  *   Class that interact with underlying SSL library, currently only openssl and libressl are tested
- *   It's recommended to use openssl in Windows and Linux, use libressl in macOS
+ *   It's recommended to use openssl in Windows and Linux operating system, and use libressl in macOS operating system
+ *   Other SSL library or other operating system were not tested, you are welcome to test it on your own
  */
-public final class Ssl {
-    private static final Logger log = LoggerFactory.getLogger(Ssl.class);
+public final class SslBinding {
     @SuppressWarnings("unused")
     private static final SymbolLookup crypto;
     private static final SymbolLookup ssl;
@@ -48,7 +44,6 @@ public final class Ssl {
     private static final MethodHandle sslGetErrMethod;
 
     static {
-        long nano = Clock.nano();
         crypto = NativeUtil.loadLibrary(Constants.CRYPTO);
         ssl = NativeUtil.loadLibrary(Constants.SSL);
         tlsMethod = NativeUtil.methodHandle(ssl, "TLS_method", FunctionDescriptor.of(ValueLayout.ADDRESS));
@@ -68,10 +63,9 @@ public final class Ssl {
         sslFreeMethod = NativeUtil.methodHandle(ssl, "SSL_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         sslCtxFreeMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         sslGetErrMethod = NativeUtil.methodHandle(ssl, "SSL_get_error", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        log.info("Initializing SSL library successfully, time consuming : {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
     }
 
-    private Ssl() {
+    private SslBinding() {
         throw new UnsupportedOperationException();
     }
 
@@ -79,7 +73,7 @@ public final class Ssl {
         try{
             return (MemorySegment) tlsMethod.invokeExact();
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking tlsMethod()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -87,7 +81,7 @@ public final class Ssl {
         try{
             return (MemorySegment) sslCtxNewMethod.invokeExact(tlsMethod);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslCtxNew()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -95,14 +89,14 @@ public final class Ssl {
         try{
             return (int) sslCtxUseCertificateFileMethod.invokeExact(ctx, file, type);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking setPublicKey()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
     public static int setPrivateKey(MemorySegment ctx, MemorySegment file, int type) {
         try{
             return (int) sslCtxUsePrivateKeyFileMethod.invokeExact(ctx, file, type);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking setPrivateKey()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -110,7 +104,7 @@ public final class Ssl {
         try{
             return (int) sslCtxCheckPrivateKeyMethod.invokeExact(ctx);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking checkPrivateKey()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -118,7 +112,7 @@ public final class Ssl {
         try{
             return (long) sslCtxCtrlMethod.invokeExact(ctx, cmd, mode, ptr);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslCtxSetMode()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -126,7 +120,7 @@ public final class Ssl {
         try{
             sslCtxSetVerifyMethod.invokeExact(ctx, mode, callback);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslCtxSetVerify()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -134,7 +128,7 @@ public final class Ssl {
         try{
             return (MemorySegment) sslNewMethod.invokeExact(ctx);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslNew()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -142,7 +136,7 @@ public final class Ssl {
         try{
             return (int) sslSetFdMethod.invokeExact(ssl, fd);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslSetFd()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -150,7 +144,7 @@ public final class Ssl {
         try{
             return (int) sslConnectMethod.invokeExact(ssl);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslConnect()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -158,7 +152,7 @@ public final class Ssl {
         try{
             return (int) sslAcceptMethod.invokeExact(ssl);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslAccept()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -166,7 +160,7 @@ public final class Ssl {
         try{
             return (int) sslReadMethod.invokeExact(ssl, buf, len);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslRead()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -174,7 +168,7 @@ public final class Ssl {
         try{
             return (int) sslWriteMethod.invokeExact(ssl, buf, len);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslWrite()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -182,7 +176,7 @@ public final class Ssl {
         try{
             return (int) sslShutdownMethod.invokeExact(ssl);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslShutdown()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -190,7 +184,7 @@ public final class Ssl {
         try{
             sslFreeMethod.invokeExact(ssl);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslFree()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -198,7 +192,7 @@ public final class Ssl {
         try{
             sslCtxFreeMethod.invokeExact(sslCtx);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslCtxFree()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -206,7 +200,7 @@ public final class Ssl {
         try{
             return (int) sslGetErrMethod.invokeExact(ssl, ret);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Exception caught when invoking sslGetErr()", throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -214,14 +208,14 @@ public final class Ssl {
      *   configure CTX for non-blocking socket with several preassigned options
      */
     public static void configureCtx(MemorySegment ctx) {
-        if((ctxCtrl(ctx, SSL_CTRL_MODE, Constants.SSL_MODE_ENABLE_PARTIAL_WRITE, NativeUtil.NULL_POINTER) & Constants.SSL_MODE_ENABLE_PARTIAL_WRITE) == 0) {
-            throw new FrameworkException(ExceptionType.NETWORK, "set SSL_MODE_ENABLE_PARTIAL_WRITE failed for openssl");
+        if((ctxCtrl(ctx, SSL_CTRL_MODE, Constants.SSL_MODE_ENABLE_PARTIAL_WRITE, NativeUtil.NULL_POINTER) & Constants.SSL_MODE_ENABLE_PARTIAL_WRITE) == Constants.ZERO) {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
-        if((ctxCtrl(ctx, SSL_CTRL_MODE, Constants.SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER, NativeUtil.NULL_POINTER) & Constants.SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER) == 0) {
-            throw new FrameworkException(ExceptionType.NETWORK, "set SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER failed for openssl");
+        if((ctxCtrl(ctx, SSL_CTRL_MODE, Constants.SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER, NativeUtil.NULL_POINTER) & Constants.SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER) == Constants.ZERO) {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
-        if(((~ctxCtrl(ctx, SSL_CTRL_CLEAR_MODE, Constants.SSL_MODE_AUTO_RETRY, NativeUtil.NULL_POINTER)) & Constants.SSL_MODE_AUTO_RETRY) == 0) {
-            throw new FrameworkException(ExceptionType.NETWORK, "unset SSL_MODE_AUTO_RETRY failed for openssl");
+        if(((~ctxCtrl(ctx, SSL_CTRL_CLEAR_MODE, Constants.SSL_MODE_AUTO_RETRY, NativeUtil.NULL_POINTER)) & Constants.SSL_MODE_AUTO_RETRY) == Constants.ZERO) {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 }

@@ -25,6 +25,7 @@ public interface Protocol {
     /**
      *   Perform the actual write operation, return the actual bytes written, if not bytes written then return 0, if write err occurred then return -1
      *   This method will only be invoked in worker's writer thread, if not successfully written, the protocol itself is due to register write events
+     *   After calling doWrite(), the writeBuffer's writeIndex will be reset to zero
      */
     WriteStatus doWrite(Channel channel, WriteBuffer writeBuffer);
 

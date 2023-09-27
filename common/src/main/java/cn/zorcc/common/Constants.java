@@ -4,6 +4,7 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
 
+import java.lang.foreign.MemorySegment;
 import java.lang.invoke.MethodHandles;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -23,6 +24,7 @@ public final class Constants {
     public static final String CRYPTO = "crypto";
     public static final String SSL = "ssl";
     public static final String DEFLATE = "deflate";
+    public static final String SQLITE = "sqlite";
     public static final String TENET_LIBRARY_PATH = "TENET_LIBRARY_PATH";
     public static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
     public static final String GET = "get";
@@ -72,32 +74,30 @@ public final class Constants {
     public static final byte DEL = (byte) 0x7F;
     public static final String DEFAULT_HTTP_VERSION = "HTTP/1.1";
 
-    public static final String TMP_LIB = "tenet-lib";
-
     public static final int TRACE = 0;
     public static final int DEBUG = 10;
     public static final int INFO = 20;
     public static final int WARN = 30;
     public static final int ERROR = 40;
-    public static final String DEFAULT_LOG_DIR = "log";
-    public static final String DEFAULT_LOG_FILE_NAME = "app";
+    public static final String LOG_FILE_NAME_PATTERN = "yyyy-MM-dd'T'HH_mm_ss";
     public static final String LOG_FILE_TYPE = ".log";
+    public static final String SQLITE_FILE_TYPE = ".db";
     /**
      *  Ansi格式的带颜色的控制台字符控制
      */
-    public static final byte[] ANSI_PREFIX = "\033[".getBytes(StandardCharsets.UTF_8); // 2 bytes
-    public static final byte[] ANSI_SUFFIX = "\033[0m".getBytes(StandardCharsets.UTF_8); // 4 bytes
-    public static final byte[] TRACE_BYTES = "TRACE".getBytes(StandardCharsets.UTF_8);
-    public static final byte[] DEBUG_BYTES = "DEBUG".getBytes(StandardCharsets.UTF_8);
-    public static final byte[] INFO_BYTES = "INFO".getBytes(StandardCharsets.UTF_8);
-    public static final byte[] WARN_BYTES = "WARN".getBytes(StandardCharsets.UTF_8);
-    public static final byte[] ERROR_BYTES = "ERROR".getBytes(StandardCharsets.UTF_8);
-    public static final byte[] RED_BYTES = "31m".getBytes(StandardCharsets.UTF_8);
-    public static final byte[] GREEN_BYTES = "32m".getBytes(StandardCharsets.UTF_8);
-    public static final byte[] YELLOW_BYTES = "33m".getBytes(StandardCharsets.UTF_8);
-    public static final byte[] BLUE_BYTES = "34m".getBytes(StandardCharsets.UTF_8);
-    public static final byte[] MAGENTA_BYTES = "35m".getBytes(StandardCharsets.UTF_8);
-    public static final byte[] CYAN_BYTES = "36m".getBytes(StandardCharsets.UTF_8);
+    public static final MemorySegment ANSI_PREFIX = MemorySegment.ofArray("\033[".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment ANSI_SUFFIX = MemorySegment.ofArray("\033[0m".getBytes(StandardCharsets.UTF_8)); // 4 bytes
+    public static final MemorySegment TRACE_BYTES = MemorySegment.ofArray("TRACE".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment DEBUG_BYTES = MemorySegment.ofArray("DEBUG".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment INFO_BYTES = MemorySegment.ofArray("INFO".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment WARN_BYTES = MemorySegment.ofArray("WARN".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment ERROR_BYTES = MemorySegment.ofArray("ERROR".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment RED_BYTES = MemorySegment.ofArray("31m".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment GREEN_BYTES = MemorySegment.ofArray("32m".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment YELLOW_BYTES = MemorySegment.ofArray("33m".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment BLUE_BYTES = MemorySegment.ofArray("34m".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment MAGENTA_BYTES = MemorySegment.ofArray("35m".getBytes(StandardCharsets.UTF_8));
+    public static final MemorySegment CYAN_BYTES = MemorySegment.ofArray("36m".getBytes(StandardCharsets.UTF_8));
     public static final String RED = "red";
     public static final String GREEN = "green";
     public static final String YELLOW = "yellow";
@@ -345,7 +345,6 @@ public final class Constants {
     public static final int SQLITE_OPEN_SHAREDCACHE = 131072;
     public static final int SQLITE_OPEN_PRIVATECACHE = 262144;
     public static final int SQLITE_OPEN_NOFOLLOW = 16777216;
-
     public static final int SQLITE_CONFIG_SINGLETHREAD = 1;
     public static final int SQLITE_CONFIG_MULTITHREAD = 2;
     public static final int SQLITE_CONFIG_SERIALIZED = 3;
@@ -355,6 +354,7 @@ public final class Constants {
     public static final int SQLITE_PREPARE_PERSISTENT = 1;
     public static final int SQLITE_PREPARE_NORMALIZE = 2;
     public static final int SQLITE_PREPARE_NO_VTAB = 4;
+    public static final byte SQLITE_UTF8 = 1;
 
     private Constants() {
         throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);

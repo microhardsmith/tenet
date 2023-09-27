@@ -4,11 +4,10 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.LifeCycle;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.Net;
 import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.orm.PgConfig;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TransferQueue;
@@ -20,7 +19,7 @@ import java.util.concurrent.locks.ReentrantLock;
  *   The main postgresql manager for handling all incoming msg
  */
 public final class PgManager implements LifeCycle {
-    private static final Logger log = LoggerFactory.getLogger(PgManager.class);
+    private static final Logger log = new Logger(PgManager.class);
     private final Net net;
     private final PgConfig pgConfig;
     private final TransferQueue<PgConn> connPool = new LinkedTransferQueue<>();
@@ -63,7 +62,7 @@ public final class PgManager implements LifeCycle {
     }
 
     @Override
-    public void shutdown() {
+    public void exit() {
 
     }
 }

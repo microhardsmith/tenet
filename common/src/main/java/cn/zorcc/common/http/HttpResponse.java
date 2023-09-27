@@ -2,6 +2,8 @@ package cn.zorcc.common.http;
 
 import cn.zorcc.common.Constants;
 
+import java.lang.foreign.MemorySegment;
+
 /**
  *   Http response abstraction
  */
@@ -21,7 +23,7 @@ public class HttpResponse {
     /**
      *   Http content data, normally would be json UTF-8 bytes, could be null for chunked data
      */
-    private byte[] data;
+    private MemorySegment data;
 
     public String getVersion() {
         return version;
@@ -47,11 +49,11 @@ public class HttpResponse {
         this.headers = headers;
     }
 
-    public byte[] getData() {
+    public MemorySegment getData() {
         return data;
     }
 
-    public void setData(byte[] data) {
+    public void setData(MemorySegment data) {
         this.data = data;
     }
 }

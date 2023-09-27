@@ -3,6 +3,7 @@ package cn.zorcc.orm.core;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.Channel;
 import cn.zorcc.common.network.Shutdown;
 import cn.zorcc.common.util.ThreadUtil;
@@ -19,8 +20,6 @@ import com.ongres.scram.common.exception.ScramInvalidServerSignatureException;
 import com.ongres.scram.common.exception.ScramParseException;
 import com.ongres.scram.common.exception.ScramServerErrorException;
 import com.ongres.scram.common.stringprep.StringPreparations;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -35,7 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   Representing a basic postgresql connection
  */
 public final class PgConn {
-    private static final Logger log = LoggerFactory.getLogger(PgConn.class);
+    private static final Logger log = new Logger(PgConn.class);
     /**
      *   Global counter for established postgresql connections
      */
@@ -71,12 +70,6 @@ public final class PgConn {
         return available.get();
     }
 
-    private void debug(String s, Object... args) {
-        if(sequence == Constants.ZERO) {
-            log.debug(s, args);
-        }
-    }
-
     private void onMsg(Object msg) {
         switch (msg) {
             case PgAuthOkMsg() -> handleAuthOk();
@@ -102,12 +95,12 @@ public final class PgConn {
     }
 
     private void handleParameterStatus(String key, String value) {
-        debug("Receiving parameter status, key : {}, value : {}", key, value);
+        log.debug(STR."Receiving parameter status, key : \{key}, value : \{value}");
         variable.getParameterStatus().put(key, value);
     }
 
     private void handleBackendData(int processId, int secretKey) {
-        debug("Receiving processId : {}, secretKey : {}", processId, secretKey);
+        log.debug(STR."Receiving processId : \{processId}, secretKey : \{secretKey}");
         variable.setProcessId(processId);
         variable.setSecretKey(secretKey);
     }
@@ -137,11 +130,11 @@ public final class PgConn {
             if(scramSession == null) {
                 throw new FrameworkException(ExceptionType.SQL, "Empty sasl session");
             }
-            debug("Receiving server first msg : {}", serverFirstMsg);
+            log.debug(STR."Receiving server first msg : \{serverFirstMsg}");
             ScramSession.ServerFirstProcessor serverFirstProcessor = scramSession.receiveServerFirstMessage(serverFirstMsg);
             ScramSession.ClientFinalProcessor clientFinalProcessor = serverFirstProcessor.clientFinalProcessor(pgManager.pgConfig().getPassword());
             String clientFinalMsg = clientFinalProcessor.clientFinalMessage();
-            debug("Generating client final msg ： {}", clientFinalMsg);
+            log.debug(STR."Generating client final msg ： \{clientFinalMsg}");
             variable.setClientFinalProcessor(clientFinalProcessor);
             channel.send(new PgAuthSaslResponseMsg(clientFinalMsg));
         }catch (ScramException e) {
@@ -156,10 +149,10 @@ public final class PgConn {
                     .stringPreparation(StringPreparations.SASL_PREPARATION)
                     .selectMechanismBasedOnServerAdvertised(mechanisms.toArray(new String[0])).setup();
             String mechanism = scramClient.getScramMechanism().getName();
-            debug("Using mechanism : {}", mechanism);
+            log.debug(STR."Using mechanism : \{mechanism}");
             ScramSession scramSession = scramClient.scramSession("*");
             String clientFirstMsg = scramSession.clientFirstMessage();
-            debug("Generating client first msg : {}", clientFirstMsg);
+            log.debug(STR."Generating client first msg : \{clientFirstMsg}");
             variable.setScramClient(scramClient);
             variable.setScramSession(scramSession);
             channel.send(new PgAuthSaslInitialResponseMsg(mechanism, clientFirstMsg));

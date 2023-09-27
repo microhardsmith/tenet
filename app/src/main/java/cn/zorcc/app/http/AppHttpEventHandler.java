@@ -4,14 +4,12 @@ import cn.zorcc.app.http.anno.*;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.Context;
 import cn.zorcc.common.enums.ExceptionType;
-import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.exception.ServiceException;
+import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.util.ReflectUtil;
 import cn.zorcc.http.HttpReq;
 import io.netty.handler.codec.http.HttpMethod;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
@@ -23,8 +21,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 
-public class AppHttpEventHandler implements EventHandler<AppHttpEvent>, AppHttpMapping {
-    private static final Logger log = LoggerFactory.getLogger(AppHttpEventHandler.class);
+public class AppHttpEventHandler implements AppHttpMapping {
+    private static final Logger log = new Logger(AppHttpEventHandler.class);
     /**
      *  可解析的method参数注解
      */
@@ -47,7 +45,7 @@ public class AppHttpEventHandler implements EventHandler<AppHttpEvent>, AppHttpM
             HttpMethod.PATCH, new UrlTree());
 
     public AppHttpEventHandler() {
-        Context.loadContainer(this, AppHttpMapping.class);
+        Context.load(this, AppHttpMapping.class);
     }
     // TODO refactoring
     public void init() {
@@ -59,12 +57,10 @@ public class AppHttpEventHandler implements EventHandler<AppHttpEvent>, AppHttpM
         }
     }
 
-    @Override
     public void handle(AppHttpEvent event) {
         HttpReq httpReq = event.httpReq();
         UrlTree urlTree = urlTreeMap.get(httpReq.method());
         if (urlTree.searchPath(event)) {
-
 
         }
     }
@@ -78,7 +74,7 @@ public class AppHttpEventHandler implements EventHandler<AppHttpEvent>, AppHttpM
             throw new FrameworkException(ExceptionType.CONTEXT, "Can't register HttpMapping after initialization");
         }
         Class<?> implClass = impl.getClass();
-        log.info("Registering HttpMapping for class : {}", implClass.getSimpleName());
+        log.info(STR."Registering HttpMapping for class : \{implClass.getSimpleName()}");
         String prefix = implClass.getAnnotation(HttpMapping.class).prefix();
         for (Method method : ReflectUtil.getAllMethod(implClass)) {
             processMethod(impl, method, prefix);
@@ -119,7 +115,7 @@ public class AppHttpEventHandler implements EventHandler<AppHttpEvent>, AppHttpM
      * @param path Http映射路径
      */
     private void registerUrlMapping(Object impl, Method method, HttpMethod httpMethod, String path) {
-//        int methodIndex = methodInvoker.registerMethodMapping(impl, method);
+        int methodIndex = 0; // 要根据impl和method去拿具体的 TODO
         Parameter[] parameters = method.getParameters();
         Function<AppHttpEvent, AppHttpEvent> func = event -> {
             event.setArgIndex(Constants.ZERO);

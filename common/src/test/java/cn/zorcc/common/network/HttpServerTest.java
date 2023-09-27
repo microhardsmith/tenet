@@ -1,53 +1,55 @@
-package cn.zorcc.common.example;
+package cn.zorcc.common.network;
 
-import cn.zorcc.common.Chain;
-import cn.zorcc.common.Clock;
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.Context;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.http.*;
+import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.log.LoggerConsumer;
-import cn.zorcc.common.network.*;
 import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.CompressUtil;
 import cn.zorcc.common.wheel.Wheel;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.junit.jupiter.api.Test;
 
-import java.lang.management.ManagementFactory;
+import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.zip.Deflater;
 
-/**
- *   Test class for building a executable fat-jar
- */
-public final class HttpServer {
-    private static final Logger log = LoggerFactory.getLogger(HttpServer.class);
+public class HttpServerTest {
+    private static final Logger log = new Logger(HttpServerTest.class);
     private static final Loc HTTP_LOC = new Loc("0.0.0.0", 80);
     private static final Loc HTTPS_LOC = new Loc("0.0.0.0", 443);
     private static final String PUBLIC_KEY_FILE = "/Users/liuxichen/workspace/ca/server.crt";
     private static final String PRIVATE_KEY_FILE = "/Users/liuxichen/workspace/ca/server.key";
-    public static void main(String[] args) {
-        long nano = Clock.nano();
-        Chain chain = Chain.chain();
-        chain.add(Wheel.wheel());
-        chain.add(new LoggerConsumer());
+    @Test
+    public void testHttpServer() {
+        Context.load(Wheel.wheel(), Wheel.class);
+        Context.load(new LoggerConsumer(), LoggerConsumer.class);
+        Context.load(createHttpNet(), Net.class);
+        Context.init();
+    }
 
-        //chain.add(createHttpNet());
+    @Test
+    public void testHttpsServer() {
+        Context.load(Wheel.wheel(), Wheel.class);
+        Context.load(new LoggerConsumer(), LoggerConsumer.class);
+        Context.load(createHttpsNet(), Net.class);
+        Context.init();
+    }
 
-        //chain.add(createHttpsNet());
-
-        chain.add(createHttpAndHttpsNet());
-        chain.run();
-
-        long jvmTime = ManagementFactory.getRuntimeMXBean().getUptime();
-        log.info("Starting now, causing {} ms, JVM started for {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)), jvmTime);
+    @Test
+    public void testHttpAndHttpsServer() {
+        Context.load(Wheel.wheel(), Wheel.class);
+        Context.load(new LoggerConsumer(), LoggerConsumer.class);
+        Context.load(createHttpAndHttpsNet(), Net.class);
+        Context.init();
     }
 
     public static Net createHttpNet() {
@@ -91,26 +93,23 @@ public final class HttpServer {
     }
 
     private static class HttpTestHandler implements Handler {
-        private static final Logger log = LoggerFactory.getLogger(HttpTestHandler.class);
-        private static final byte[] body = """
+        private static final MemorySegment body = MemorySegment.ofArray("""
                 {
                     "hello" : "world"
                 }
-                """.getBytes(StandardCharsets.UTF_8);
+                """.getBytes(StandardCharsets.UTF_8));
         private static final ZoneId gmt = ZoneId.of("GMT");
         private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss z", Locale.ENGLISH).withZone(gmt);
-        private final ThreadFactory threadFactory = Thread.ofVirtual().name("http-", 0).factory();
+        private static final Executor executor = Executors.newVirtualThreadPerTaskExecutor();
         @Override
         public void onConnected(Channel channel) {
-            log.debug("Http connection established : {}", channel.loc());
+            log.debug(STR."Http connection established : \{channel.loc()}");
         }
 
         @Override
         public void onRecv(Channel channel, Object data) {
             if(data instanceof HttpRequest httpRequest) {
-                // TODO 好像有线程安全问题，只有在多个worker时的情况下会触发
-//                threadFactory.newThread(() -> onHttpRequest(channel, httpRequest)).start();
-                onHttpRequest(channel, httpRequest);
+                executor.execute(() -> onHttpRequest(channel, httpRequest));
             }else {
                 throw new FrameworkException(ExceptionType.HTTP, Constants.UNREACHED);
             }
@@ -122,9 +121,9 @@ public final class HttpServer {
             headers.put("Content-Type", "application/json; charset=utf-8");
             headers.put("Date", formatter.format(ZonedDateTime.now(gmt)));
             String acceptEncoding = httpRequest.getHttpHeader().get(HttpHeader.K_ACCEPT_ENCODING);
-            if(acceptEncoding != null && acceptEncoding.contains("gzip")) {
+            if(acceptEncoding != null && acceptEncoding.contains(HttpHeader.V_GZIP)) {
                 headers.put(HttpHeader.K_CONTENT_ENCODING, HttpHeader.V_GZIP);
-                httpResponse.setData(CompressUtil.compressUsingJdkGzip(body, Deflater.BEST_COMPRESSION));
+                httpResponse.setData(CompressUtil.compressUsingGzip(body, Deflater.BEST_COMPRESSION));
             }else {
                 httpResponse.setData(body);
             }
@@ -133,12 +132,12 @@ public final class HttpServer {
 
         @Override
         public void onShutdown(Channel channel) {
-            log.debug("Http connection shutdown : {}", channel.loc());
+            log.debug(STR."Http connection shutdown : \{channel.loc()}");
         }
 
         @Override
         public void onRemoved(Channel channel) {
-            log.debug("Http connection closed : {}", channel.loc());
+            log.debug(STR."Http connection closed : \{channel.loc()}");
         }
     }
 }

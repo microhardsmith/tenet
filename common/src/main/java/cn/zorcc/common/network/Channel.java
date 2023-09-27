@@ -6,9 +6,8 @@ import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.pojo.Loc;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -19,7 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   in channel state, the socket read and write operation would be taken over by Encoder, Decoder and Handler using Protocol
  */
 public final class Channel implements Actor {
-    private static final Logger log = LoggerFactory.getLogger(Channel.class);
+    private static final Logger log = new Logger(Channel.class);
     private static final Native n = Native.n;
     private final int hashcode;
     private final Socket socket;
@@ -132,7 +131,7 @@ public final class Channel implements Actor {
                 handler.onRecv(this, result);
             }
         }catch (FrameworkException e) {
-            log.error("Failed to perform reading from channel : {}", loc, e);
+            log.error(STR."Failed to perform reading from channel : \{loc}", e);
             shutdown();
         }
     }

@@ -2,13 +2,12 @@ package cn.zorcc.orm.common;
 
 import cn.zorcc.common.Meta;
 import cn.zorcc.common.Pair;
+import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.sql.Filler;
 import cn.zorcc.common.sql.Mapper;
 import cn.zorcc.common.sql.Page;
 import cn.zorcc.common.sql.Where;
 import cn.zorcc.common.util.SqlUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.List;
@@ -16,7 +15,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class SqlMapper<T> implements Mapper<T> {
-    private static final Logger log = LoggerFactory.getLogger(SqlMapper.class);
+    private static final Logger log = new Logger(SqlMapper.class);
     private static final Map<Class<?>, Mapper<?>> mapperMap = new ConcurrentHashMap<>();
 
     @SuppressWarnings("unchecked")

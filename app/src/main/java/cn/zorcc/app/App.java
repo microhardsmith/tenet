@@ -13,7 +13,7 @@ public class App {
 
     public static void start(String configFileName) {
         AppConfig appConfig = ConfigUtil.loadJsonConfig(configFileName, AppConfig.class);
-        Context.loadContainer(appConfig, AppConfig.class);
+        Context.load(appConfig, AppConfig.class);
         // Context.init();
     }
 }

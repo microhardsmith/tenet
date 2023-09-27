@@ -2,9 +2,8 @@ package cn.zorcc.common;
 
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.util.ThreadUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,7 +17,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public enum Chain {
     INSTANCE;
 
-    private static final Logger log = LoggerFactory.getLogger(Chain.class);
+    private static final Logger log = new Logger(Chain.class);
     private final AtomicBoolean started = new AtomicBoolean(false);
     private final List<LifeCycle> list = new ArrayList<>();
     private final Lock lock = new ReentrantLock();
@@ -55,7 +54,7 @@ public enum Chain {
                     }catch (FrameworkException e) {
                         log.error("Err caught when initializing component, exiting application now", e);
                         for(int i = index; i >= 0; i--) {
-                            list.get(index).shutdown();
+                            list.get(index).exit();
                         }
                     }
                 }
@@ -65,7 +64,7 @@ public enum Chain {
             Runtime.getRuntime().addShutdownHook(ThreadUtil.virtual("Exit", () -> {
                 try{
                     for(int index = list.size(); index > 0; index--) {
-                        list.get(index - 1).shutdown();
+                        list.get(index - 1).exit();
                     }
                 }catch (InterruptedException e) {
                     throw new FrameworkException(ExceptionType.CONTEXT, "Shutdown interrupted", e);

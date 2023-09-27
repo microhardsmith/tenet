@@ -1,17 +1,17 @@
 package cn.zorcc.common.log;
 
-import cn.zorcc.common.event.EventHandler;
+import java.util.function.Consumer;
 
 /**
  *   Print log to the remote metrics server TODO not implemented yet
  */
-public final class MetricsLogEventHandler implements EventHandler<LogEvent> {
+public final class MetricsLogEventHandler implements Consumer<LogEvent> {
     public MetricsLogEventHandler(LogConfig logConfig) {
 
     }
 
     @Override
-    public void handle(LogEvent event) {
+    public void accept(LogEvent event) {
 
     }
 }

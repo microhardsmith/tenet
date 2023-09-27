@@ -326,7 +326,7 @@ public final class CompressUtil {
         try(WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer()) {
             while (!deflater.finished()) {
                 int len = deflater.deflate(buffer);
-                writeBuffer.writeBytes(buffer, Constants.ZERO, len);
+                writeBuffer.write(buffer, Constants.ZERO, len);
             }
             return writeBuffer.toArray();
         } finally {
@@ -341,7 +341,7 @@ public final class CompressUtil {
             byte[] buffer = new byte[CHUNK_SIZE];
             while (!inflater.finished()) {
                 int decompressLen = inflater.inflate(buffer);
-                writeBuffer.writeBytes(buffer, Constants.ZERO, decompressLen);
+                writeBuffer.write(buffer, Constants.ZERO, decompressLen);
             }
             return writeBuffer.toArray();
         }catch (DataFormatException e) {

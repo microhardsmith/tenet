@@ -1,5 +1,7 @@
 package cn.zorcc.common.http;
 
+import java.lang.foreign.MemorySegment;
+
 /**
  *  Http request abstraction
  */
@@ -23,48 +25,45 @@ public class HttpRequest {
     /**
      *  Http content data, normally would be json UTF-8 bytes or null
      */
-    private byte[] data;
-
-    public HttpRequest() {
-    }
+    private MemorySegment data;
 
     public HttpMethod getMethod() {
-        return this.method;
-    }
-
-    public String getUri() {
-        return this.uri;
-    }
-
-    public String getVersion() {
-        return this.version;
-    }
-
-    public HttpHeader getHttpHeader() {
-        return this.httpHeader;
-    }
-
-    public byte[] getData() {
-        return this.data;
+        return method;
     }
 
     public void setMethod(HttpMethod method) {
         this.method = method;
     }
 
+    public String getUri() {
+        return uri;
+    }
+
     public void setUri(String uri) {
         this.uri = uri;
+    }
+
+    public String getVersion() {
+        return version;
     }
 
     public void setVersion(String version) {
         this.version = version;
     }
 
+    public HttpHeader getHttpHeader() {
+        return httpHeader;
+    }
+
     public void setHttpHeader(HttpHeader httpHeader) {
         this.httpHeader = httpHeader;
     }
 
-    public void setData(byte[] data) {
+    public MemorySegment getData() {
+        return data;
+    }
+
+    public void setData(MemorySegment data) {
         this.data = data;
     }
 }

@@ -4,7 +4,6 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
 
-import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -81,48 +80,26 @@ public final class WriteBuffer extends OutputStream {
     }
 
     @Override
-    public void write(byte[] b, int off, int len) throws IOException {
+    public void write(byte[] b, int off, int len) {
+        if(len < Constants.ZERO || off + len > b.length) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
+        }
         long nextIndex = writeIndex + len;
         resize(nextIndex);
-        for(int i = Constants.ZERO; i < len; i++) {
-            NativeUtil.setByte(segment, writeIndex + i, b[off + i]);
-        }
+        MemorySegment.copy(MemorySegment.ofArray(b), off, segment, writeIndex, len);
         writeIndex = nextIndex;
+    }
+
+    @Override
+    public void write(byte[] b) {
+        writeBytes(b);
     }
 
     public void writeBytes(byte... bytes) {
         long nextIndex = writeIndex + bytes.length;
         resize(nextIndex);
-        MemorySegment sourceSegment = MemorySegment.ofArray(bytes);
-        MemorySegment.copy(sourceSegment, Constants.ZERO, segment, writeIndex, sourceSegment.byteSize());
+        MemorySegment.copy(MemorySegment.ofArray(bytes), Constants.ZERO, segment, writeIndex, bytes.length);
         writeIndex = nextIndex;
-    }
-
-    public void writeBytes(byte[] data, int offset, int len) {
-        if(len < Constants.ZERO || offset + len > data.length) {
-            throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
-        }
-        long nextIndex = writeIndex + len;
-        for(int i = Constants.ZERO; i < len; i++) {
-            NativeUtil.setByte(segment, writeIndex + i, data[offset + i]);
-        }
-        writeIndex = nextIndex;
-    }
-
-    public void writeBytesWithPadding(byte[] bytes, int minWidth, byte padding) {
-        if(minWidth <= bytes.length) {
-            writeBytes(bytes);
-        }else {
-            long nextIndex = writeIndex + minWidth;
-            resize(nextIndex);
-            for(int i = 0; i < bytes.length; i++) {
-                NativeUtil.setByte(segment, writeIndex + i, bytes[i]);
-            }
-            for(int i = bytes.length; i < minWidth; i++) {
-                NativeUtil.setByte(segment, writeIndex + i, padding);
-            }
-            writeIndex = nextIndex;
-        }
     }
 
     public void writeShort(short s) {
@@ -147,13 +124,12 @@ public final class WriteBuffer extends OutputStream {
     }
 
     public void writeCStr(String str) {
-        byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
-        long nextIndex = writeIndex + bytes.length + Constants.ONE;
+        MemorySegment m = MemorySegment.ofArray(str.getBytes(StandardCharsets.UTF_8));
+        long len = m.byteSize();
+        long nextIndex = writeIndex + len + Constants.ONE;
         resize(nextIndex);
-        for(int i = Constants.ZERO; i < bytes.length; i++) {
-            NativeUtil.setByte(segment, writeIndex + i, bytes[i]);
-        }
-        NativeUtil.setByte(segment, writeIndex + bytes.length, Constants.NUT);
+        MemorySegment.copy(m, Constants.ZERO, segment, writeIndex, len);
+        NativeUtil.setByte(segment, writeIndex + len, Constants.NUT);
         writeIndex = nextIndex;
     }
 
@@ -163,6 +139,19 @@ public final class WriteBuffer extends OutputStream {
         resize(nextIndex);
         MemorySegment.copy(memorySegment, Constants.ZERO, segment, writeIndex, len);
         writeIndex = nextIndex;
+    }
+
+    public void writeSegmentWithPadding(MemorySegment memorySegment, long minWidth, byte padding) {
+        long len = memorySegment.byteSize();
+        if(minWidth <= len) {
+            writeSegment(memorySegment);
+        }else {
+            long nextIndex = writeIndex + minWidth;
+            resize(nextIndex);
+            MemorySegment.copy(memorySegment, Constants.ZERO, segment, writeIndex, len);
+            segment.asSlice(writeIndex + len, minWidth - len).fill(padding);
+            writeIndex = nextIndex;
+        }
     }
 
     public void writeUtf8Data(int data) {
@@ -207,17 +196,10 @@ public final class WriteBuffer extends OutputStream {
     }
 
     /**
-     *   Return current written segment, from 0 ~ writeIndex
+     *   Return current written segment, from 0 ~ writeIndex, calling content() will not modify current writeBuffer's writeIndex
      */
     public MemorySegment content() {
         return writeIndex == size ? segment : segment.asSlice(Constants.ZERO, writeIndex);
-    }
-
-    /**
-     *   Return raw segment, sometimes manually slice could be avoided because there could be some separators in it, such as '\0', therefore the whole segment could be directly used
-     */
-    public MemorySegment rawSegment() {
-        return segment;
     }
 
     /**
@@ -265,6 +247,12 @@ public final class WriteBuffer extends OutputStream {
             MemorySegment.copy(segment, Constants.ZERO, m, Constants.ZERO, index);
             return bytes;
         }
+    }
+
+    public MemorySegment toSegment() {
+        MemorySegment m = content();
+        writeIndex = Constants.ZERO;
+        return m;
     }
 
     /**
@@ -339,9 +327,7 @@ public final class WriteBuffer extends OutputStream {
 
         @Override
         public void close(WriteBuffer writeBuffer) {
-            if(arena == null) {
-                writeBuffer.writeIndex = Constants.ZERO;
-            }else {
+            if(arena != null) {
                 arena.close();
             }
         }

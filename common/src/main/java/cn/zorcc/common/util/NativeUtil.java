@@ -12,6 +12,7 @@ import java.lang.invoke.VarHandle;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 /**
  *  Native Helper class for accessing native memory and methods
@@ -226,7 +227,7 @@ public final class NativeUtil {
     }
 
     public static String getStr(MemorySegment memorySegment) {
-        return getStr(memorySegment, 0);
+        return getStr(memorySegment, Constants.ZERO);
     }
 
     public static String getStr(MemorySegment ptr, int maxLength) {
@@ -235,7 +236,7 @@ public final class NativeUtil {
             for(int i = 0; i < maxLength; i++) {
                 byte b = getByte(ptr, i);
                 if(b == Constants.NUT) {
-                    return new String(bytes, 0, i, StandardCharsets.UTF_8);
+                    return new String(bytes, Constants.ZERO, i, StandardCharsets.UTF_8);
                 }else {
                     bytes[i] = b;
                 }
@@ -244,16 +245,15 @@ public final class NativeUtil {
             for(int i = 0; i < Integer.MAX_VALUE; i++) {
                 byte b = getByte(ptr, i);
                 if(b == Constants.NUT) {
-                    byte[] bytes = new byte[i];
-                    MemorySegment.copy(ptr, ValueLayout.JAVA_BYTE, 0, bytes, 0, i);
-                    return new String(bytes, StandardCharsets.UTF_8);
+                    return new String(ptr.asSlice(Constants.ZERO, i).toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8);
                 }
             }
         }
         throw new FrameworkException(ExceptionType.NATIVE, "Not a valid C style string");
     }
 
-    public static MemorySegment accessPtr(MemorySegment pp, Arena arena) {
-        return pp.get(ValueLayout.ADDRESS, 0L).reinterpret(ValueLayout.ADDRESS.byteSize(), arena, null);
+    // TODO remove
+    public static MemorySegment accessPtr(MemorySegment pp, Arena arena, Consumer<MemorySegment> cleanup) {
+        return pp.get(ValueLayout.ADDRESS, Constants.ZERO).reinterpret(ValueLayout.ADDRESS.byteSize(), arena, cleanup);
     }
 }

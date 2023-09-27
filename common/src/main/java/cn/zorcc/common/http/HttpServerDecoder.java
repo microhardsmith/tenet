@@ -8,6 +8,7 @@ import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Decoder;
 import cn.zorcc.common.util.CompressUtil;
 
+import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 
 public final class HttpServerDecoder implements Decoder {
@@ -144,7 +145,7 @@ public final class HttpServerDecoder implements Decoder {
         if (readBuffer.size() - readBuffer.readIndex() < len) {
             return ResultStatus.INCOMPLETE;
         }
-        current.setData(tryDecompress(readBuffer.readBytes(len)));
+        current.setData(tryDecompress(readBuffer.readSegment(len)));
         decodingStatus = DecodingStatus.INITIAL;
         return ResultStatus.FINISHED;
     }
@@ -155,7 +156,7 @@ public final class HttpServerDecoder implements Decoder {
         if(bytes == null) {
             return ResultStatus.INCOMPLETE;
         }else if (bytes == Constants.EMPTY_BYTES) {
-            current.setData(tryDecompress(tempBuffer.toArray()));
+            current.setData(tryDecompress(tempBuffer.toSegment()));
             decodingStatus = DecodingStatus.INITIAL;
             return ResultStatus.FINISHED;
         }else {
@@ -204,11 +205,11 @@ public final class HttpServerDecoder implements Decoder {
         return ret;
     }
 
-    private byte[] tryDecompress(byte[] rawData) {
+    private MemorySegment tryDecompress(MemorySegment rawData) {
         return switch (current.getHttpHeader().get(HttpHeader.K_CONTENT_ENCODING)) {
             case null -> rawData;
-            case HttpHeader.V_GZIP -> CompressUtil.decompressUsingJdkGzip(rawData);
-            case HttpHeader.V_DEFLATE -> CompressUtil.decompressUsingJdkDeflate(rawData);
+            case HttpHeader.V_GZIP -> CompressUtil.decompressUsingGzip(rawData);
+            case HttpHeader.V_DEFLATE -> CompressUtil.decompressUsingDeflate(rawData);
             default -> throw new FrameworkException(ExceptionType.HTTP, "Unsupported compression type detected");
         };
     }

@@ -3,162 +3,158 @@ package cn.zorcc.common.log;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.util.ConfigUtil;
+import cn.zorcc.common.util.StringUtil;
 import cn.zorcc.common.util.ThreadUtil;
-import org.slf4j.Marker;
-import org.slf4j.event.Level;
-import org.slf4j.helpers.LegacyAbstractLogger;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.ServiceLoader;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TransferQueue;
+import java.util.function.Function;
 
 /**
  *  Tenet logger, using a single thread to async log msg to console, file or remote
  */
-public final class Logger extends LegacyAbstractLogger {
-    private static final Map<Level, byte[]> levelMap = Map.of(
-            Level.DEBUG, Constants.DEBUG_BYTES,
-            Level.TRACE, Constants.TRACE_BYTES,
-            Level.INFO, Constants.INFO_BYTES,
-            Level.WARN, Constants.WARN_BYTES,
-            Level.ERROR, Constants.ERROR_BYTES
+public final class Logger {
+    private static final Map<LogLevel, MemorySegment> levelMap = Map.of(
+            LogLevel.DEBUG, Constants.DEBUG_BYTES,
+            LogLevel.TRACE, Constants.TRACE_BYTES,
+            LogLevel.INFO, Constants.INFO_BYTES,
+            LogLevel.WARN, Constants.WARN_BYTES,
+            LogLevel.ERROR, Constants.ERROR_BYTES
     );
-    private static final LogConfig config;
     private static final int level;
-    private static final DateTimeFormatter formatter;
     private static final TimeResolver timeResolver;
     private static final TransferQueue<LogEvent> queue = new LinkedTransferQueue<>();
+    private final MemorySegment className;
 
     static {
-        config = ConfigUtil.loadJsonConfig(Constants.DEFAULT_LOG_CONFIG_NAME, LogConfig.class);
-        formatter = DateTimeFormatter.ofPattern(config.getTimeFormat(), Locale.getDefault());
-        String resolver = config.getTimeResolver();
-        if(resolver != null && !resolver.isEmpty()) {
-            try {
-                Class<?> timeResolverClass = Class.forName(resolver);
-                if(!TimeResolver.class.isAssignableFrom(timeResolverClass)) {
-                    throw new FrameworkException(ExceptionType.LOG, "Target TimeResolver is not valid");
-                }
-                timeResolver = (TimeResolver) timeResolverClass.getConstructor().newInstance();
-            } catch (Exception e) {
-                throw new FrameworkException(ExceptionType.LOG, "Unable to instantiate target TimeResolver", e);
-            }
-        }else {
-            timeResolver = null;
-        }
-        level = switch (config.getLevel()) {
-            case Constants.TRACE -> Constants.TRACE;
-            case Constants.INFO -> Constants.INFO;
-            case Constants.WARN -> Constants.WARN;
-            case Constants.ERROR -> Constants.ERROR;
-            case Constants.DEBUG -> Constants.DEBUG;
-            default -> throw new FrameworkException(ExceptionType.LOG, "Unsupported Log default level");
+        timeResolver = ServiceLoader.load(TimeResolver.class).findFirst().orElseGet(DefaultTimeResolver::new);
+        level = switch (System.getProperty("log.level")) {
+            case "TRACE"       -> Constants.TRACE;
+            case "WARN"        -> Constants.WARN;
+            case "ERROR"       -> Constants.ERROR;
+            case "DEBUG"       -> Constants.DEBUG;
+            case null, default -> Constants.INFO;
         };
     }
 
-    public static LogConfig config() {
-        return config;
+    public Logger(Class<?> clazz) {
+        className = MemorySegment.ofArray(clazz.getName().getBytes(StandardCharsets.UTF_8));
     }
 
     public static TransferQueue<LogEvent> queue() {
         return queue;
     }
 
-    public Logger(String name) {
-        this.name = name;
-    }
-
-    @Override
-    protected String getFullyQualifiedCallerName() {
-        return null;
-    }
-
-    @Override
-    protected void handleNormalizedLoggingCall(Level level, Marker marker, String s, Object[] objects, Throwable throwable) {
+    private void doLog(LogLevel level, String str, Throwable throwable) {
         Instant instant = Constants.SYSTEM_CLOCK.instant();
         LocalDateTime now = LocalDateTime.ofEpochSecond(instant.getEpochSecond(), instant.getNano(), Constants.LOCAL_ZONE_OFFSET);
         long timestamp = instant.toEpochMilli();
-
-        byte[] time = timeResolver == null ? formatter.format(now).getBytes(StandardCharsets.UTF_8) : timeResolver.format(now);
-        byte[] lv = levelMap.get(level);
-        byte[] threadName = ThreadUtil.threadName().getBytes(StandardCharsets.UTF_8);
-        byte[] className = getName().getBytes(StandardCharsets.UTF_8);
-        byte[] th = null;
-        if(throwable != null) {
-            // set log's throwable
-            StringWriter stringWriter = new StringWriter();
-            throwable.printStackTrace(new PrintWriter(stringWriter));
-            th = stringWriter.toString().getBytes(StandardCharsets.UTF_8);
-        }
-        byte[] msg = processMsg(s, objects);
-        LogEvent logEvent = new LogEvent(false, timestamp, time, lv, threadName, className, th, msg);
+        MemorySegment time = timeResolver.format(now);
+        MemorySegment lv = levelMap.get(level);
+        MemorySegment threadName = MemorySegment.ofArray(ThreadUtil.threadName().getBytes(StandardCharsets.UTF_8));
+        MemorySegment th = throwableToSegment(throwable);
+        MemorySegment msg = MemorySegment.ofArray(str.getBytes(StandardCharsets.UTF_8));
+        LogEvent logEvent = new LogEvent(LogEventType.Msg, timestamp, time, lv, threadName, className, th, msg);
         if (!queue.offer(logEvent)) {
             throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED);
         }
     }
 
-    /**
-     *   Process msg, replacing '{}' with target args, return UTF-8 byte array
-     */
-    public static byte[] processMsg(String msg, Object[] args) {
-        byte[] msgBytes = msg.getBytes(StandardCharsets.UTF_8);
-        if(args == null || args.length == Constants.ZERO) {
-            return msgBytes;
-        } else {
-            List<byte[]> list = new ArrayList<>(args.length);
-            int reserved = Constants.ZERO;
-            for (Object arg : args) {
-                byte[] b = arg.toString().getBytes(StandardCharsets.UTF_8);
-                list.add(b);
-                reserved += b.length;
-            }
-            byte[] result = new byte[reserved + msgBytes.length];
-            int len = Constants.ZERO;
-            for(int i = Constants.ZERO, index = Constants.ZERO; i < msgBytes.length; i++) {
-                byte b = msgBytes[i];
-                if(b == Constants.LCB && i + Constants.ONE < msgBytes.length && msgBytes[i + Constants.ONE] == Constants.RCB) {
-                    // reaching {}, need to parse the arg
-                    byte[] argBytes = list.get(index++);
-                    System.arraycopy(argBytes, Constants.ZERO, result, len, argBytes.length);
-                    len += argBytes.length;
-                    i++; // escape "{}"
-                }else {
-                    result[len++] = b;
-                }
-            }
-            return Arrays.copyOf(result, len);
+    private MemorySegment throwableToSegment(Throwable throwable) {
+        if(throwable == null) {
+            return null;
+        }else {
+            StringWriter stringWriter = new StringWriter();
+            throwable.printStackTrace(new PrintWriter(stringWriter));
+            return MemorySegment.ofArray(stringWriter.toString().getBytes(StandardCharsets.UTF_8));
         }
     }
 
-    @Override
-    public boolean isTraceEnabled() {
-        return Logger.level <= Constants.TRACE;
+    public void trace(String msg) {
+        trace(msg, null);
     }
 
-    @Override
-    public boolean isDebugEnabled() {
-        return Logger.level <= Constants.DEBUG;
+    public void trace(String msg, Throwable throwable) {
+        if(level <= Constants.TRACE) {
+            doLog(LogLevel.TRACE, msg, throwable);
+        }
+    }
+    public void debug(String msg) {
+        debug(msg, null);
     }
 
-    @Override
-    public boolean isInfoEnabled() {
-        return Logger.level <= Constants.INFO;
+    public void debug(String msg, Throwable throwable) {
+        if (level <= Constants.DEBUG) {
+            doLog(LogLevel.DEBUG, msg, throwable);
+        }
     }
 
-    @Override
-    public boolean isWarnEnabled() {
-        return Logger.level <= Constants.WARN;
+    public void info(String msg) {
+        info(msg, null);
     }
 
-    @Override
-    public boolean isErrorEnabled() {
-        return Logger.level <= Constants.ERROR;
+    public void info(String msg, Throwable throwable) {
+        if (level <= Constants.INFO) {
+            doLog(LogLevel.INFO, msg, throwable);
+        }
+    }
+
+    public void warn(String msg) {
+        warn(msg, null);
+    }
+
+    public void warn(String msg, Throwable throwable) {
+        if (level <= Constants.WARN) {
+            doLog(LogLevel.WARN, msg, throwable);
+        }
+    }
+
+    public void error(String msg) {
+        error(msg, null);
+    }
+
+    public void error(String msg, Throwable throwable) {
+        if (level <= Constants.ERROR) {
+            doLog(LogLevel.ERROR, msg, throwable);
+        }
+    }
+
+    public static List<LogHandler> createLogHandlers(String logFormat, Function<String, LogHandler> transformer) {
+        List<LogHandler> logHandlers = new ArrayList<>();
+        MemorySegment format = MemorySegment.ofArray(logFormat.getBytes(StandardCharsets.UTF_8));
+        long index = Constants.ZERO;
+        for( ; ; ) {
+            index = search(format, index, logHandlers, transformer);
+            if(index < Constants.ZERO) {
+                return logHandlers;
+            }
+        }
+    }
+
+    private static long search(MemorySegment format, long startIndex, List<LogHandler> handlers, Function<String, LogHandler> transformer) {
+        long nextIndex = StringUtil.searchBytes(format, Constants.LCB, startIndex, segment -> handlers.add((writeBuffer, event) -> writeBuffer.writeSegment(segment)));
+        if(nextIndex < Constants.ZERO) {
+            if(startIndex < format.byteSize()) {
+                handlers.add((writeBuffer, event) -> writeBuffer.writeSegment(format.asSlice(startIndex, format.byteSize() - startIndex)));
+            }
+            handlers.add((writeBuffer, event) -> writeBuffer.writeByte(Constants.LF));
+            return nextIndex;
+        }
+        nextIndex = StringUtil.searchBytes(format, Constants.RCB, nextIndex, segment -> handlers.add(transformer.apply(new String(segment.toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8))));
+        if(nextIndex < Constants.ZERO) {
+            handlers.add((writeBuffer, event) -> writeBuffer.writeByte(Constants.LF));
+        }
+        return nextIndex;
     }
 }

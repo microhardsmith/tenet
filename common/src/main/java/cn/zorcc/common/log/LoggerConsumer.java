@@ -1,92 +1,89 @@
 package cn.zorcc.common.log;
 
+import cn.zorcc.common.AbstractLifeCycle;
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.LifeCycle;
 import cn.zorcc.common.enums.ExceptionType;
-import cn.zorcc.common.event.EventHandler;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.util.ConfigUtil;
 import cn.zorcc.common.util.ThreadUtil;
 import cn.zorcc.common.wheel.Wheel;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TransferQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 /**
  *   Singleton log consumer, init a LoggerConsumer to start the whole log processing procedure
  */
-public final class LoggerConsumer implements LifeCycle {
-    private static final String NAME = "tenet-log";
+public final class LoggerConsumer extends AbstractLifeCycle {
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
     private final Thread consumerThread;
-    private static final int INITIAL = 0;
-    private static final int RUNNING = 1;
-    private static final int SHUTDOWN = 2;
-    private final AtomicInteger state = new AtomicInteger(INITIAL);
-    public LoggerConsumer() {
+    public LoggerConsumer(LogConfig logConfig) {
         if(instanceFlag.compareAndSet(false, true)) {
-            this.consumerThread = createConsumerThread(Logger.config());
+            this.consumerThread = createConsumerThread(logConfig);
         }else {
             throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED);
         }
     }
 
+    public LoggerConsumer() {
+        this(ConfigUtil.loadJsonConfig(Constants.DEFAULT_LOG_CONFIG_NAME, LogConfig.class));
+    }
+
     private static Thread createConsumerThread(LogConfig logConfig) {
-            return ThreadUtil.platform(NAME, () -> {
-                List<EventHandler<LogEvent>> handlers = new ArrayList<>();
-                TransferQueue<LogEvent> queue = Logger.queue();
-                // initializing log handlers
-                if(logConfig.isUsingConsole()) {
-                    handlers.add(new ConsoleLogEventHandler(logConfig));
+        return ThreadUtil.platform("log", () -> {
+            List<Consumer<LogEvent>> handlers = createEventHandlerList(logConfig);
+            TransferQueue<LogEvent> queue = Logger.queue();
+            Wheel.wheel().addPeriodicJob(() -> {
+                if (!queue.offer(LogEvent.flushEvent)) {
+                    throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED);
                 }
-                if(logConfig.isUsingFile()) {
-                    handlers.add(new FileLogEventHandler(logConfig));
-                }
-                if(logConfig.isUsingMetrics()) {
-                    handlers.add(new MetricsLogEventHandler(logConfig));
-                }
-                // Add periodic flush job
-                if(logConfig.isUsingFile() || logConfig.isUsingMetrics()) {
-                    Wheel.wheel().addPeriodicJob(() -> {
-                        if (!queue.offer(LogEvent.flushEvent)) {
-                            throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED);
-                        }
-                    }, 0L, logConfig.getFlushInterval(), TimeUnit.MILLISECONDS);
-                }
-                // Start consuming logEvent
-                try{
-                    for( ; ; ){
-                        LogEvent logEvent = queue.take();
-                        for (EventHandler<LogEvent> handler : handlers) {
-                            handler.handle(logEvent);
-                        }
-                        if(logEvent == LogEvent.shutdownEvent) {
-                            break;
-                        }
+            }, Constants.ZERO, logConfig.getFlushInterval(), TimeUnit.MILLISECONDS);
+            try{
+                for( ; ; ){
+                    final LogEvent logEvent = queue.take();
+                    handlers.forEach(consumer -> consumer.accept(logEvent));
+                    if(logEvent == LogEvent.shutdownEvent) {
+                        break;
                     }
-                }catch (InterruptedException e) {
-                    throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED, e);
                 }
-            });
-    }
-
-    @Override
-    public void init() {
-        if(state.compareAndSet(INITIAL, RUNNING)) {
-            consumerThread.start();
-        }
-    }
-
-    @Override
-    public void shutdown() throws InterruptedException {
-        if(state.compareAndSet(INITIAL, SHUTDOWN)) {
-            if (!Logger.queue().offer(LogEvent.shutdownEvent)) {
-                throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED);
+            }catch (InterruptedException e) {
+                throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED, e);
             }
-            consumerThread.join();
+        });
+    }
+
+    private static List<Consumer<LogEvent>> createEventHandlerList(LogConfig logConfig) {
+        List<Consumer<LogEvent>> handlers = new ArrayList<>();
+        ConsoleLogConfig consoleLogConfig = logConfig.getConsole();
+        if(consoleLogConfig != null) {
+            handlers.add(new ConsoleLogEventHandler(logConfig));
         }
+        FileLogConfig fileLogConfig = logConfig.getFile();
+        if(fileLogConfig != null) {
+            handlers.add(new FileLogEventHandler(logConfig));
+        }
+        SqliteLogConfig sqliteLogConfig = logConfig.getSqlite();
+        if(sqliteLogConfig != null) {
+            handlers.add(new SqliteLogEventHandler(logConfig));
+        }
+        return Collections.unmodifiableList(handlers);
+    }
+
+    @Override
+    public void doInit() {
+        consumerThread.start();
+    }
+
+    @Override
+    public void doExit() throws InterruptedException {
+        if (!Logger.queue().offer(LogEvent.shutdownEvent)) {
+            throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED);
+        }
+        consumerThread.join();
     }
 }

@@ -3,10 +3,10 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
+import cn.zorcc.common.binding.SslBinding;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import cn.zorcc.common.log.Logger;
 
 import java.lang.foreign.MemorySegment;
 import java.util.concurrent.locks.Lock;
@@ -16,7 +16,7 @@ import java.util.concurrent.locks.ReentrantLock;
  *   Protocol using SSL encryption
  */
 public class SslProtocol implements Protocol {
-    private static final Logger log = LoggerFactory.getLogger(SslProtocol.class);
+    private static final Logger log = new Logger(SslProtocol.class);
     private static final Native n = Native.n;
     private final MemorySegment ssl;
     private final Lock lock = new ReentrantLock();
@@ -52,15 +52,15 @@ public class SslProtocol implements Protocol {
             }
             if((state & RECV_WANT_TO_WRITE) == Constants.ZERO) {
                 int len = (int) memorySegment.byteSize();
-                int received = Ssl.sslRead(ssl, memorySegment, len);
+                int received = SslBinding.sslRead(ssl, memorySegment, len);
                 if(received <= 0) {
-                    int err = Ssl.sslGetErr(ssl, received);
+                    int err = SslBinding.sslGetErr(ssl, received);
                     switch (err) {
                         case Constants.SSL_ERROR_WANT_WRITE -> state &= RECV_WANT_TO_WRITE;
                         case Constants.SSL_ERROR_ZERO_RETURN -> performShutdown(channel);
                         case Constants.SSL_ERROR_WANT_READ -> {}
                         default -> {
-                            log.debug("{} ssl recv err, ssl_err : {}", channel.loc(), err);
+                            log.debug(STR."\{channel.loc()} ssl recv err, ssl_err : \{err}");
                             channel.close();
                         }
                     }
@@ -104,20 +104,20 @@ public class SslProtocol implements Protocol {
     @Override
     public WriteStatus doWrite(Channel channel, WriteBuffer writeBuffer) {
         boolean registerWrite = false;
-        MemorySegment segment = writeBuffer.content();
+        MemorySegment segment = writeBuffer.toSegment();
         int len = (int) segment.byteSize();
         lock.lock();
         try{
-            int r = Ssl.sslWrite(ssl, segment, len);
+            int r = SslBinding.sslWrite(ssl, segment, len);
             if(r <= Constants.ZERO) {
-                int err = Ssl.sslGetErr(ssl, r);
+                int err = SslBinding.sslGetErr(ssl, r);
                 if(err == Constants.SSL_ERROR_WANT_WRITE) {
                     state &= SEND_WANT_TO_WRITE;
                     registerWrite = true;
                 }else if(err == Constants.SSL_ERROR_WANT_READ) {
                     state &= SEND_WANT_TO_READ;
                 }else {
-                    log.error("Failed to write, ssl err : {}", err);
+                    log.error(STR."Failed to write, ssl err : \{err}");
                     return WriteStatus.FAILURE;
                 }
 
@@ -148,9 +148,9 @@ public class SslProtocol implements Protocol {
         boolean registerWrite = false, errOccur = false;
         lock.lock();
         try {
-            r = Ssl.sslShutdown(ssl);
+            r = SslBinding.sslShutdown(ssl);
             if(r < 0) {
-                int err = Ssl.sslGetErr(ssl, r);
+                int err = SslBinding.sslGetErr(ssl, r);
                 switch (err) {
                     case Constants.SSL_ERROR_WANT_READ -> state &= SHUTDOWN_WANT_TO_READ;
                     case Constants.SSL_ERROR_WANT_WRITE -> {
@@ -158,7 +158,7 @@ public class SslProtocol implements Protocol {
                         registerWrite = true;
                     }
                     default -> {
-                        log.error("SSL shutdown failed with err : {}", err);
+                        log.error(STR."SSL shutdown failed with err : \{err}");
                         errOccur = true;
                     }
                 }
@@ -183,7 +183,7 @@ public class SslProtocol implements Protocol {
 
     @Override
     public void doClose(Channel channel) {
-        Ssl.sslFree(ssl);
+        SslBinding.sslFree(ssl);
         n.closeSocket(channel.socket());
     }
 }

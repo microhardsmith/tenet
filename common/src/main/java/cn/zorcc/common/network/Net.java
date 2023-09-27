@@ -1,15 +1,15 @@
 package cn.zorcc.common.network;
 
+import cn.zorcc.common.AbstractLifeCycle;
 import cn.zorcc.common.Clock;
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.LifeCycle;
+import cn.zorcc.common.binding.SslBinding;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.common.wheel.Wheel;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -27,8 +27,8 @@ import java.util.function.Supplier;
  *   Handler determines how we deal with the incoming data
  *   Protocol determines the low level operations
  */
-public final class Net implements LifeCycle {
-    private static final Logger log = LoggerFactory.getLogger(Net.class);
+public final class Net extends AbstractLifeCycle {
+    private static final Logger log = new Logger(Net.class);
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
     private static final Native n = Native.n;
     private final NetworkConfig networkConfig;
@@ -38,10 +38,6 @@ public final class Net implements LifeCycle {
     private final MemorySegment sslServerCtx;
     private final Supplier<Connector> sslClientConnectorSupplier;
     private final Supplier<Connector> sslServerConnectorSupplier;
-    private static final int INITIAL = 0;
-    private static final int RUNNING = 1;
-    private static final int SHUTDOWN = 2;
-    private final AtomicInteger state = new AtomicInteger(INITIAL);
     private final AtomicInteger connectCounter = new AtomicInteger(Constants.ZERO);
 
     public Net(NetworkConfig networkConfig) {
@@ -49,33 +45,33 @@ public final class Net implements LifeCycle {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.SINGLETON_MSG);
         }
         this.networkConfig = networkConfig;
-        this.sslClientCtx = Ssl.sslCtxNew(Ssl.tlsMethod());
-        Ssl.configureCtx(sslClientCtx);
-        Ssl.setVerify(sslClientCtx, Constants.SSL_VERIFY_PEER, NativeUtil.NULL_POINTER);
-        this.sslClientConnectorSupplier =  () -> new SslConnector(true, Ssl.sslNew(sslClientCtx));
+        this.sslClientCtx = SslBinding.sslCtxNew(SslBinding.tlsMethod());
+        SslBinding.configureCtx(sslClientCtx);
+        SslBinding.setVerify(sslClientCtx, Constants.SSL_VERIFY_PEER, NativeUtil.NULL_POINTER);
+        this.sslClientConnectorSupplier =  () -> new SslConnector(true, SslBinding.sslNew(sslClientCtx));
         if(NativeUtil.checkNullPointer(sslClientCtx)) {
             throw new FrameworkException(ExceptionType.NETWORK, "SSL client initialization failed");
         }
         if(networkConfig.getEnableSsl()) {
-            this.sslServerCtx = Ssl.sslCtxNew(Ssl.tlsMethod());
+            this.sslServerCtx = SslBinding.sslCtxNew(SslBinding.tlsMethod());
             if(NativeUtil.checkNullPointer(sslServerCtx)) {
                 throw new FrameworkException(ExceptionType.NETWORK, "SSL server initialization failed");
             }
-            Ssl.configureCtx(sslServerCtx);
+            SslBinding.configureCtx(sslServerCtx);
             try(Arena arena = Arena.ofConfined()) {
                 MemorySegment publicKey = NativeUtil.allocateStr(arena, networkConfig.getPublicKeyFile());
-                if (Ssl.setPublicKey(sslServerCtx, publicKey, Constants.SSL_FILETYPE_PEM) <= 0) {
+                if (SslBinding.setPublicKey(sslServerCtx, publicKey, Constants.SSL_FILETYPE_PEM) <= 0) {
                     throw new FrameworkException(ExceptionType.NETWORK, "SSL server public key err");
                 }
                 MemorySegment privateKey = NativeUtil.allocateStr(arena, networkConfig.getPrivateKeyFile());
-                if (Ssl.setPrivateKey(sslServerCtx, privateKey, Constants.SSL_FILETYPE_PEM) <= 0) {
+                if (SslBinding.setPrivateKey(sslServerCtx, privateKey, Constants.SSL_FILETYPE_PEM) <= 0) {
                     throw new FrameworkException(ExceptionType.NETWORK, "SSL server private key err");
                 }
-                if (Ssl.checkPrivateKey(sslServerCtx) <= 0) {
+                if (SslBinding.checkPrivateKey(sslServerCtx) <= 0) {
                     throw new FrameworkException(ExceptionType.NETWORK, "SSL server private key and public key doesn't match");
                 }
             }
-            this.sslServerConnectorSupplier = () -> new SslConnector(false, Ssl.sslNew(sslServerCtx));
+            this.sslServerConnectorSupplier = () -> new SslConnector(false, SslBinding.sslNew(sslServerCtx));
         }else {
             this.sslServerCtx = null;
             this.sslServerConnectorSupplier = () -> {
@@ -94,12 +90,9 @@ public final class Net implements LifeCycle {
     }
 
     /**
-     *   Add a new Master instance to current Net, not thread safe
+     *   Add a new Master instance to current Net, not thread safe, must be invoked before init()
      */
     public void addMaster(Supplier<Encoder> e, Supplier<Decoder> d, Supplier<Handler> h, Supplier<Connector> c, Loc loc, MuxConfig muxConfig) {
-        if(state.getAndSet(INITIAL) != INITIAL) {
-            throw new FrameworkException(ExceptionType.NETWORK, "Can't add master when net is running or shutdown");
-        }
         loc.validate();
         muxConfig.validate();
         if (masters.stream().anyMatch(master -> master.loc().equals(loc))) {
@@ -110,12 +103,9 @@ public final class Net implements LifeCycle {
     }
 
     /**
-     *   Add a new Worker instance to current Net, not thread safe
+     *   Add a new Worker instance to current Net, not thread safe, must be invoked before init()
      */
     public void addWorker(NetworkConfig networkConfig, MuxConfig muxConfig) {
-        if(state.getAndSet(INITIAL) != INITIAL) {
-            throw new FrameworkException(ExceptionType.NETWORK, "Can't add worker when net is running or shutdown");
-        }
         muxConfig.validate();
         int sequence = workers.size();
         workers.add(new Worker(networkConfig, muxConfig, sequence));
@@ -125,7 +115,7 @@ public final class Net implements LifeCycle {
      *   Create a new client-side ssl object
      */
     public MemorySegment newClientSsl() {
-        return Ssl.sslNew(sslClientCtx);
+        return SslBinding.sslNew(sslClientCtx);
     }
 
     /**
@@ -189,49 +179,37 @@ public final class Net implements LifeCycle {
     }
 
     @Override
-    public void init() {
-        if(state.compareAndSet(INITIAL, RUNNING)) {
-            for (Worker worker : workers) {
-                if(worker.state().compareAndSet(INITIAL, RUNNING)) {
-                    worker.reader().start();
-                    worker.writer().start();
-                }else {
-                    throw new FrameworkException(ExceptionType.NETWORK, "Worker already running");
-                }
-            }
-            for (Master master : masters) {
-                master.thread().start();
-            }
-        }else {
-            throw new FrameworkException(ExceptionType.NETWORK, "Net already running");
+    public void doInit() {
+        for (Worker worker : workers) {
+            worker.reader().start();
+            worker.writer().start();
+        }
+        for (Master master : masters) {
+            master.thread().start();
         }
     }
 
     @Override
-    public void shutdown() throws InterruptedException {
-        if(state.compareAndSet(RUNNING, SHUTDOWN)) {
-            long nano = Clock.nano();
-            for (Master master : masters) {
-                master.thread().interrupt();
-            }
-            for (Master master : masters) {
-                master.thread().join();
-            }
-            for (Worker worker : workers) {
-                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.GRACEFUL_SHUTDOWN, null, null, new Shutdown(networkConfig.getGracefulShutdownTimeout(), TimeUnit.MILLISECONDS)));
-            }
-            for(Worker worker : workers) {
-                worker.reader().join();
-                worker.writer().join();
-            }
-            n.exit();
-            Ssl.sslCtxFree(sslClientCtx);
-            if(sslServerCtx != null) {
-                Ssl.sslCtxFree(sslServerCtx);
-            }
-            log.debug("Exiting Net gracefully, cost : {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
-        }else {
-            throw new FrameworkException(ExceptionType.NETWORK, "Net already shutdown");
+    public void doExit() throws InterruptedException {
+        long nano = Clock.nano();
+        for (Master master : masters) {
+            master.thread().interrupt();
         }
+        for (Master master : masters) {
+            master.thread().join();
+        }
+        for (Worker worker : workers) {
+            worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.GRACEFUL_SHUTDOWN, null, null, new Shutdown(networkConfig.getGracefulShutdownTimeout(), TimeUnit.MILLISECONDS)));
+        }
+        for(Worker worker : workers) {
+            worker.reader().join();
+            worker.writer().join();
+        }
+        n.exit();
+        SslBinding.sslCtxFree(sslClientCtx);
+        if(sslServerCtx != null) {
+            SslBinding.sslCtxFree(sslServerCtx);
+        }
+        log.debug(STR."Exiting Net gracefully, cost : \{TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano))} ms");
     }
 }

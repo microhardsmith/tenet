@@ -14,20 +14,11 @@
     </properties>
 
     <dependencies>
-        <!--  slf4j  -->
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-            <version>${slf4j.version}</version>
-        </dependency>
-
-        <!-- jctools-core -->
         <dependency>
             <groupId>org.jctools</groupId>
             <artifactId>jctools-core</artifactId>
-            <version>4.0.1</version>
+            <version>${jctools.version}</version>
         </dependency>
-
 
     </dependencies>
 
@@ -46,9 +37,7 @@
                         <configuration>
                             <archive>
                                 <manifest>
-                                    <mainClass>
-                                        cn.zorcc.common.example.HttpServer
-                                    </mainClass>
+                                    <mainClass/> <!-- put a main class here to distribute a executable jar -->
                                 </manifest>
                             </archive>
                             <descriptorRefs>

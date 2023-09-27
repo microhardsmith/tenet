@@ -1,24 +1,47 @@
 package cn.zorcc.common.log;
 
-import cn.zorcc.common.Chain;
-import org.junit.jupiter.api.BeforeAll;
+import cn.zorcc.common.Constants;
+import cn.zorcc.common.Context;
+import cn.zorcc.common.wheel.Wheel;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class LogTest {
-    private static final Logger log = LoggerFactory.getLogger(LogTest.class);
+    private static final Logger log = new Logger(LogTest.class);
 
-    @BeforeAll
-    public static void beforeAll() {
-        Chain chain = Chain.chain();
-        chain.add(new LoggerConsumer());
-        chain.run();
+    @Test
+    public void testConsoleLog() throws InterruptedException {
+        Context.load(Wheel.wheel(), Wheel.class);
+        Context.load(new LoggerConsumer(), LoggerConsumer.class);
+        Context.init();
+        for(int i = Constants.ZERO; i < Constants.KB; i++) {
+            log.info(STR."hello , \{i}");
+        }
+        Thread.sleep(1000L);
     }
 
     @Test
-    public void testPlainLog() throws InterruptedException {
-        log.info("hello");
-        Thread.sleep(200L);
+    public void testFileLog() throws InterruptedException {
+        Context.load(Wheel.wheel(), Wheel.class);
+        LogConfig logConfig = new LogConfig();
+        logConfig.setFile(new FileLogConfig());
+        Context.load(new LoggerConsumer(logConfig), LoggerConsumer.class);
+        Context.init();
+        for(int i = Constants.ZERO; i < Constants.KB; i++) {
+            log.info(STR."hello , \{i}");
+        }
+        Thread.sleep(1000L);
+    }
+
+    @Test
+    public void testSqliteLog() throws InterruptedException {
+        Context.load(Wheel.wheel(), Wheel.class);
+        LogConfig logConfig = new LogConfig();
+        logConfig.setSqlite(new SqliteLogConfig());
+        Context.load(new LoggerConsumer(logConfig), LoggerConsumer.class);
+        Context.init();
+        for(int i = Constants.ZERO; i < Constants.KB; i++) {
+            log.info(STR."hello , \{i}");
+        }
+        Thread.sleep(1000L);
     }
 }

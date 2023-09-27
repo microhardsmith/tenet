@@ -6,8 +6,7 @@ import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import cn.zorcc.common.log.Logger;
 
 import java.lang.foreign.MemorySegment;
 
@@ -15,7 +14,7 @@ import java.lang.foreign.MemorySegment;
  *   Protocol for normal TCP connection
  */
 public final class TcpProtocol implements Protocol {
-    private static final Logger log = LoggerFactory.getLogger(TcpProtocol.class);
+    private static final Logger log = new Logger(TcpProtocol.class);
     private static final Native n = Native.n;
 
     @Override
@@ -46,7 +45,7 @@ public final class TcpProtocol implements Protocol {
     @Override
     public WriteStatus doWrite(Channel channel, WriteBuffer writeBuffer) {
         Socket socket = channel.socket();
-        MemorySegment segment = writeBuffer.content();
+        MemorySegment segment = writeBuffer.toSegment();
         long len = segment.byteSize();
         long bytes = n.send(socket, segment, len);
         if(bytes == -1L) {
@@ -61,7 +60,7 @@ public final class TcpProtocol implements Protocol {
                     throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
                 }
             }else {
-                log.error("Failed to write, errno : {}", errno);
+                log.error(STR."Failed to write, errno : \{errno}");
                 return WriteStatus.FAILURE;
             }
         }else if(bytes < len){

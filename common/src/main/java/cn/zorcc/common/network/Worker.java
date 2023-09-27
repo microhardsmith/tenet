@@ -5,11 +5,10 @@ import cn.zorcc.common.Mix;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.util.ThreadUtil;
 import cn.zorcc.common.wheel.Wheel;
 import org.jctools.queues.atomic.MpscUnboundedAtomicArrayQueue;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -17,23 +16,20 @@ import java.lang.foreign.ValueLayout;
 import java.util.*;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TransferQueue;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
  *   Network worker
  */
 public final class Worker {
-    private static final Logger log = LoggerFactory.getLogger(Worker.class);
+    private static final Logger log = new Logger(Worker.class);
     private final Native n = Native.n;
     /**
-     *   INITIAL -> RUNNING -> CLOSING -> STOPPED
+     *   RUNNING -> CLOSING -> STOPPED
      */
-    private static final int INITIAL = 0;
     private static final int RUNNING = 1;
     private static final int CLOSING = 2;
     private static final int STOPPED = 3;
-    private final AtomicInteger state = new AtomicInteger(INITIAL);
     /**
      *   Representing the number of connections mounted on current worker instance
      *   This field might be optimized to normal long since it's only accessed by reader thread, AtomicLong is more secure however
@@ -78,10 +74,6 @@ public final class Worker {
         return socketMap;
     }
 
-    public AtomicInteger state() {
-        return state;
-    }
-
     public AtomicLong counter() {
         return counter;
     }
@@ -105,12 +97,13 @@ public final class Worker {
         final long readBufferSize = networkConfig.getReadBufferSize();
         final int maxEvents = muxConfig.getMaxEvents();
         return ThreadUtil.platform("Worker-r-" + sequence, () -> {
-            log.debug("Initializing Net worker's reader, sequence : {}", sequence);
+            log.debug(STR."Initializing Net worker's reader, sequence : \{sequence}");
             try(Arena arena = Arena.ofConfined()) {
+                int state = RUNNING;
                 Timeout timeout = Timeout.of(arena, muxConfig.getMuxTimeout());
                 MemorySegment events = n.createEventsArray(muxConfig, arena);
                 MemorySegment[] bufArray = new MemorySegment[maxEvents];
-                for (int i = 0; i < bufArray.length; i++) {
+                for (int i = Constants.ZERO; i < bufArray.length; i++) {
                     bufArray[i] = arena.allocateArray(ValueLayout.JAVA_BYTE, readBufferSize);
                 }
                 for( ; ; ) {
@@ -123,16 +116,17 @@ public final class Worker {
                             throw new FrameworkException(ExceptionType.NETWORK, "Multiplexing wait failed with errno : %d".formatted(errno));
                         }
                     }
-                    if(processReaderTasks()) {
+                    state = processReaderTasks(state);
+                    if(state < Constants.ZERO) {
                         break ;
                     }
-                    for(int index = 0; index < count; index++) {
+                    for(int index = Constants.ZERO; index < count; index++) {
                         MemorySegment buffer = bufArray[index];
                         n.waitForData(socketMap, buffer, events, index);
                     }
                 }
             }finally {
-                log.debug("Exiting Net reader, sequence : {}", sequence);
+                log.debug(STR."Exiting Net reader, sequence : \{sequence}");
                 n.exitMux(mux);
             }
         });
@@ -141,11 +135,11 @@ public final class Worker {
     /**
      *   Process all reader tasks in the taskQueue, return whether current reader thread should quit
      */
-    private boolean processReaderTasks() {
+    private int processReaderTasks(int currentState) {
         for( ; ; ) {
             ReaderTask readerTask = readerTaskQueue.poll();
             if(readerTask == null) {
-                return false;
+                return currentState;
             }
             switch (readerTask.type()) {
                 case ADD_ACCEPTOR -> {
@@ -156,13 +150,12 @@ public final class Worker {
                 case CLOSE_ACCEPTOR -> readerTask.acceptor().close();
                 case CLOSE_CHANNEL -> readerTask.channel().close();
                 case GRACEFUL_SHUTDOWN -> {
-                    if(state.compareAndSet(RUNNING, CLOSING)) {
+                    if(currentState == RUNNING) {
                         if(counter.get() == Constants.ZERO) {
-                            state.set(STOPPED);
                             submitWriterTask(new WriterTask(WriterTask.WriterTaskType.EXIT, null, null, null));
-                            return true;
+                            return STOPPED;
                         }else {
-                            log.debug("Net worker awaiting for termination,  sequence : {}, socket count : {}", sequence, socketMap.size());
+                            log.debug(STR."Net worker awaiting for termination,  sequence : \{sequence}, socket count : \{socketMap.size()}");
                             socketMap.values().forEach(actor -> actor.canShutdown(readerTask.shutdown()));
                         }
                     }else {
@@ -170,9 +163,9 @@ public final class Worker {
                     }
                 }
                 case POSSIBLE_SHUTDOWN -> {
-                    if(state.compareAndSet(CLOSING, STOPPED)) {
+                    if(currentState == CLOSING) {
                         submitWriterTask(new WriterTask(WriterTask.WriterTaskType.EXIT, null, null, null));
-                        return true;
+                        return STOPPED;
                     }
                 }
             }
@@ -184,7 +177,7 @@ public final class Worker {
      */
     private Thread createWriterThread() {
         return ThreadUtil.platform("Worker-w-" + sequence, () -> {
-            log.debug("Initializing Net worker's writer, sequence : {}", sequence);
+            log.debug(STR."Initializing Net worker's writer, sequence : \{sequence}");
             final long writeBufferSize = networkConfig.getWriteBufferSize();
             try(Arena arena = Arena.ofConfined()){
                 MemorySegment reservedSegment = arena.allocateArray(ValueLayout.JAVA_BYTE, writeBufferSize);
@@ -192,7 +185,7 @@ public final class Worker {
             }catch (InterruptedException i) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Writer thread interrupted", i);
             }finally {
-                log.debug("Exiting Net writer, sequence : {}", sequence);
+                log.debug(STR."Exiting Net writer, sequence : \{sequence}");
             }
         });
     }
@@ -286,7 +279,7 @@ public final class Worker {
                     wb.close();
                 }
             }catch (FrameworkException e) {
-                log.error("Failed to perform writing from channel : {}", channel.loc(), e);
+                log.error(STR."Failed to perform writing from channel : \{channel.loc()}", e);
                 channel.shutdown();
             }
         }
@@ -301,7 +294,7 @@ public final class Worker {
                     wb.close();
                 }
             } catch (FrameworkException e) {
-                log.error("Failed to perform writing from channel : {}", channel.loc(), e);
+                log.error(STR."Failed to perform writing from channel : \{channel.loc()}", e);
                 channel.shutdown();
             }
         }
@@ -394,7 +387,7 @@ public final class Worker {
         private void copyLocally(WriteBuffer writeBuffer, WriterCallback callback) {
             Arena arena = Arena.ofConfined();
             WriteBuffer wb = WriteBuffer.newFixedWriteBuffer(arena, writeBuffer.size());
-            wb.writeSegment(writeBuffer.content());
+            wb.writeSegment(writeBuffer.toSegment());
             tasks.add(new SenderTask(wb, callback));
         }
 

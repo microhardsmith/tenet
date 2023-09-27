@@ -1,5 +1,6 @@
 package cn.zorcc.common.log;
 
+import java.lang.foreign.MemorySegment;
 import java.time.LocalDateTime;
 
 /**
@@ -9,5 +10,5 @@ import java.time.LocalDateTime;
  */
 @FunctionalInterface
 public interface TimeResolver {
-    byte[] format(LocalDateTime time);
+    MemorySegment format(LocalDateTime time);
 }

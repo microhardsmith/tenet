@@ -171,7 +171,7 @@ public abstract class JsonWriterNode {
                 tempBuffer.writeByte((byte) (Constants.B_ZERO + i % 10));
                 i /= 10;
             }
-            MemorySegment segment = tempBuffer.content();
+            MemorySegment segment = tempBuffer.toSegment();
             long len = segment.byteSize();
             for(int t = Constants.ONE; t <= len; t++) {
                 writeBuffer.writeByte(NativeUtil.getByte(segment, len - t));
@@ -203,7 +203,7 @@ public abstract class JsonWriterNode {
                 tempBuffer.writeByte((byte) (Constants.B_ZERO + l % 10));
                 l /= 10;
             }
-            MemorySegment segment = tempBuffer.content();
+            MemorySegment segment = tempBuffer.toSegment();
             long len = segment.byteSize();
             for(int t = Constants.ONE; t <= len; t++) {
                 writeBuffer.writeByte(NativeUtil.getByte(segment, len - t));

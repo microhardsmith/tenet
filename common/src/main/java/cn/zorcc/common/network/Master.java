@@ -3,10 +3,9 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.ThreadUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -19,7 +18,7 @@ import java.util.function.Supplier;
  *   Network master
  */
 public final class Master {
-    private static final Logger log = LoggerFactory.getLogger(Master.class);
+    private static final Logger log = new Logger(Master.class);
     private static final Native n = Native.n;
     private final Supplier<Encoder> encoderSupplier;
     private final Supplier<Decoder> decoderSupplier;
@@ -63,7 +62,7 @@ public final class Master {
             int maxEvents = muxConfig.getMaxEvents();
             Thread currentThread = Thread.currentThread();
             try(Arena arena = Arena.ofConfined()){
-                log.debug("Master start listening on port : {}, sequence : {}, ", loc.port(), sequence);
+                log.debug(STR."Master start listening on port : \{loc.port()}, sequence : \{sequence}");
                 Timeout timeout = Timeout.of(arena, muxConfig.getMuxTimeout());
                 MemorySegment events = n.createEventsArray(muxConfig, arena);
                 n.bindAndListen(loc, muxConfig, socket);
@@ -75,7 +74,7 @@ public final class Master {
                         if(errno == n.interruptCode()) {
                             continue;
                         }else {
-                            throw new FrameworkException(ExceptionType.NETWORK, "Multiplexing wait failed with errno : %d".formatted(errno));
+                            throw new FrameworkException(ExceptionType.NETWORK, STR."Multiplexing wait failed with errno : \{errno}");
                         }
                     }
                     for(int index = 0; index < count; ++index) {
@@ -92,7 +91,7 @@ public final class Master {
                     }
                 }
             } finally {
-                log.debug("Exiting Net master, sequence : {}", sequence);
+                log.debug(STR."Exiting Net master, sequence : \{sequence}");
                 n.exitMux(mux);
                 n.closeSocket(socket);
             }

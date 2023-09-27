@@ -1,40 +1,34 @@
-package cn.zorcc.common.sqlite;
+package cn.zorcc.common.binding;
 
-import cn.zorcc.common.Clock;
+import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SymbolLookup;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
-import java.util.concurrent.TimeUnit;
 
 /**
- *   Sqlite native bindings
+ *   Sqlite bindings for the underlying dynamic library
+ *   The binding class shouldn't be directly used unless developers knows perfectly what they want to achieve
  */
-public final class Sqlite {
-    private static final Logger log = LoggerFactory.getLogger(Sqlite.class);
-    /**
-     *   Environment variable that must be configured when launching the application
-     */
-    public static final String SQLITE_LIB = "sqlite";
-
-    private static final String version;
+public final class SqliteBinding {
+    private static final long SQLITE_TRANSIENT = -1L;
+    private static final MemorySegment sqliteTransient = MemorySegment.ofAddress(SQLITE_TRANSIENT);
+    private static final MethodHandle threadHandle;
     private static final MethodHandle openHandle;
-    private static final MethodHandle configHandle; // TODO variadic variables still in-process for Project-Panama
+    private static final MethodHandle configHandle;
     private static final MethodHandle initializeHandle;
-
     private static final MethodHandle prepareHandle;
     private static final MethodHandle bindIntHandle;
     private static final MethodHandle bindLongHandle;
     private static final MethodHandle bindDoubleHandle;
     private static final MethodHandle bindTextHandle;
     private static final MethodHandle bindBlobHandle;
+    private static final MethodHandle bindNullHandle;
     private static final MethodHandle stepHandle;
     private static final MethodHandle columnBytesHandle;
     private static final MethodHandle columnIntHandle;
@@ -49,33 +43,26 @@ public final class Sqlite {
     private static final MethodHandle backupInitHandle;
     private static final MethodHandle backupStepHandle;
     private static final MethodHandle backupFinishHandle;
-
     private static final MethodHandle freeHandle;
     private static final MethodHandle shutdownHandle;
     private static final MethodHandle closeHandle;
+    private static final MethodHandle errMsgHandle;
+    private static final MethodHandle execHandle;
 
     static {
-        long nano = Clock.nano();
-        SymbolLookup symbolLookup = NativeUtil.loadLibrary(SQLITE_LIB);
-        MethodHandle versionHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_libversion", FunctionDescriptor.of(ValueLayout.ADDRESS));
-        try{
-            MemorySegment versionPtr = ((MemorySegment) versionHandle.invokeExact()).reinterpret(Long.MAX_VALUE);
-            version = NativeUtil.getStr(versionPtr);
-        }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Unable to get sqlite version", throwable);
-        }
+        SymbolLookup symbolLookup = NativeUtil.loadLibrary(Constants.SQLITE);
+        threadHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_threadsafe", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         openHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_open_v2", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         configHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_config", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         initializeHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_initialize", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-
         prepareHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_prepare_v3", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         bindIntHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_int", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         bindLongHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_int64", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG));
         bindDoubleHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_double", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_DOUBLE));
-        bindTextHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_text", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS,  ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        bindBlobHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_blob", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        bindTextHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_text64", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS,  ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_BYTE));
+        bindBlobHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_blob64", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+        bindNullHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_null", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         stepHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_step", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-
         columnBytesHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_bytes", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         columnIntHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_int", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         columnLongHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_int64", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
@@ -85,53 +72,39 @@ public final class Sqlite {
         resetHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_reset", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         clearBindingsHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_clear_bindings", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         finalizeHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_finalize", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        changesHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_changes", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-
+        changesHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_changes64", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
         backupInitHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_backup_init", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         backupStepHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_backup_step", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         backupFinishHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_backup_finish", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-
         freeHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         shutdownHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_shutdown", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         closeHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_close_v2", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        log.info("Initializing Sqlite successfully, cost : {} ms", TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano)));
+        errMsgHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_errmsg", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+        execHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_exec", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
     }
 
-    private Sqlite() {
-        throw new UnsupportedOperationException();
-    }
-
-    public static String version() {
-        return version;
-    }
-
-    /**
-     *   Corresponding to int sqlite3_open_v2(const char *filename, sqlite3 **ppDb, int flags, const char *zVfs)
-     */
-    public static int open(MemorySegment fileName, MemorySegment ppDb, int flags, MemorySegment zVfs) {
-        try{
-            return (int) openHandle.invokeExact(fileName, ppDb, flags, zVfs);
-        }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to open");
+    public static void check(int r, String errMsg) {
+        if(r != Constants.ZERO) {
+            throw new FrameworkException(ExceptionType.SQLITE, STR."Failed to \{errMsg} with err code : \{r}");
         }
     }
 
-    /**
-     *   Corresponding to int sqlite3_close_v2(sqlite3*)
-     *   See <a href="https://www.sqlite.org/c3ref/config.html">...</a>
-     */
-    public static int config(int option) {
+    public static int threadSafe() {
         try{
-            return (int) configHandle.invokeExact(option);
+            return (int) threadHandle.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.SQLITE, "Unable to call threadsafe", throwable);
+        }
+    }
+
+    public static int config() {
+        try{
+            return (int) configHandle.invokeExact(Constants.SQLITE_CONFIG_MULTITHREAD);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.SQLITE, "Failed to config");
         }
     }
 
-    /**
-     *   Corresponding to int sqlite3_initialize(void)
-     *   See <a href="https://www.sqlite.org/c3ref/initialize.html">...</a>
-     */
     public static int initialize() {
         try{
             return (int) initializeHandle.invokeExact();
@@ -140,22 +113,22 @@ public final class Sqlite {
         }
     }
 
-    /**
-     *   Corresponding to int sqlite3_prepare_v3(sqlite3 *db, const char *zSql, int nByte, unsigned int prepFlags, sqlite3_stmt **ppStmt, const char **pzTail)
-     *   See <a href="https://www.sqlite.org/c3ref/initialize.html">...</a>
-     */
-    public static int prepare(MemorySegment sqlite, MemorySegment sql, int len, int flags, MemorySegment ppStmt, MemorySegment pzTail) {
+    public static int open(MemorySegment fileName, MemorySegment ppDb, int flags) {
         try{
-            return (int) prepareHandle.invokeExact(sqlite, sql, len, flags, ppStmt, pzTail);
+            return (int) openHandle.invokeExact(fileName, ppDb, flags, NativeUtil.NULL_POINTER);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.SQLITE, "Failed to open");
+        }
+    }
+
+    public static int prepare(MemorySegment sqlite, MemorySegment sql, int len, int flags, MemorySegment ppStmt) {
+        try{
+            return (int) prepareHandle.invokeExact(sqlite, sql, len, flags, ppStmt, NativeUtil.NULL_POINTER);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.SQLITE, "Failed to prepare");
         }
     }
 
-    /**
-     *   Corresponding to int sqlite3_bind_int(sqlite3_stmt*, int, int)
-     *   See <a href="https://www.sqlite.org/c3ref/bind_blob.html">...</a>
-     */
     public static int bindInt(MemorySegment stmt, int index, int value) {
         try{
             return (int) bindIntHandle.invokeExact(stmt, index, value);
@@ -164,10 +137,6 @@ public final class Sqlite {
         }
     }
 
-    /**
-     *   Corresponding to int sqlite3_bind_int(sqlite3_stmt*, int, int)
-     *   See <a href="https://www.sqlite.org/c3ref/bind_blob.html">...</a>
-     */
     public static int bindLong(MemorySegment stmt, int index, long value) {
         try{
             return (int) bindLongHandle.invokeExact(stmt, index, value);
@@ -176,10 +145,6 @@ public final class Sqlite {
         }
     }
 
-    /**
-     *   Corresponding to int sqlite3_bind_double(sqlite3_stmt*, int, double)
-     *   See <a href="https://www.sqlite.org/c3ref/bind_blob.html">...</a>
-     */
     public static int bindDouble(MemorySegment stmt, int index, double value) {
         try{
             return (int) bindDoubleHandle.invokeExact(stmt, index, value);
@@ -188,34 +153,30 @@ public final class Sqlite {
         }
     }
 
-    /**
-     *   Corresponding to int sqlite3_bind_text(sqlite3_stmt*,int,const char*,int,void(*)(void*))
-     *   See <a href="https://www.sqlite.org/c3ref/bind_blob.html">...</a>
-     */
-    public static int bindText(MemorySegment stmt, int index, MemorySegment ptr, int len, MemorySegment finalizer) {
+    public static int bindText(MemorySegment stmt, int index, MemorySegment ptr) {
         try{
-            return (int) bindTextHandle.invokeExact(stmt, index, ptr, len, finalizer);
+            return (int) bindTextHandle.invokeExact(stmt, index, ptr, ptr.byteSize(), sqliteTransient, Constants.SQLITE_UTF8);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.SQLITE, "Failed to bind text");
         }
     }
 
-    /**
-     *   Corresponding to int sqlite3_bind_blob(sqlite3_stmt*, int, const void*, int n, void(*)(void*))
-     *   See <a href="https://www.sqlite.org/c3ref/bind_blob.html">...</a>
-     */
-    public static int bindBlob(MemorySegment stmt, int index, MemorySegment ptr, int len, MemorySegment finalizer) {
+    public static int bindBlob(MemorySegment stmt, int index, MemorySegment ptr) {
         try{
-            return (int) bindBlobHandle.invokeExact(stmt, index, ptr, len, finalizer);
+            return (int) bindBlobHandle.invokeExact(stmt, index, ptr, ptr.byteSize(), sqliteTransient);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.SQLITE, "Failed to bind blob");
         }
     }
 
-    /**
-     *   Corresponding to int sqlite3_bind_blob(sqlite3_stmt*, int, const void*, int n, void(*)(void*))
-     *   See <a href="https://www.sqlite.org/c3ref/step.html">...</a>
-     */
+    public static int bindNull(MemorySegment stmt, int index) {
+        try{
+            return (int) bindNullHandle.invokeExact(stmt, index);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.SQLITE, "Failed to bind null");
+        }
+    }
+
     public static int step(MemorySegment stmt) {
         try{
             return (int) stepHandle.invokeExact(stmt);
@@ -224,10 +185,6 @@ public final class Sqlite {
         }
     }
 
-    /**
-     *   Corresponding to int sqlite3_column_bytes(sqlite3_stmt*, int iCol)
-     *   See <a href="https://www.sqlite.org/c3ref/column_blob.html">...</a>
-     */
     public static int columnBytes(MemorySegment stmt, int index) {
         try{
             return (int) columnBytesHandle.invokeExact(stmt, index);
@@ -236,10 +193,6 @@ public final class Sqlite {
         }
     }
 
-    /**
-     *   Corresponding to int sqlite3_column_int(sqlite3_stmt*, int iCol)
-     *   See <a href="https://www.sqlite.org/c3ref/column_blob.html">...</a>
-     */
     public static int columnInt(MemorySegment stmt, int index) {
         try{
             return (int) columnIntHandle.invokeExact(stmt, index);
@@ -248,10 +201,6 @@ public final class Sqlite {
         }
     }
 
-    /**
-     *   Corresponding to sqlite3_int64 sqlite3_column_int64(sqlite3_stmt*, int iCol)
-     *   See <a href="https://www.sqlite.org/c3ref/column_blob.html">...</a>
-     */
     public static long columnLong(MemorySegment stmt, int index) {
         try{
             return (long) columnLongHandle.invokeExact(stmt, index);
@@ -260,10 +209,6 @@ public final class Sqlite {
         }
     }
 
-    /**
-     *   Corresponding to double sqlite3_column_double(sqlite3_stmt*, int iCol)
-     *   See <a href="https://www.sqlite.org/c3ref/column_blob.html">...</a>
-     */
     public static double columnDouble(MemorySegment stmt, int index) {
         try{
             return (double) columnDoubleHandle.invokeExact(stmt, index);
@@ -272,10 +217,6 @@ public final class Sqlite {
         }
     }
 
-    /**
-     *   Corresponding to const unsigned char *sqlite3_column_text(sqlite3_stmt*, int iCol)
-     *   See <a href="https://www.sqlite.org/c3ref/column_blob.html">...</a>
-     */
     public static MemorySegment columnText(MemorySegment stmt, int index) {
         try{
             return (MemorySegment) columnTextHandle.invokeExact(stmt, index);
@@ -284,10 +225,6 @@ public final class Sqlite {
         }
     }
 
-    /**
-     *   Corresponding to const void *sqlite3_column_blob(sqlite3_stmt*, int iCol)
-     *   See <a href="https://www.sqlite.org/c3ref/column_blob.html">...</a>
-     */
     public static MemorySegment columnBlob(MemorySegment stmt, int index) {
         try{
             return (MemorySegment) columnBlobHandle.invokeExact(stmt, index);
@@ -296,10 +233,6 @@ public final class Sqlite {
         }
     }
 
-    /**
-     *   Corresponding to int sqlite3_reset(sqlite3_stmt *pStmt)
-     *   See <a href="https://www.sqlite.org/c3ref/reset.html">...</a>
-     */
     public static int reset(MemorySegment pStmt) {
         try{
             return (int) resetHandle.invokeExact(pStmt);
@@ -308,10 +241,6 @@ public final class Sqlite {
         }
     }
 
-    /**
-     *   Corresponding to int sqlite3_clear_bindings(sqlite3_stmt*)
-     *   See <a href="https://www.sqlite.org/c3ref/clear_bindings.html">...</a>
-     */
     public static int clearBindings(MemorySegment pStmt) {
         try{
             return (int) clearBindingsHandle.invokeExact(pStmt);
@@ -320,22 +249,14 @@ public final class Sqlite {
         }
     }
 
-    /**
-     *   Corresponding to int sqlite3_changes(sqlite3*)
-     *   See <a href="http://www.sqlite.org/c3ref/changes.html">...</a>
-     */
-    public static int changes(MemorySegment sqlite) {
+    public static long changes(MemorySegment sqlite) {
         try{
-            return (int) changesHandle.invokeExact(sqlite);
+            return (long) changesHandle.invokeExact(sqlite);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.SQLITE, "Failed to get changes");
         }
     }
 
-    /**
-     *   Corresponding to int sqlite3_finalize(sqlite3_stmt *pStmt)
-     *   See <a href="https://www.sqlite.org/c3ref/finalize.html">...</a>
-     */
     public static int finalize(MemorySegment pStmt) {
         try{
             return (int) finalizeHandle.invokeExact(pStmt);
@@ -344,10 +265,6 @@ public final class Sqlite {
         }
     }
 
-    /**
-     *   Corresponding to sqlite3_backup *sqlite3_backup_init(sqlite3 *pDest, const char *zDestName, sqlite3 *pSource, const char *zSourceName)
-     *   See <a href="https://sqlite.org/c3ref/backup_finish.html#sqlite3backupinit">...</a>
-     */
     public static MemorySegment backupInit(MemorySegment dest, MemorySegment destName, MemorySegment source, MemorySegment sourceName) {
         try{
             return (MemorySegment) backupInitHandle.invokeExact(dest, destName, source, sourceName);
@@ -355,10 +272,7 @@ public final class Sqlite {
             throw new FrameworkException(ExceptionType.SQLITE, "Failed to backupInit");
         }
     }
-    /**
-     *   Corresponding to int sqlite3_backup_step(sqlite3_backup *p, int nPage)
-     *   See <a href="https://sqlite.org/c3ref/backup_finish.html#sqlite3backupinit">...</a>
-     */
+
     public static int backupStep(MemorySegment backup, int nPage) {
         try{
             return (int) backupStepHandle.invokeExact(backup, nPage);
@@ -366,10 +280,7 @@ public final class Sqlite {
             throw new FrameworkException(ExceptionType.SQLITE, "Failed to backupStep");
         }
     }
-    /**
-     *   Corresponding to int sqlite3_backup_finish(sqlite3_backup *p);
-     *   See <a href="https://sqlite.org/c3ref/backup_finish.html#sqlite3backupinit">...</a>
-     */
+
     public static int backupFinish(MemorySegment backup) {
         try{
             return (int) backupFinishHandle.invokeExact(backup);
@@ -378,10 +289,6 @@ public final class Sqlite {
         }
     }
 
-    /**
-     *   Corresponding to void sqlite3_free(void*)
-     *   See <a href="https://www.sqlite.org/c3ref/free.html">...</a>
-     */
     public static void free(MemorySegment ptr) {
         try{
             freeHandle.invokeExact(ptr);
@@ -390,22 +297,6 @@ public final class Sqlite {
         }
     }
 
-    /**
-     *   Corresponding to int sqlite3_shutdown(void)
-     *   See <a href="https://www.sqlite.org/c3ref/initialize.html">...</a>
-     */
-    public static int shutdown() {
-        try{
-            return (int) shutdownHandle.invokeExact();
-        }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to shutdown");
-        }
-    }
-
-    /**
-     *   Corresponding to int sqlite3_close_v2(sqlite3*)
-     *   See <a href="https://www.sqlite.org/c3ref/close.html">...</a>
-     */
     public static int close(MemorySegment sqlite) {
         try{
             return (int) closeHandle.invokeExact(sqlite);
@@ -414,4 +305,27 @@ public final class Sqlite {
         }
     }
 
+    public static int shutdown() {
+        try {
+            return (int) shutdownHandle.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.SQLITE, "Failed to shutdown");
+        }
+    }
+
+    public static MemorySegment errMsg(MemorySegment sqlite) {
+        try{
+            return (MemorySegment) errMsgHandle.invokeExact(sqlite);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.SQLITE, "Failed to get errMsg");
+        }
+    }
+
+    public static int exec(MemorySegment sqlite, MemorySegment sql, MemorySegment err) {
+        try{
+            return (int) execHandle.invokeExact(sqlite, sql, NativeUtil.NULL_POINTER, NativeUtil.NULL_POINTER, err);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.SQLITE, "Failed to exec");
+        }
+    }
 }

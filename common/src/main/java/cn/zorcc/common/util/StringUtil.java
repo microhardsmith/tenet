@@ -3,8 +3,6 @@ package cn.zorcc.common.util;
 import cn.zorcc.common.Constants;
 
 import java.lang.foreign.MemorySegment;
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.function.Consumer;
 
 public final class StringUtil {
@@ -13,7 +11,7 @@ public final class StringUtil {
     }
 
     /**
-     *   Find next expected byte in the data from startIndex
+     *   Find next expected byte in the data from startIndex, return the target index + 1 of the expected byte
      */
     public static long searchBytes(MemorySegment data, byte expected, long startIndex, Consumer<MemorySegment> consumer) {
         for(long index = startIndex; index < data.byteSize(); index++) {

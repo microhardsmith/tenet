@@ -61,14 +61,18 @@ public final class ReadBuffer {
         return b;
     }
 
-    public byte[] readBytes(long count) {
+    public MemorySegment readSegment(long count) {
         long nextIndex = readIndex + count;
         if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
-        byte[] result = segment.asSlice(readIndex, count).toArray(ValueLayout.JAVA_BYTE);
+        MemorySegment result = segment.asSlice(readIndex, count);
         readIndex = nextIndex;
         return result;
+    }
+
+    public byte[] readBytes(long count) {
+        return readSegment(count).toArray(ValueLayout.JAVA_BYTE);
     }
 
     public short readShort() {

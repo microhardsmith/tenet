@@ -6,6 +6,7 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Encoder;
 
+import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
@@ -27,14 +28,14 @@ public final class HttpServerEncoder implements Encoder {
         writeBuffer.writeBytes(status.description().getBytes(StandardCharsets.UTF_8));
         writeBuffer.writeBytes(Constants.CR, Constants.LF);
         HttpHeader headers = httpResponse.getHeaders();
-        byte[] data = httpResponse.getData();
-        if(data == null || data.length == Constants.ZERO) {
+        MemorySegment data = httpResponse.getData();
+        if(data == null || data.byteSize() == Constants.ZERO) {
             throw new FrameworkException(ExceptionType.HTTP, "Http response without a request body is meaningless");
         }
-        headers.put(HttpHeader.K_CONTENT_LENGTH, String.valueOf(data.length));
+        headers.put(HttpHeader.K_CONTENT_LENGTH, String.valueOf(data.byteSize()));
         headers.encode(writeBuffer);
         writeBuffer.writeBytes(Constants.CR, Constants.LF);
-        writeBuffer.writeBytes(data);
+        writeBuffer.writeSegment(data);
         return writeBuffer;
     }
 }
