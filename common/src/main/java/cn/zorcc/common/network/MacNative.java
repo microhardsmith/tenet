@@ -15,9 +15,9 @@ import java.lang.foreign.ValueLayout;
 import java.util.Map;
 
 /**
- *   Native implementation under MacOS, using kqueue
+ *   Native implementation under macOS, using kqueue
  *   Note that the .dylib library is only suitable for ARM-based chips since I only tested on M1 series MacBook
- *   If developer needs to run it on X86 processors, recompile a new .dylib would work, it should be working on freebsd or openbsd operating system too since they are quite similar to macos
+ *   If developer needs to run it on X86 processors, recompile a new .dylib would work, it should be working on freebsd or openbsd operating system too since they are quite similar to macOS
  */
 public final class MacNative implements Native {
     private static final Logger log = new Logger(MacNative.class);

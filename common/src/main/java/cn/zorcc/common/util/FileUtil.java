@@ -88,9 +88,8 @@ public final class FileUtil {
                 throw new FrameworkException(ExceptionType.NATIVE, "ResourcePath is not valid");
             }else {
                 final File tmp = File.createTempFile(prefix, suffix);
-                Files.copy(inputStream, tmp.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 if(tmp.exists()) {
-                    // when JVM exit, the tmp file will be destroyed
+                    Files.copy(inputStream, tmp.toPath(), StandardCopyOption.REPLACE_EXISTING);
                     tmp.deleteOnExit();
                 }else {
                     throw new FrameworkException(ExceptionType.NATIVE, "File %s doesn't exist".formatted(tmp.getAbsolutePath()));
