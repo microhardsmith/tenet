@@ -8,42 +8,41 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.log.LoggerConsumer;
+import cn.zorcc.common.pojo.IpType;
 import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.wheel.Wheel;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class EchoTest {
     private static final Logger log = new Logger(EchoTest.class);
 
     @Test
-    public void testEchoClient() {
+    public void testEchoClient() throws InterruptedException {
         Context.load(Wheel.wheel(), Wheel.class);
         Context.load(new LoggerConsumer(), LoggerConsumer.class);
         Net netClient = createEchoNetClient();
         Context.load(netClient, Net.class);
         Context.init();
-        netClient.connect(new Loc("127.0.0.1", 8002), new EchoEncoder(), new EchoDecoder(), new EchoClientHandler(), new TcpConnector());
+        netClient.connect(new Loc(IpType.IPV6, "::1", 8002), new EchoEncoder(), new EchoDecoder(), new EchoClientHandler(), new TcpConnector());
+        Thread.sleep(Long.MAX_VALUE);
     }
 
     @Test
-    public void testEchoServer() {
+    public void testEchoServer() throws InterruptedException {
         Context.load(Wheel.wheel(), Wheel.class);
         Context.load(new LoggerConsumer(), LoggerConsumer.class);
         Net netServer = createEchoNetServer();
         Context.load(netServer, Net.class);
         Context.init();
+        Thread.sleep(Long.MAX_VALUE);
     }
 
     private static Net createEchoNetClient() {
-        NetworkConfig networkConfig = new NetworkConfig();
-        Net net = new Net(networkConfig);
-        MuxConfig muxConfig = new MuxConfig();
-        net.addWorker(networkConfig, muxConfig);
-        return net;
+        return new Net(Constants.ONE);
     }
 
     private static class EchoClientHandler implements Handler {
@@ -51,7 +50,7 @@ public class EchoTest {
         @Override
         public void onConnected(Channel channel) {
             log.info("Client channel connected");
-            Wheel.wheel().addPeriodicJob(() -> channel.send("Hello : " + counter.getAndIncrement()), 0, 1000, TimeUnit.MILLISECONDS);
+            Wheel.wheel().addPeriodicJob(() -> channel.send("Hello : " + counter.getAndIncrement()), Duration.ZERO, Duration.ofSeconds(Constants.ONE));
         }
 
         @Override
@@ -75,12 +74,13 @@ public class EchoTest {
     }
 
     private static Net createEchoNetServer() {
-        NetworkConfig networkConfig = new NetworkConfig();
-        Net net = new Net(networkConfig);
-        MuxConfig muxConfig = new MuxConfig();
-        net.addMaster(EchoEncoder::new, EchoDecoder::new, EchoServerHandler::new, TcpConnector::new, new Loc("0.0.0.0", 8002), muxConfig);
-        net.addWorker(networkConfig, muxConfig);
-        return net;
+        MasterConfig masterConfig = new MasterConfig();
+        masterConfig.setEncoderSupplier(EchoEncoder::new);
+        masterConfig.setDecoderSupplier(EchoDecoder::new);
+        masterConfig.setHandlerSupplier(EchoServerHandler::new);
+        masterConfig.setProvider(Net.tcpProvider());
+        masterConfig.setLoc(new Loc(IpType.IPV6, "::1", 8002));
+        return new Net(masterConfig, Constants.ONE);
     }
 
     private static class EchoServerHandler implements Handler {

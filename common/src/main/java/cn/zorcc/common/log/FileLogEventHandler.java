@@ -90,7 +90,7 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
     public void accept(LogEvent event) {
         switch (event.eventType()) {
             case Msg -> onMsg(event);
-            case Flush -> flush();
+            case Flush -> flush(true);
             case Shutdown -> shutdown();
         }
     }
@@ -98,11 +98,11 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
     private void onMsg(LogEvent event) {
         eventList.add(event);
         if(flushThreshold > Constants.ZERO && eventList.size() > flushThreshold) {
-            flush();
+            flush(true);
         }
     }
 
-    private void flush() {
+    private void flush(boolean checkLimitation) {
         if(!eventList.isEmpty()) {
             try(WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(reserved)) {
                 for (LogEvent event : eventList) {
@@ -110,7 +110,7 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
                 }
                 FileUtil.fwrite(writeBuffer.toSegment(), fileStream);
                 currentWrittenIndex += writeBuffer.writeIndex();
-                if((maxFileSize > Constants.ZERO && currentWrittenIndex > maxFileSize) || (maxRecordingTime > Constants.ZERO && eventList.getLast().timestamp() - currentCreateTime > maxRecordingTime)) {
+                if(checkLimitation && (exceedFileSizeLimitation() || exceedRecordingTimeLimitation())) {
                     openNewLogOutputFile();
                 }
             }finally {
@@ -119,7 +119,16 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
         }
     }
 
+    private boolean exceedFileSizeLimitation() {
+        return maxFileSize > Constants.ZERO && currentWrittenIndex > maxFileSize;
+    }
+
+    private boolean exceedRecordingTimeLimitation() {
+        return maxRecordingTime > Constants.ZERO && eventList.getLast().timestamp() - currentCreateTime > maxRecordingTime;
+    }
+
     private void shutdown() {
+        flush(false);
         FileUtil.fclose(fileStream);
         reservedArena.close();
     }

@@ -12,8 +12,8 @@ public record LogEvent (
         MemorySegment throwable,
         MemorySegment msg
 ){
-    public static final LogEvent flushEvent = of(LogEventType.Flush);
-    public static final LogEvent shutdownEvent = of(LogEventType.Shutdown);
+    public static final LogEvent FLUSH_EVENT = of(LogEventType.Flush);
+    public static final LogEvent SHUTDOWN_EVENT = of(LogEventType.Shutdown);
     private static LogEvent of(LogEventType type) {
         return new LogEvent(type, Long.MIN_VALUE, null, null, null, null, null, null);
     }

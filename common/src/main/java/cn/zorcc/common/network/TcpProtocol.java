@@ -15,18 +15,18 @@ import java.lang.foreign.MemorySegment;
  */
 public final class TcpProtocol implements Protocol {
     private static final Logger log = new Logger(TcpProtocol.class);
-    private static final Native n = Native.n;
+    private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
 
     @Override
     public void canRead(Channel channel, MemorySegment segment) {
-        long len = segment.byteSize();
-        long received = n.recv(channel.socket(), segment, len);
+        int len = (int) segment.byteSize();
+        int received = osNetworkLibrary.recv(channel.socket(), segment, len);
         if(received > Constants.ZERO) {
             channel.onReadBuffer(new ReadBuffer(received == len ? segment : segment.asSlice(Constants.ZERO, received)));
         }else {
             if(received < Constants.ZERO) {
                 // usually connection reset by peer
-                log.debug(STR."\{channel.loc()} tcp recv err, errno : \{n.errno()}");
+                log.debug(STR."\{channel.loc()} tcp recv err, errno : \{ osNetworkLibrary.errno()}");
             }
             channel.close();
         }
@@ -34,8 +34,8 @@ public final class TcpProtocol implements Protocol {
 
     @Override
     public void canWrite(Channel channel) {
-        if(channel.state().compareAndSet(Native.REGISTER_READ_WRITE, Native.REGISTER_READ)) {
-            n.ctl(channel.worker().mux(), channel.socket(), Native.REGISTER_READ_WRITE, Native.REGISTER_READ);
+        if(channel.state().compareAndSet(OsNetworkLibrary.REGISTER_READ_WRITE, OsNetworkLibrary.REGISTER_READ)) {
+            osNetworkLibrary.ctl(channel.worker().mux(), channel.socket(), OsNetworkLibrary.REGISTER_READ_WRITE, OsNetworkLibrary.REGISTER_READ);
             channel.worker().submitWriterTask(new WriterTask(WriterTask.WriterTaskType.WRITABLE, channel, null, null));
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -46,15 +46,15 @@ public final class TcpProtocol implements Protocol {
     public WriteStatus doWrite(Channel channel, WriteBuffer writeBuffer) {
         Socket socket = channel.socket();
         MemorySegment segment = writeBuffer.toSegment();
-        long len = segment.byteSize();
-        long bytes = n.send(socket, segment, len);
-        if(bytes == -1L) {
+        int len = (int) segment.byteSize();
+        int bytes = osNetworkLibrary.send(socket, segment, len);
+        if(bytes == -1) {
             // error occurred
-            int errno = n.errno();
-            if(errno == n.sendBlockCode()) {
+            int errno = osNetworkLibrary.errno();
+            if(errno == osNetworkLibrary.sendBlockCode()) {
                 // current TCP write buffer is full, wait until writable again
-                if(channel.state().compareAndSet(Native.REGISTER_READ, Native.REGISTER_READ_WRITE)) {
-                    n.ctl(channel.worker().mux(), socket, Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
+                if(channel.state().compareAndSet(OsNetworkLibrary.REGISTER_READ, OsNetworkLibrary.REGISTER_READ_WRITE)) {
+                    osNetworkLibrary.ctl(channel.worker().mux(), socket, OsNetworkLibrary.REGISTER_READ, OsNetworkLibrary.REGISTER_READ_WRITE);
                     return WriteStatus.PENDING;
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -72,11 +72,11 @@ public final class TcpProtocol implements Protocol {
 
     @Override
     public void doShutdown(Channel channel) {
-        n.shutdownWrite(channel.socket());
+        osNetworkLibrary.shutdownWrite(channel.socket());
     }
 
     @Override
     public void doClose(Channel channel) {
-        n.closeSocket(channel.socket());
+        osNetworkLibrary.closeSocket(channel.socket());
     }
 }

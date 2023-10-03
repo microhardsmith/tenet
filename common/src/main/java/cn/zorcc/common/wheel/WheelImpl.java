@@ -8,15 +8,17 @@ import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.ThreadUtil;
 import org.jctools.queues.atomic.MpscUnboundedAtomicArrayQueue;
 
+import java.time.Duration;
 import java.util.Iterator;
 import java.util.Queue;
 import java.util.TreeSet;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.LongConsumer;
 
 public final class WheelImpl extends AbstractLifeCycle implements Wheel {
+    private static final long ONCE = Long.MIN_VALUE;
     private static final AtomicLong counter = new AtomicLong(Constants.ZERO);
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
     private final int mask;
@@ -35,19 +37,19 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
         if(slots < 256) {
             throw new FrameworkException(ExceptionType.WHEEL, "Slots are too small for a wheel");
         }
-        if((slots & (slots - Constants.ONE)) != Constants.ZERO) {
+        this.mask = slots - Constants.ONE;
+        if((slots & mask) != Constants.ZERO) {
             throw new FrameworkException(ExceptionType.WHEEL, "Slots must be power of two");
         }
-        this.mask = slots - Constants.ONE;
         this.tick = tick;
-        this.tickNano = TimeUnit.MILLISECONDS.toNanos(tick);
+        this.tickNano = Duration.ofMillis(tick).toNanos();
         this.bound = slots * tick;
         this.cMask = mask >> Constants.ONE;
         this.queue = new MpscUnboundedAtomicArrayQueue<>(slots);
         this.wheel = new JobImpl[slots];
-        for(int i = 0; i < slots; i++) {
-            // create head node
-            wheel[i] = new JobImpl(Long.MIN_VALUE, Long.MIN_VALUE, null);
+        final Runnable empty = () -> {};
+        for(int i = Constants.ZERO; i < slots; i++) {
+            wheel[i] = new JobImpl(Constants.ZERO, Constants.ZERO, empty);
         }
         // if we use virtual thread, then parkNanos() will internally use a ScheduledThreadPoolExecutor for unpark the current vthread
         // still there is a platform thread constantly waiting for lock and go to sleep and so on. So use platform thread would be more simplified
@@ -67,22 +69,42 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
     }
 
     @Override
-    public Job addJob(Runnable job, long delay, TimeUnit timeUnit) {
-        long delayMillis = timeUnit.toMillis(delay);
-        JobImpl result = new JobImpl(Clock.current() + delayMillis, JobImpl.ONCE, job);
+    public Job addJob(Runnable job, Duration delay) {
+        return enqueue(delay.toMillis(), ONCE, job);
+    }
+
+    @Override
+    public Job addPeriodicJob(Runnable job, Duration delay, Duration period) {
+        long periodDelayMillis = period.toMillis();
+        if (periodDelayMillis <= tick) {
+            throw new FrameworkException(ExceptionType.WHEEL, "Wheel tick is too large for current task, might consider tuning Wheel's default parameters");
+        }
+        return enqueue(delay.toMillis(), periodDelayMillis, job);
+    }
+
+    @Override
+    public Job addJob(LongConsumer job, Duration delay) {
+        return enqueue(delay.toMillis(), ONCE, job);
+    }
+
+    @Override
+    public Job addPeriodicJob(LongConsumer job, Duration delay, Duration period) {
+        long periodDelayMillis = period.toMillis();
+        if (periodDelayMillis <= tick) {
+            throw new FrameworkException(ExceptionType.WHEEL, "Wheel tick is too large for current task, might consider tuning Wheel's default parameters");
+        }
+        return enqueue(delay.toMillis(), periodDelayMillis, job);
+    }
+
+    private Job enqueue(long delayMillis, long periodDelayMillis, Runnable job) {
+        JobImpl result = new JobImpl(Clock.current() + delayMillis, periodDelayMillis, job);
         if (!queue.offer(result)) {
             throw new FrameworkException(ExceptionType.WHEEL, Constants.UNREACHED);
         }
         return result;
     }
 
-    @Override
-    public Job addPeriodicJob(Runnable job, long delay, long periodDelay, TimeUnit timeUnit) {
-        long periodDelayMillis = timeUnit.toMillis(periodDelay);
-        if (periodDelayMillis <= tick) {
-            throw new FrameworkException(ExceptionType.WHEEL, "Wheel tick is too large for current task, might consider tuning Wheel's default parameters");
-        }
-        long delayMillis = timeUnit.toMillis(delay);
+    private Job enqueue(long delayMillis, long periodDelayMillis, LongConsumer job) {
         JobImpl result = new JobImpl(Clock.current() + delayMillis, periodDelayMillis, job);
         if (!queue.offer(result)) {
             throw new FrameworkException(ExceptionType.WHEEL, Constants.UNREACHED);
@@ -143,7 +165,11 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
                 if(current.owner.compareAndSet(false, true)) {
                     ThreadUtil.virtual("wheel-job-" + counter.getAndIncrement(), current.mission).start();
                     final long period = current.period;
-                    if(period != JobImpl.ONCE) {
+                    if(period == ONCE) {
+                        // help GC
+                        current.prev = null;
+                        current.next = null;
+                    } else {
                         // reset current node's status
                         current.owner.set(false);
                         current.execMilli = current.execMilli + period;
@@ -155,10 +181,6 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
                             current.pos = (int) ((slot + (period / tick)) & mask);
                             insert(current);
                         }
-                    } else {
-                        // help GC
-                        current.prev = null;
-                        current.next = null;
                     }
                 }
                 current = next;
@@ -230,7 +252,6 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
     }
 
     private static final class JobImpl implements Job, Comparable<JobImpl> {
-        public static final long ONCE = -1L;
         private long execMilli;
         private int pos;
         private JobImpl prev;
@@ -244,15 +265,19 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
             this.execMilli = execMilli;
             this.period = period;
             this.mission = () -> {
-                // there could be self calibration inside job itself if the tasks in your scenario, since LockSupport.parkNanos depends on a ScheduledExecutorService,
-                // using calibration would make us fallback to JDK's DelayQueue, without calibration, the error range within tick should already be acceptable for most scenarios
-
-                // LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(execMilli - Clock.current()));
                 runnable.run();
                 count.incrementAndGet();
             };
         }
 
+        JobImpl(long execMilli, long period, LongConsumer consumer) {
+            this.execMilli = execMilli;
+            this.period = period;
+            this.mission = () -> {
+                consumer.accept(execMilli);
+                count.incrementAndGet();
+            };
+        }
 
         @Override
         public long count() {

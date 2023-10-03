@@ -93,7 +93,7 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
     public void accept(LogEvent event) {
         switch (event.eventType()) {
             case Msg -> onMsg(event);
-            case Flush -> flush();
+            case Flush -> flush(true);
             case Shutdown -> shutdown();
         }
     }
@@ -101,11 +101,11 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
     private void onMsg(LogEvent event) {
         eventList.add(event);
         if(flushThreshold > Constants.ZERO && eventList.size() > flushThreshold) {
-            flush();
+            flush(true);
         }
     }
 
-    private void flush() {
+    private void flush(boolean checkLimitation) {
         if(!eventList.isEmpty()) {
             sqliteConn.begin();
             for (LogEvent logEvent : eventList) {
@@ -130,11 +130,19 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
             }
             sqliteConn.commit();
             currentRowCount += eventList.size();
-            if((maxRowCount > Constants.ZERO && currentRowCount > maxRowCount) || (maxRecordingTime > Constants.ZERO && eventList.getLast().timestamp() - currentCreateTime > maxRecordingTime)) {
+            if(checkLimitation && (exceedMaxRowCountLimitation() || exceedMaxRecordingTimeLimitation())) {
                 openNewSqliteDatabase();
             }
             eventList.clear();
         }
+    }
+
+    private boolean exceedMaxRowCountLimitation() {
+        return maxRowCount > Constants.ZERO && currentRowCount > maxRowCount;
+    }
+
+    private boolean exceedMaxRecordingTimeLimitation() {
+        return maxRecordingTime > Constants.ZERO && eventList.getLast().timestamp() - currentCreateTime > maxRecordingTime;
     }
 
     private static MemorySegment wrapText(WriteBuffer writeBuffer, MemorySegment segment) {
@@ -143,6 +151,7 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
     }
 
     private void shutdown() {
+        flush(false);
         sqliteConn.finalize(stmt);
         sqliteConn.close();
         reservedArena.close();

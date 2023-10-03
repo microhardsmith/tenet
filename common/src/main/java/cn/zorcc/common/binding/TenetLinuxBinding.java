@@ -12,20 +12,29 @@ import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 
 public final class TenetLinuxBinding {
-    private static final MethodHandle addressLenMethodHandle;
     private static final MethodHandle connectBlockCodeMethodHandle;
     private static final MethodHandle sendBlockCodeMethodHandle;
+    private static final MethodHandle interruptCodeMethodHandle;
+    private static final MethodHandle ipv4AddressLenMethodHandle;
+    private static final MethodHandle ipv6AddressLenMethodHandle;
+    private static final MethodHandle ipv4AddressSizeMethodHandle;
+    private static final MethodHandle ipv6AddressSizeMethodHandle;
     private static final MethodHandle epollCreateMethodHandle;
     private static final MethodHandle epollCtlMethodHandle;
     private static final MethodHandle epollWaitMethodHandle;
-    private static final MethodHandle addressMethodHandle;
-    private static final MethodHandle portMethodHandle;
-    private static final MethodHandle socketCreateMethodHandle;
+    private static final MethodHandle getIpv4AddressMethodHandle;
+    private static final MethodHandle getIpv6AddressMethodHandle;
+    private static final MethodHandle ipv4PortMethodHandle;
+    private static final MethodHandle ipv6PortMethodHandle;
+    private static final MethodHandle ipv4SocketCreateMethodHandle;
+    private static final MethodHandle ipv6SocketCreateMethodHandle;
     private static final MethodHandle acceptMethodHandle;
-    private static final MethodHandle setSockAddrMethodHandle;
+    private static final MethodHandle setIpv4SockAddrMethodHandle;
+    private static final MethodHandle setIpv6SockAddrMethodHandle;
     private static final MethodHandle setReuseAddrMethodHandle;
     private static final MethodHandle setKeepAliveMethodHandle;
     private static final MethodHandle setTcpNoDelayMethodHandle;
+    private static final MethodHandle setIpv6OnlyMethodHandle;
     private static final MethodHandle getErrOptMethodHandle;
     private static final MethodHandle setNonBlockingMethodHandle;
     private static final MethodHandle bindMethodHandle;
@@ -39,38 +48,39 @@ public final class TenetLinuxBinding {
 
     static {
         SymbolLookup symbolLookup = NativeUtil.loadLibrary(Constants.TENET);
-        addressLenMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_address_len", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         connectBlockCodeMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_connect_block_code", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         sendBlockCodeMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_send_block_code", FunctionDescriptor.of(ValueLayout.JAVA_INT));
+        interruptCodeMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_interrupt_code", FunctionDescriptor.of(ValueLayout.JAVA_INT));
+        ipv4AddressLenMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_ipv4_address_len", FunctionDescriptor.of(ValueLayout.JAVA_INT));
+        ipv6AddressLenMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_ipv6_address_len", FunctionDescriptor.of(ValueLayout.JAVA_INT));
+        ipv4AddressSizeMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_ipv4_address_size", FunctionDescriptor.of(ValueLayout.JAVA_INT));
+        ipv6AddressSizeMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_ipv6_address_size", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         epollCreateMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_epoll_create", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         epollCtlMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_epoll_ctl", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         epollWaitMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_epoll_wait", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
-        addressMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_address", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        portMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_port", FunctionDescriptor.of(ValueLayout.JAVA_SHORT, ValueLayout.ADDRESS));
-        socketCreateMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_socket_create", FunctionDescriptor.of(ValueLayout.JAVA_INT));
+        getIpv4AddressMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_get_ipv4_address", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        getIpv6AddressMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_get_ipv6_address", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        ipv4PortMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_ipv4_port", FunctionDescriptor.of(ValueLayout.JAVA_SHORT, ValueLayout.ADDRESS));
+        ipv6PortMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_ipv6_port", FunctionDescriptor.of(ValueLayout.JAVA_SHORT, ValueLayout.ADDRESS));
+        ipv4SocketCreateMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_ipv4_socket_create", FunctionDescriptor.of(ValueLayout.JAVA_INT));
+        ipv6SocketCreateMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_ipv6_socket_create", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         acceptMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_accept", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        setSockAddrMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_set_sock_addr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_SHORT));
+        setIpv4SockAddrMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_set_ipv4_sock_addr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_SHORT));
+        setIpv6SockAddrMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_set_ipv6_sock_addr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_SHORT));
         setReuseAddrMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_set_reuse_addr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         setKeepAliveMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_set_keep_alive", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         setTcpNoDelayMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_set_tcp_no_delay", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
+        setIpv6OnlyMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_set_ipv6_only", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         getErrOptMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_get_err_opt", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         setNonBlockingMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_set_nonblocking", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         bindMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_bind", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         connectMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_connect", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         listenMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_listen", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
-        recvMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_recv", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
-        sendMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_send", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+        recvMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_recv", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        sendMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_send", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         closeMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_close", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         shutdownWriteMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_shutdown_write", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         errnoMethodHandle = NativeUtil.methodHandle(symbolLookup, "l_errno", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-    }
-
-    public static int addressLen() {
-        try{
-            return (int) addressLenMethodHandle.invokeExact();
-        }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
-        }
     }
 
     public static int connectBlockCode() {
@@ -84,6 +94,46 @@ public final class TenetLinuxBinding {
     public static int sendBlockCode() {
         try{
             return (int) sendBlockCodeMethodHandle.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static int interruptCode() {
+        try{
+            return (int) interruptCodeMethodHandle.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static int ipv4AddressLen() {
+        try{
+            return (int) ipv4AddressLenMethodHandle.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static int ipv6AddressLen() {
+        try{
+            return (int) ipv6AddressLenMethodHandle.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static int ipv4AddressSize() {
+        try{
+            return (int) ipv4AddressSizeMethodHandle.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static int ipv6AddressSize() {
+        try{
+            return (int) ipv6AddressSizeMethodHandle.invokeExact();
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
@@ -113,25 +163,49 @@ public final class TenetLinuxBinding {
         }
     }
 
-    public static int address(MemorySegment sockAddr, MemorySegment addrStr, int len) {
+    public static int getIpv4Address(MemorySegment clientAddr, MemorySegment addrStr, int len) {
         try{
-            return (int) addressMethodHandle.invokeExact(sockAddr, addrStr, len);
+            return (int) getIpv4AddressMethodHandle.invokeExact(clientAddr, addrStr, len);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
-    public static short port(MemorySegment sockAddr) {
+    public static int getIpv6Address(MemorySegment clientAddr, MemorySegment addrStr, int len) {
         try{
-            return (short) portMethodHandle.invokeExact(sockAddr);
+            return (int) getIpv6AddressMethodHandle.invokeExact(clientAddr, addrStr, len);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
-    public static int socketCreate() {
+    public static short ipv4Port(MemorySegment clientAddr) {
         try{
-            return (int) socketCreateMethodHandle.invokeExact();
+            return (short) ipv4PortMethodHandle.invokeExact(clientAddr);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static short ipv6Port(MemorySegment clientAddr) {
+        try{
+            return (short) ipv6PortMethodHandle.invokeExact(clientAddr);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static int ipv4SocketCreate() {
+        try{
+            return (int) ipv4SocketCreateMethodHandle.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static int ipv6SocketCreate() {
+        try{
+            return (int) ipv6SocketCreateMethodHandle.invokeExact();
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
@@ -145,9 +219,17 @@ public final class TenetLinuxBinding {
         }
     }
 
-    public static int setSockAddr(MemorySegment sockAddr, MemorySegment address, short port) {
+    public static int setIpv4SockAddr(MemorySegment sockAddr, MemorySegment address, short port) {
         try{
-            return (int) setSockAddrMethodHandle.invokeExact(sockAddr, address, port);
+            return (int) setIpv4SockAddrMethodHandle.invokeExact(sockAddr, address, port);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static int setIpv6SockAddr(MemorySegment sockAddr, MemorySegment address, short port) {
+        try{
+            return (int) setIpv6SockAddrMethodHandle.invokeExact(sockAddr, address, port);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
@@ -172,6 +254,14 @@ public final class TenetLinuxBinding {
     public static int setTcpNoDelay(int socket, int value) {
         try{
             return (int) setTcpNoDelayMethodHandle.invokeExact(socket, value);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static int setIpv6Only(int socket, int value) {
+        try{
+            return (int) setIpv6OnlyMethodHandle.invokeExact(socket, value);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
@@ -217,17 +307,17 @@ public final class TenetLinuxBinding {
         }
     }
 
-    public static long recv(int socket, MemorySegment buf, long len) {
+    public static int recv(int socket, MemorySegment buf, int len) {
         try{
-            return (long) recvMethodHandle.invokeExact(socket, buf, len);
+            return (int) recvMethodHandle.invokeExact(socket, buf, len);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
-    public static long send(int socket, MemorySegment buf, long len) {
+    public static int send(int socket, MemorySegment buf, int len) {
         try{
-            return (long) sendMethodHandle.invokeExact(socket, buf, len);
+            return (int) sendMethodHandle.invokeExact(socket, buf, len);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }

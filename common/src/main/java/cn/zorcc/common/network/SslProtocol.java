@@ -17,7 +17,7 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public class SslProtocol implements Protocol {
     private static final Logger log = new Logger(SslProtocol.class);
-    private static final Native n = Native.n;
+    private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
     private final MemorySegment ssl;
     private final Lock lock = new ReentrantLock();
     private int state = 0;
@@ -94,8 +94,8 @@ public class SslProtocol implements Protocol {
         }finally {
             lock.unlock();
         }
-        if(channel.state().compareAndSet(Native.REGISTER_READ_WRITE, Native.REGISTER_READ)) {
-            n.ctl(channel.worker().mux(), channel.socket(), Native.REGISTER_READ_WRITE, Native.REGISTER_READ);
+        if(channel.state().compareAndSet(OsNetworkLibrary.REGISTER_READ_WRITE, OsNetworkLibrary.REGISTER_READ)) {
+            osNetworkLibrary.ctl(channel.worker().mux(), channel.socket(), OsNetworkLibrary.REGISTER_READ_WRITE, OsNetworkLibrary.REGISTER_READ);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
@@ -129,8 +129,8 @@ public class SslProtocol implements Protocol {
         }finally {
             lock.unlock();
         }
-        if(registerWrite && channel.state().compareAndSet(Native.REGISTER_READ, Native.REGISTER_READ_WRITE)) {
-            n.ctl(channel.worker().mux(), channel.socket(), Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
+        if(registerWrite && channel.state().compareAndSet(OsNetworkLibrary.REGISTER_READ, OsNetworkLibrary.REGISTER_READ_WRITE)) {
+            osNetworkLibrary.ctl(channel.worker().mux(), channel.socket(), OsNetworkLibrary.REGISTER_READ, OsNetworkLibrary.REGISTER_READ_WRITE);
         }
         return WriteStatus.PENDING;
     }
@@ -166,8 +166,8 @@ public class SslProtocol implements Protocol {
         }finally {
             lock.unlock();
         }
-        if(registerWrite && channel.state().compareAndSet(Native.REGISTER_READ, Native.REGISTER_READ_WRITE)) {
-            n.ctl(channel.worker().mux(), channel.socket(), Native.REGISTER_READ, Native.REGISTER_READ_WRITE);
+        if(registerWrite && channel.state().compareAndSet(OsNetworkLibrary.REGISTER_READ, OsNetworkLibrary.REGISTER_READ_WRITE)) {
+            osNetworkLibrary.ctl(channel.worker().mux(), channel.socket(), OsNetworkLibrary.REGISTER_READ, OsNetworkLibrary.REGISTER_READ_WRITE);
         }
         if(errOccur || r == Constants.ONE) {
             // if openssl.sslShutdown() return 1, then the channel is safe to be closed
@@ -184,6 +184,6 @@ public class SslProtocol implements Protocol {
     @Override
     public void doClose(Channel channel) {
         SslBinding.sslFree(ssl);
-        n.closeSocket(channel.socket());
+        osNetworkLibrary.closeSocket(channel.socket());
     }
 }

@@ -15,9 +15,12 @@ import java.lang.foreign.ValueLayout;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ *   TODO refactor
+ */
 public class PgConnector implements Connector {
     private static final Logger log = new Logger(PgConnector.class);
-    private static final Native n = Native.n;
+    private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
     private final Net net;
     private static final int INITIAL = 0;
     private static final int SSL_UNWRITTEN = 1;
@@ -37,7 +40,7 @@ public class PgConnector implements Connector {
         if(!NativeUtil.checkNullPointer(ssl)) {
             SslBinding.sslFree(ssl);
         }
-        n.closeSocket(acceptor.socket());
+        osNetworkLibrary.closeSocket(acceptor.socket());
     }
 
     @Override
@@ -46,13 +49,13 @@ public class PgConnector implements Connector {
         if(i == SSL_WAIT) {
             try(Arena arena = Arena.ofConfined()) {
                 MemorySegment segment = arena.allocate(ValueLayout.JAVA_BYTE);
-                if (n.recv(acceptor.socket(), segment, segment.byteSize()) < 1L) {
-                    log.error(STR."Unable to read, errno : \{n.errno()}");
+                if (osNetworkLibrary.recv(acceptor.socket(), segment, (int) segment.byteSize()) < Constants.ZERO) {
+                    log.error(STR."Unable to read, errno : \{ osNetworkLibrary.errno()}");
                     acceptor.close();
                 }
                 byte b = NativeUtil.getByte(segment, 0L);
                 if(b == PgConstants.SSL_OK) {
-                    MemorySegment ssl = net.newClientSsl();
+                    MemorySegment ssl = NativeUtil.NULL_POINTER; // TODO refactor this class
                     int r = SslBinding.sslSetFd(ssl, acceptor.socket().intValue());
                     if(r == 0) {
                         log.error(STR."Failed to set fd for ssl, err : \{SslBinding.sslGetErr(ssl, r)}");
@@ -78,7 +81,7 @@ public class PgConnector implements Connector {
         final int i = status.get();
         if(i == INITIAL) {
             Socket socket = acceptor.socket();
-            int errOpt = n.getErrOpt(socket);
+            int errOpt = osNetworkLibrary.getErrOpt(socket);
             if(errOpt == 0) {
                 long len = 8L;
                 WriteBuffer writeBuffer = WriteBuffer.newDefaultWriteBuffer(Arena.ofConfined(), len);
@@ -86,7 +89,7 @@ public class PgConnector implements Connector {
                 writeBuffer.writeInt(PgConstants.SSL_CODE);
                 write(acceptor, writeBuffer);
             }else {
-                log.error(STR."Unable to write, errno : \{n.errno()}");
+                log.error(STR."Unable to write, errno : \{ osNetworkLibrary.errno()}");
                 acceptor.close();
             }
         }else if(i == SSL_UNWRITTEN) {
@@ -106,9 +109,9 @@ public class PgConnector implements Connector {
                 status.set(SSL_WANT_READ);
             }else if(err == Constants.SSL_ERROR_WANT_WRITE) {
                 status.set(SSL_WANT_WRITE);
-                int current = acceptor.state().getAndUpdate(i -> (i & Native.REGISTER_WRITE) == 0 ? i + Native.REGISTER_WRITE : i);
-                if((current & Native.REGISTER_WRITE) == 0) {
-                    n.ctl(acceptor.worker().mux(), acceptor.socket(), current, current + Native.REGISTER_READ);
+                int current = acceptor.state().getAndUpdate(i -> (i & OsNetworkLibrary.REGISTER_WRITE) == 0 ? i + OsNetworkLibrary.REGISTER_WRITE : i);
+                if((current & OsNetworkLibrary.REGISTER_WRITE) == 0) {
+                    osNetworkLibrary.ctl(acceptor.worker().mux(), acceptor.socket(), current, current + OsNetworkLibrary.REGISTER_READ);
                 }
             }else {
                 log.error(STR."Failed to perform ssl handshake, ssl err : \{err}");
@@ -119,11 +122,11 @@ public class PgConnector implements Connector {
 
     private void write(Acceptor acceptor, WriteBuffer writeBuffer) {
         MemorySegment segment = writeBuffer.content();
-        long len = segment.byteSize();
-        long bytes = n.send(acceptor.socket(), segment, len);
+        int len = (int) segment.byteSize();
+        int bytes = osNetworkLibrary.send(acceptor.socket(), segment, len);
         if(bytes == -1) {
-            int errno = n.errno();
-            if(errno == n.sendBlockCode()) {
+            int errno = osNetworkLibrary.errno();
+            if(errno == osNetworkLibrary.sendBlockCode()) {
                 status.set(SSL_UNWRITTEN);
                 unwritten.set(writeBuffer);
             }else {
@@ -135,8 +138,8 @@ public class PgConnector implements Connector {
         }else {
             writeBuffer.close();
             status.set(SSL_WAIT);
-            if (acceptor.state().compareAndSet(Native.REGISTER_WRITE, Native.REGISTER_READ)) {
-                n.ctl(acceptor.worker().mux(), acceptor.socket(), Native.REGISTER_WRITE, Native.REGISTER_READ);
+            if (acceptor.state().compareAndSet(OsNetworkLibrary.REGISTER_WRITE, OsNetworkLibrary.REGISTER_READ)) {
+                osNetworkLibrary.ctl(acceptor.worker().mux(), acceptor.socket(), OsNetworkLibrary.REGISTER_WRITE, OsNetworkLibrary.REGISTER_READ);
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }

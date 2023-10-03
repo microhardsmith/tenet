@@ -5,7 +5,6 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.Channel;
-import cn.zorcc.common.network.Shutdown;
 import cn.zorcc.common.util.ThreadUtil;
 import cn.zorcc.orm.PgConfig;
 import cn.zorcc.orm.backend.*;
@@ -24,9 +23,9 @@ import com.ongres.scram.common.stringprep.StringPreparations;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -192,7 +191,7 @@ public final class PgConn {
 
     private void handleTerminate(PgTerminateMsg pgTerminateMsg) {
         channel.send(pgTerminateMsg);
-        channel.shutdown(new Shutdown(pgManager.pgConfig().getShutdownTimeout(), TimeUnit.MILLISECONDS));
+        channel.shutdown(Duration.ofMillis(pgManager.pgConfig().getShutdownTimeout()));
         Thread.currentThread().interrupt();
     }
 }

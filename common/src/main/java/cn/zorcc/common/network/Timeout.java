@@ -1,5 +1,6 @@
 package cn.zorcc.common.network;
 
+import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
@@ -8,7 +9,7 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 
 /**
  *   Timeout abstraction for different operating system
@@ -33,11 +34,12 @@ public record Timeout(
             }
             case MacOS -> {
                 MemorySegment ptr = arena.allocate(timespecLayout);
-                NativeUtil.setLong(ptr, secOffset, milliseconds / 1000);
-                NativeUtil.setLong(ptr, nsecOffset, TimeUnit.MILLISECONDS.toNanos(milliseconds % 1000));
+                Duration duration = Duration.ofMillis(milliseconds);
+                NativeUtil.setLong(ptr, secOffset, duration.getSeconds());
+                NativeUtil.setLong(ptr, nsecOffset, duration.getNano());
                 return new Timeout(Integer.MIN_VALUE, ptr);
             }
-            default -> throw new FrameworkException(ExceptionType.NATIVE, "Unrecognized operating system");
+            case null, default -> throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED);
         }
     }
 }

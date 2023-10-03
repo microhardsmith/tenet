@@ -9,18 +9,29 @@ public class LogTest {
     private static final Logger log = new Logger(LogTest.class);
 
     @Test
-    public void testConsoleLog() throws InterruptedException {
+    public void testShutdownHook() {
+        Runtime.getRuntime().addShutdownHook(Thread.ofPlatform().unstarted(() -> {
+            try {
+                Thread.sleep(1000L);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            System.out.println("shutdown");
+        }));
+    }
+
+    @Test
+    public void testConsoleLog() {
         Context.load(Wheel.wheel(), Wheel.class);
         Context.load(new LoggerConsumer(), LoggerConsumer.class);
         Context.init();
         for(int i = Constants.ZERO; i < Constants.KB; i++) {
             log.info(STR."hello , \{i}");
         }
-        Thread.sleep(1000L);
     }
 
     @Test
-    public void testFileLog() throws InterruptedException {
+    public void testFileLog() {
         Context.load(Wheel.wheel(), Wheel.class);
         LogConfig logConfig = new LogConfig();
         logConfig.setFile(new FileLogConfig());
@@ -29,11 +40,10 @@ public class LogTest {
         for(int i = Constants.ZERO; i < Constants.KB; i++) {
             log.info(STR."hello , \{i}");
         }
-        Thread.sleep(1000L);
     }
 
     @Test
-    public void testSqliteLog() throws InterruptedException {
+    public void testSqliteLog() {
         Context.load(Wheel.wheel(), Wheel.class);
         LogConfig logConfig = new LogConfig();
         logConfig.setSqlite(new SqliteLogConfig());
@@ -42,6 +52,5 @@ public class LogTest {
         for(int i = Constants.ZERO; i < Constants.KB; i++) {
             log.info(STR."hello , \{i}");
         }
-        Thread.sleep(1000L);
     }
 }

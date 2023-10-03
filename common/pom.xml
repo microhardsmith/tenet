@@ -9,17 +9,12 @@
     <artifactId>tenet-common</artifactId>
     <packaging>jar</packaging>
 
-    <properties>
-
-    </properties>
-
     <dependencies>
         <dependency>
-            <groupId>org.jctools</groupId>
+            <groupId>com.github.JCTools.JCTools</groupId>
             <artifactId>jctools-core</artifactId>
             <version>${jctools.version}</version>
         </dependency>
-
     </dependencies>
 
     <build>

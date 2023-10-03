@@ -2,7 +2,8 @@ package cn.zorcc.common.wheel;
 
 import cn.zorcc.common.LifeCycle;
 
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
+import java.util.function.LongConsumer;
 
 public sealed interface Wheel extends LifeCycle permits WheelImpl {
     /**
@@ -19,13 +20,11 @@ public sealed interface Wheel extends LifeCycle permits WheelImpl {
         return WheelImpl.instance;
     }
 
-    /**
-     * 添加定时任务
-     */
-    Job addJob(Runnable job, long delay, TimeUnit timeUnit);
+    Job addJob(Runnable job, Duration delay);
 
-    /**
-     * 添加周期性定时任务
-     */
-    Job addPeriodicJob(Runnable job, long delay, long periodDelay, TimeUnit timeUnit);
+    Job addPeriodicJob(Runnable job, Duration delay, Duration period);
+
+    Job addJob(LongConsumer job, Duration delay);
+
+    Job addPeriodicJob(LongConsumer job, Duration delay, Duration period);
 }

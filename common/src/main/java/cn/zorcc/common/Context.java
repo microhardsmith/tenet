@@ -7,8 +7,8 @@ import cn.zorcc.common.util.ThreadUtil;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.RuntimeMXBean;
+import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -30,21 +30,26 @@ public final class Context {
         String[] pidAndDevice = runtimeMXBean.getName().split("@");
         log.info(STR."Process running with Pid: \{pidAndDevice[Constants.ZERO]} on Device: \{pidAndDevice[Constants.ONE]}");
         List<LifeCycle> temp = new ArrayList<>();
+        boolean success = true;
         lock.lock();
         try{
             cycles.forEach(c -> {
                 c.init();
                 temp.add(c);
             });
-            Runtime.getRuntime().addShutdownHook(ThreadUtil.virtual("Exit", () -> cycles.reversed().forEach(LifeCycle::UninterruptibleExit)));
         }catch (FrameworkException e) {
             log.error("Err caught when initializing container, exiting application now", e);
             temp.reversed().forEach(LifeCycle::UninterruptibleExit);
-            System.exit(Constants.ONE);
+            success = false;
         }finally {
             lock.unlock();
         }
-        log.info(STR."Tenet application started in \{ TimeUnit.NANOSECONDS.toMillis(Clock.elapsed(nano))} ms, JVM running for \{runtimeMXBean.getUptime()} ms");
+        if(success) {
+            Runtime.getRuntime().addShutdownHook(ThreadUtil.platform("Exit", () -> cycles.reversed().forEach(LifeCycle::UninterruptibleExit)));
+        }else {
+            System.exit(Constants.ONE);
+        }
+        log.info(STR."Tenet application started in \{ Duration.ofNanos(Clock.elapsed(nano)).toMillis()} ms, JVM running for \{runtimeMXBean.getUptime()} ms");
     }
 
     public static <T> void load(T target, Class<T> type) {

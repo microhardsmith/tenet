@@ -12,11 +12,11 @@ import java.lang.foreign.MemorySegment;
  */
 public class TcpConnector implements Connector {
     private static final Logger log = new Logger(TcpConnector.class);
-    private static final Native n = Native.n;
+    private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
 
     @Override
     public void doClose(Acceptor acceptor) {
-        n.closeSocket(acceptor.socket());
+        osNetworkLibrary.closeSocket(acceptor.socket());
     }
 
     @Override
@@ -26,7 +26,7 @@ public class TcpConnector implements Connector {
 
     @Override
     public void canWrite(Acceptor acceptor) {
-        int errOpt = n.getErrOpt(acceptor.socket());
+        int errOpt = osNetworkLibrary.getErrOpt(acceptor.socket());
         if(errOpt == Constants.ZERO) {
             acceptor.toChannel(new TcpProtocol());
         }else {

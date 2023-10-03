@@ -12,7 +12,6 @@ import java.nio.charset.StandardCharsets;
 
 public class PgEncoder implements Encoder {
 
-    @SuppressWarnings("unused")
     @Override
     public WriteBuffer encode(WriteBuffer writeBuffer, Object o) {
         switch (o) {

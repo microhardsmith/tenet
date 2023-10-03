@@ -11,6 +11,7 @@ import cn.zorcc.common.pojo.Loc;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -19,8 +20,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class Channel implements Actor {
     private static final Logger log = new Logger(Channel.class);
-    private static final Native n = Native.n;
-    private final int hashcode;
+    private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
+    private static final Duration defaultShutdownDuration = Duration.ofSeconds(5);
     private final Socket socket;
     private final AtomicInteger state;
     private final Encoder encoder;
@@ -37,8 +38,7 @@ public final class Channel implements Actor {
      */
     private WriteBuffer tempBuffer;
 
-    public Channel(int hashcode, Socket socket, AtomicInteger state, Encoder e, Decoder d, Handler h, Protocol protocol, Loc loc, Worker worker) {
-        this.hashcode = hashcode;
+    public Channel(Socket socket, AtomicInteger state, Encoder e, Decoder d, Handler h, Protocol protocol, Loc loc, Worker worker) {
         this.socket = socket;
         this.state = state;
         this.encoder = e;
@@ -51,7 +51,7 @@ public final class Channel implements Actor {
 
     @Override
     public int hashCode() {
-        return hashcode;
+        return socket.intValue();
     }
 
     public Socket socket() {
@@ -93,8 +93,8 @@ public final class Channel implements Actor {
     }
 
     @Override
-    public void canShutdown(Shutdown shutdown) {
-        shutdown(shutdown);
+    public void canShutdown(Duration duration) {
+        shutdown(duration);
     }
 
     /**
@@ -162,16 +162,16 @@ public final class Channel implements Actor {
      *   in fact, socket will only be closed when worker thread recv EOF from remote peer
      *   Calling shutdown for multiple times doesn't matter since writerThread will exit when handling the first shutdown signal
      */
-    public void shutdown(Shutdown shutdown) {
+    public void shutdown(Duration duration) {
         handler.onShutdown(this);
-        worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.SHUTDOWN, this, shutdown, null));
+        worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.SHUTDOWN, this, duration, null));
     }
 
     /**
      *   Shutdown with default timeout configuration
      */
     public void shutdown() {
-        shutdown(Shutdown.DEFAULT);
+        shutdown(defaultShutdownDuration);
     }
 
     /**
@@ -182,12 +182,12 @@ public final class Channel implements Actor {
             throw new FrameworkException(ExceptionType.NETWORK, "Not in worker thread");
         }
         // make sure the channel could only be removed once
-        if(worker.socketMap().remove(socket, this)) {
+        if(worker.unregister(socket, this)) {
             // Force close the sender instance
             worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.REMOVE, this, null, null));
-            int current = state.getAndSet(Native.REGISTER_NONE);
-            if(current > Native.REGISTER_NONE) {
-                n.ctl(worker.mux(), socket, current, Native.REGISTER_NONE);
+            int current = state.getAndSet(OsNetworkLibrary.REGISTER_NONE);
+            if(current > OsNetworkLibrary.REGISTER_NONE) {
+                osNetworkLibrary.ctl(worker.mux(), socket, current, OsNetworkLibrary.REGISTER_NONE);
             }
             protocol.doClose(this);
             handler.onRemoved(this);

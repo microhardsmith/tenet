@@ -8,10 +8,10 @@ import cn.zorcc.common.util.ConfigUtil;
 import cn.zorcc.common.util.ThreadUtil;
 import cn.zorcc.common.wheel.Wheel;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TransferQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -35,19 +35,19 @@ public final class LoggerConsumer extends AbstractLifeCycle {
     }
 
     private static Thread createConsumerThread(LogConfig logConfig) {
-        return ThreadUtil.platform("log", () -> {
+        return ThreadUtil.platform("tenet-log", () -> {
             List<Consumer<LogEvent>> handlers = createEventHandlerList(logConfig);
             TransferQueue<LogEvent> queue = Logger.queue();
             Wheel.wheel().addPeriodicJob(() -> {
-                if (!queue.offer(LogEvent.flushEvent)) {
+                if (!queue.offer(LogEvent.FLUSH_EVENT)) {
                     throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED);
                 }
-            }, Constants.ZERO, logConfig.getFlushInterval(), TimeUnit.MILLISECONDS);
+            }, Duration.ZERO, Duration.ofMillis(logConfig.getFlushInterval()));
             try{
                 for( ; ; ){
                     final LogEvent logEvent = queue.take();
                     handlers.forEach(consumer -> consumer.accept(logEvent));
-                    if(logEvent == LogEvent.shutdownEvent) {
+                    if(logEvent == LogEvent.SHUTDOWN_EVENT) {
                         break;
                     }
                 }
@@ -81,7 +81,7 @@ public final class LoggerConsumer extends AbstractLifeCycle {
 
     @Override
     public void doExit() throws InterruptedException {
-        if (!Logger.queue().offer(LogEvent.shutdownEvent)) {
+        if (!Logger.queue().offer(LogEvent.SHUTDOWN_EVENT)) {
             throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED);
         }
         consumerThread.join();

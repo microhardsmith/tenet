@@ -6,6 +6,7 @@ import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.pojo.Loc;
 
 import java.lang.foreign.MemorySegment;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -17,9 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   The acceptor must only be accessed in the worker's reader thread, acceptor will never touch worker's writer thread
  */
 public final class Acceptor implements Actor {
-    private static final Native n = Native.n;
-    private static final AtomicInteger hashcodeGenerator = new AtomicInteger(Constants.ZERO);
-    private final int hashcode = hashcodeGenerator.getAndIncrement();
+    private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
     private final Socket socket;
     private final Encoder encoder;
     private final Decoder decoder;
@@ -27,7 +26,7 @@ public final class Acceptor implements Actor {
     private final Connector connector;
     private final Worker worker;
     private final Loc loc;
-    private final AtomicInteger state = new AtomicInteger(Native.REGISTER_NONE);
+    private final AtomicInteger state = new AtomicInteger(OsNetworkLibrary.REGISTER_NONE);
 
     public Acceptor(Socket socket, Encoder encoder, Decoder decoder, Handler handler, Connector connector, Worker worker, Loc loc) {
         this.socket = socket;
@@ -39,16 +38,13 @@ public final class Acceptor implements Actor {
         this.loc = loc;
     }
 
-    public int hashcode() {
-        return hashcode;
+    @Override
+    public int hashCode() {
+        return socket.intValue();
     }
 
     public Socket socket() {
         return socket;
-    }
-
-    public Connector connector() {
-        return connector;
     }
 
     public Worker worker() {
@@ -69,8 +65,11 @@ public final class Acceptor implements Actor {
         connector.canWrite(this);
     }
 
+    /**
+     *   The actual parameter of duration were ignored since acceptor will always close instantly when shutdown
+     */
     @Override
-    public void canShutdown(Shutdown shutdown) {
+    public void canShutdown(Duration duration) {
         close();
     }
 
@@ -80,16 +79,14 @@ public final class Acceptor implements Actor {
      */
     public void toChannel(Protocol protocol) {
         if(Thread.currentThread() != worker.reader()) {
-            throw new FrameworkException(ExceptionType.NETWORK, "Not in worker thread");
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
-        Channel channel = new Channel(hashcode, socket, state, encoder, decoder, handler, protocol, loc, worker);
-        if (worker.socketMap().put(socket, channel) != this) {
-            throw new FrameworkException(ExceptionType.NETWORK, "Corrupted state");
-        }
+        Channel channel = new Channel(socket, state, encoder, decoder, handler, protocol, loc, worker);
+        worker.replace(socket, channel);
         worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.INITIATE, channel, null, null));
-        int from = state.getAndSet(Native.REGISTER_READ);
-        if(from != Native.REGISTER_READ) {
-            n.ctl(worker.mux(), socket, from, Native.REGISTER_READ);
+        int from = state.getAndSet(OsNetworkLibrary.REGISTER_READ);
+        if(from != OsNetworkLibrary.REGISTER_READ) {
+            osNetworkLibrary.ctl(worker.mux(), socket, from, OsNetworkLibrary.REGISTER_READ);
         }
         handler.onConnected(channel);
     }
@@ -100,12 +97,12 @@ public final class Acceptor implements Actor {
      */
     public void close() {
         if(Thread.currentThread() != worker.reader()) {
-            throw new FrameworkException(ExceptionType.NETWORK, "Not in worker thread");
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
-        if(worker.socketMap().remove(socket, this)) {
-            int current = state.getAndSet(Native.REGISTER_NONE);
-            if(current > Native.REGISTER_NONE) {
-                n.ctl(worker.mux(), socket, current, Native.REGISTER_NONE);
+        if(worker.unregister(socket, this)) {
+            int current = state.getAndSet(OsNetworkLibrary.REGISTER_NONE);
+            if(current > OsNetworkLibrary.REGISTER_NONE) {
+                osNetworkLibrary.ctl(worker.mux(), socket, current, OsNetworkLibrary.REGISTER_NONE);
             }
             connector.doClose(this);
             if (worker.counter().decrementAndGet() == Constants.ZERO) {

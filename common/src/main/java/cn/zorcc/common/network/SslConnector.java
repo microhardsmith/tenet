@@ -12,9 +12,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  *   Connector using SSL encryption
  */
-public class SslConnector implements Connector {
+public final class SslConnector implements Connector {
     private static final Logger log = new Logger(SslConnector.class);
-    private static final Native n = Native.n;
+    private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
     private static final int INITIAL = 0;
     private static final int WANT_READ = 1;
     private static final int WANT_WRITE = 2;
@@ -30,14 +30,14 @@ public class SslConnector implements Connector {
     @Override
     public void doClose(Acceptor acceptor) {
         SslBinding.sslFree(ssl);
-        n.closeSocket(acceptor.socket());
+        osNetworkLibrary.closeSocket(acceptor.socket());
     }
 
     @Override
     public void canRead(Acceptor acceptor, MemorySegment buffer) {
         int currentStatus = status.get();
         if (currentStatus == WANT_READ) {
-            unregisterState(acceptor, Native.REGISTER_READ);
+            unregisterState(acceptor, OsNetworkLibrary.REGISTER_READ);
             doHandshake(acceptor);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -48,9 +48,9 @@ public class SslConnector implements Connector {
     public void canWrite(Acceptor acceptor) {
         int currentStatus = status.get();
         if (currentStatus == INITIAL) {
-            unregisterState(acceptor, Native.REGISTER_WRITE);
+            unregisterState(acceptor, OsNetworkLibrary.REGISTER_WRITE);
             Socket socket = acceptor.socket();
-            int errOpt = n.getErrOpt(acceptor.socket());
+            int errOpt = osNetworkLibrary.getErrOpt(acceptor.socket());
             if(errOpt == 0) {
                 int r = SslBinding.sslSetFd(ssl, socket.intValue());
                 if(r == 1) {
@@ -60,11 +60,11 @@ public class SslConnector implements Connector {
                     acceptor.close();
                 }
             }else {
-                log.error(STR."Failed to establish ssl connection, errno : \{n.errno()}");
+                log.error(STR."Failed to establish ssl connection, errno : \{ osNetworkLibrary.errno()}");
                 acceptor.close();
             }
         }else if (currentStatus == WANT_WRITE) {
-            unregisterState(acceptor, Native.REGISTER_WRITE);
+            unregisterState(acceptor, OsNetworkLibrary.REGISTER_WRITE);
             doHandshake(acceptor);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -77,7 +77,7 @@ public class SslConnector implements Connector {
     private static void registerState(Acceptor acceptor, int val) {
         int current = acceptor.state().getAndUpdate(i -> (i & val) == 0 ? i + val : i);
         if((current & val) == 0) {
-            n.ctl(acceptor.worker().mux(), acceptor.socket(), current, current + val);
+            osNetworkLibrary.ctl(acceptor.worker().mux(), acceptor.socket(), current, current + val);
         }
     }
 
@@ -87,7 +87,7 @@ public class SslConnector implements Connector {
     private static void unregisterState(Acceptor acceptor, int val) {
         int current = acceptor.state().getAndUpdate(i -> (i & val) != 0 ? i - val : i);
         if((current & val) != 0) {
-            n.ctl(acceptor.worker().mux(), acceptor.socket(), current, current - val);
+            osNetworkLibrary.ctl(acceptor.worker().mux(), acceptor.socket(), current, current - val);
         }
     }
 
@@ -102,10 +102,10 @@ public class SslConnector implements Connector {
             int err = SslBinding.sslGetErr(ssl, r);
             if(err == Constants.SSL_ERROR_WANT_READ) {
                 status.set(WANT_READ);
-                registerState(acceptor, Native.REGISTER_READ);
+                registerState(acceptor, OsNetworkLibrary.REGISTER_READ);
             }else if(err == Constants.SSL_ERROR_WANT_WRITE) {
                 status.set(WANT_WRITE);
-                registerState(acceptor, Native.REGISTER_WRITE);
+                registerState(acceptor, OsNetworkLibrary.REGISTER_WRITE);
             }else {
                 log.error(STR."Failed to perform ssl handshake, ssl err : \{err}");
                 acceptor.close();

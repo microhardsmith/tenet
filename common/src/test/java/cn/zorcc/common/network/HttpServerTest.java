@@ -7,6 +7,7 @@ import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.http.*;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.log.LoggerConsumer;
+import cn.zorcc.common.pojo.IpType;
 import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.CompressUtil;
 import cn.zorcc.common.wheel.Wheel;
@@ -17,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -24,8 +26,9 @@ import java.util.zip.Deflater;
 
 public class HttpServerTest {
     private static final Logger log = new Logger(HttpServerTest.class);
-    private static final Loc HTTP_LOC = new Loc("0.0.0.0", 80);
-    private static final Loc HTTPS_LOC = new Loc("0.0.0.0", 443);
+    private static final Loc HTTP_LOC = new Loc(IpType.IPV4, "0.0.0.0", 80);
+    private static final Loc HTTPS_LOC = new Loc(IpType.IPV6, "0.0.0.0", 443);
+    private static final int WORKER_COUNT = 4;
     private static final String PUBLIC_KEY_FILE = "/Users/liuxichen/workspace/ca/server.crt";
     private static final String PRIVATE_KEY_FILE = "/Users/liuxichen/workspace/ca/server.key";
     @Test
@@ -53,43 +56,39 @@ public class HttpServerTest {
     }
 
     public static Net createHttpNet() {
-        NetworkConfig networkConfig = new NetworkConfig();
-        Net net = new Net(networkConfig);
-        MuxConfig muxConfig = new MuxConfig();
-        net.addMaster(HttpServerEncoder::new, HttpServerDecoder::new, HttpTestHandler::new, TcpConnector::new, HTTP_LOC, muxConfig);
-        for(int i = 0; i < 4; i++) {
-            net.addWorker(networkConfig, muxConfig);
-        }
-        return net;
+        MasterConfig httpMasterConfig = new MasterConfig();
+        httpMasterConfig.setEncoderSupplier(HttpServerEncoder::new);
+        httpMasterConfig.setDecoderSupplier(HttpServerDecoder::new);
+        httpMasterConfig.setHandlerSupplier(HttpTestHandler::new);
+        httpMasterConfig.setProvider(Net.tcpProvider());
+        httpMasterConfig.setLoc(HTTP_LOC);
+        return new Net(httpMasterConfig, WORKER_COUNT);
     }
 
     public static Net createHttpsNet() {
-        NetworkConfig networkConfig = new NetworkConfig();
-        networkConfig.setEnableSsl(true);
-        networkConfig.setPublicKeyFile(PUBLIC_KEY_FILE);
-        networkConfig.setPrivateKeyFile(PRIVATE_KEY_FILE);
-        Net net = new Net(networkConfig);
-        MuxConfig muxConfig = new MuxConfig();
-        net.addMaster(HttpServerEncoder::new, HttpServerDecoder::new, HttpTestHandler::new, net.sslServerConnectorSupplier(), HTTPS_LOC, muxConfig);
-        for(int i = 0; i < 4; i++) {
-            net.addWorker(networkConfig, muxConfig);
-        }
-        return net;
+        MasterConfig httpsMasterConfig = new MasterConfig();
+        httpsMasterConfig.setEncoderSupplier(HttpServerEncoder::new);
+        httpsMasterConfig.setDecoderSupplier(HttpServerDecoder::new);
+        httpsMasterConfig.setHandlerSupplier(HttpTestHandler::new);
+        httpsMasterConfig.setProvider(SslProvider.newServerProvider(PUBLIC_KEY_FILE, PRIVATE_KEY_FILE));
+        httpsMasterConfig.setLoc(HTTPS_LOC);
+        return new Net(httpsMasterConfig, WORKER_COUNT);
     }
 
     public static Net createHttpAndHttpsNet() {
-        NetworkConfig networkConfig = new NetworkConfig();
-        networkConfig.setEnableSsl(true);
-        networkConfig.setPublicKeyFile(PUBLIC_KEY_FILE);
-        networkConfig.setPrivateKeyFile(PRIVATE_KEY_FILE);
-        Net net = new Net(networkConfig);
-        MuxConfig muxConfig = new MuxConfig();
-        net.addMaster(HttpServerEncoder::new, HttpServerDecoder::new, HttpTestHandler::new, TcpConnector::new, HTTP_LOC, muxConfig);
-        net.addMaster(HttpServerEncoder::new, HttpServerDecoder::new, HttpTestHandler::new, net.sslServerConnectorSupplier(), HTTPS_LOC, muxConfig);
-        for(int i = 0; i < 4; i++) {
-            net.addWorker(networkConfig, muxConfig);
-        }
-        return net;
+        MasterConfig httpMasterConfig = new MasterConfig();
+        httpMasterConfig.setEncoderSupplier(HttpServerEncoder::new);
+        httpMasterConfig.setDecoderSupplier(HttpServerDecoder::new);
+        httpMasterConfig.setHandlerSupplier(HttpTestHandler::new);
+        httpMasterConfig.setProvider(Net.tcpProvider());
+        httpMasterConfig.setLoc(HTTP_LOC);
+        MasterConfig httpsMasterConfig = new MasterConfig();
+        httpsMasterConfig.setEncoderSupplier(HttpServerEncoder::new);
+        httpsMasterConfig.setDecoderSupplier(HttpServerDecoder::new);
+        httpsMasterConfig.setHandlerSupplier(HttpTestHandler::new);
+        httpsMasterConfig.setProvider(SslProvider.newServerProvider(PUBLIC_KEY_FILE, PRIVATE_KEY_FILE));
+        httpsMasterConfig.setLoc(HTTPS_LOC);
+        return new Net(List.of(httpMasterConfig, httpsMasterConfig), WORKER_COUNT);
     }
 
     private static class HttpTestHandler implements Handler {

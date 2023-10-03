@@ -1,6 +1,7 @@
 package cn.zorcc.common.network;
 
 import java.lang.foreign.MemorySegment;
+import java.time.Duration;
 
 public sealed interface Actor permits Acceptor, Channel {
     /**
@@ -16,5 +17,5 @@ public sealed interface Actor permits Acceptor, Channel {
     /**
      *   Indicating that current actor could perform shutdown operation
      */
-    void canShutdown(Shutdown shutdown);
+    void canShutdown(Duration duration);
 }

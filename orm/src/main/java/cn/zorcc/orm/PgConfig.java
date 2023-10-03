@@ -1,12 +1,13 @@
 package cn.zorcc.orm;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.pojo.IpType;
 import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.orm.core.PgConstants;
 
 public class PgConfig {
-    private static final Loc DEFAULT_LOC = new Loc("127.0.0.1", 5432);
+    private static final Loc DEFAULT_LOC = new Loc(IpType.IPV4, "127.0.0.1", 5432);
     /**
      * 数据库地址
      */

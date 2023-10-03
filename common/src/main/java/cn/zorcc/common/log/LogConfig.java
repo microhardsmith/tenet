@@ -1,20 +1,11 @@
 package cn.zorcc.common.log;
 
 public final class LogConfig {
-    private String level = "INFO";
     private long flushInterval = 200L;
     private String logFormat = "{time} {level} [{threadName}] {className} - {msg}";
     private ConsoleLogConfig console = new ConsoleLogConfig();
     private FileLogConfig file;
     private SqliteLogConfig sqlite;
-
-    public String getLevel() {
-        return level;
-    }
-
-    public void setLevel(String level) {
-        this.level = level;
-    }
 
     public long getFlushInterval() {
         return flushInterval;

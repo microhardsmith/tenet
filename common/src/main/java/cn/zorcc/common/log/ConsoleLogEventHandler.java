@@ -21,6 +21,7 @@ import java.util.function.Consumer;
  *      PrintTest.testSystemOut    avgt   25  2758.746 ± 108.389  ns/op
  */
 public final class ConsoleLogEventHandler implements Consumer<LogEvent> {
+    private static final long BUFFER_SIZE = 16 * Constants.KB;
     private final List<LogHandler> handlers;
     private final List<LogEvent> eventList = new ArrayList<>();
     private final int flushThreshold;
@@ -63,8 +64,8 @@ public final class ConsoleLogEventHandler implements Consumer<LogEvent> {
 
     private void flush() {
         if(!eventList.isEmpty()) {
-            try(WriteBuffer outBuffer = WriteBuffer.newDefaultWriteBuffer(Arena.ofConfined(), 16 * Constants.KB);
-                WriteBuffer errBuffer = WriteBuffer.newDefaultWriteBuffer(Arena.ofConfined(), 4 * Constants.KB)) {
+            try(WriteBuffer outBuffer = WriteBuffer.newDefaultWriteBuffer(Arena.ofConfined(), BUFFER_SIZE);
+                WriteBuffer errBuffer = WriteBuffer.newDefaultWriteBuffer(Arena.ofConfined(), BUFFER_SIZE)) {
                 for (LogEvent event : eventList) {
                     handlers.forEach(logHandler -> logHandler.process(outBuffer, event));
                     if(event.throwable() != null) {

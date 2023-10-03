@@ -11,8 +11,10 @@ import cn.zorcc.common.wheel.Wheel;
 import org.jctools.queues.atomic.MpscUnboundedAtomicArrayQueue;
 
 import java.lang.foreign.Arena;
+import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TransferQueue;
@@ -23,39 +25,26 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class Worker {
     private static final Logger log = new Logger(Worker.class);
-    private final Native n = Native.n;
-    /**
-     *   RUNNING -> CLOSING -> STOPPED
-     */
+    private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
     private static final int RUNNING = 1;
     private static final int CLOSING = 2;
     private static final int STOPPED = 3;
-    /**
-     *   Representing the number of connections mounted on current worker instance
-     *   This field might be optimized to normal long since it's only accessed by reader thread, AtomicLong is more secure however
-     */
     private final AtomicLong counter = new AtomicLong(Constants.ZERO);
-    private final NetworkConfig networkConfig;
-    private final MuxConfig muxConfig;
-    private final int sequence;
     private final Mux mux;
-    private final Map<Socket, Actor> socketMap;
+    private final ActorMap actorMap;
     private final Map<Channel, Sender> channelMap;
     private final Queue<ReaderTask> readerTaskQueue = new MpscUnboundedAtomicArrayQueue<>(Constants.QUEUE_SIZE);
     private final TransferQueue<WriterTask> writerTaskQueue = new LinkedTransferQueue<>();
     private final Thread reader;
     private final Thread writer;
 
-    public Worker(NetworkConfig networkConfig, MuxConfig muxConfig, int sequence) {
-        this.networkConfig = networkConfig;
-        this.muxConfig = muxConfig;
-        this.sequence = sequence;
-        this.mux = n.createMux();
-        final int mapSize = networkConfig.getMapSize();
-        this.socketMap = new HashMap<>(mapSize);
+    public Worker(WorkerConfig workerConfig, int sequence) {
+        this.mux = osNetworkLibrary.createMux();
+        final int mapSize = workerConfig.getMapSize();
+        this.actorMap = new ActorMap(mapSize);
         this.channelMap = new HashMap<>(mapSize);
-        this.reader = createReaderThread();
-        this.writer = createWriterThread();
+        this.reader = createReaderThread(mux, workerConfig, sequence);
+        this.writer = createWriterThread(workerConfig, sequence);
     }
 
     public Thread reader() {
@@ -70,8 +59,16 @@ public final class Worker {
         return mux;
     }
 
-    public Map<Socket, Actor> socketMap() {
-        return socketMap;
+    private void register(Socket socket, Actor actor) {
+        actorMap.put(socket.intValue(), actor);
+    }
+
+    public void replace(Socket socket, Actor actor) {
+        actorMap.replace(socket.intValue(), actor);
+    }
+
+    public boolean unregister(Socket socket, Actor actor) {
+        return actorMap.remove(socket.intValue(), actor);
     }
 
     public AtomicLong counter() {
@@ -92,42 +89,56 @@ public final class Worker {
 
     /**
      *   Create worker's reader thread
+     *   The reusableSocket mechanism was only provided to reduce the allocation pressure, so we don't have to allocate a Socket object each round
      */
-    private Thread createReaderThread() {
-        final long readBufferSize = networkConfig.getReadBufferSize();
-        final int maxEvents = muxConfig.getMaxEvents();
+    private Thread createReaderThread(Mux mux, WorkerConfig workerConfig, int sequence) {
+        final long readBufferSize = workerConfig.getReadBufferSize();
+        final int maxEvents = workerConfig.getMaxEvents();
+        final int muxTimeout = workerConfig.getMuxTimeout();
         return ThreadUtil.platform("Worker-r-" + sequence, () -> {
             log.debug(STR."Initializing Net worker's reader, sequence : \{sequence}");
             try(Arena arena = Arena.ofConfined()) {
                 int state = RUNNING;
-                Timeout timeout = Timeout.of(arena, muxConfig.getMuxTimeout());
-                MemorySegment events = n.createEventsArray(muxConfig, arena);
+                Timeout timeout = Timeout.of(arena, muxTimeout);
+                MemorySegment events = arena.allocate(MemoryLayout.sequenceLayout(maxEvents, osNetworkLibrary.eventLayout()));
                 MemorySegment[] bufArray = new MemorySegment[maxEvents];
                 for (int i = Constants.ZERO; i < bufArray.length; i++) {
                     bufArray[i] = arena.allocateArray(ValueLayout.JAVA_BYTE, readBufferSize);
                 }
                 for( ; ; ) {
-                    final int count = n.multiplexingWait(mux, events, maxEvents, timeout);
+                    final int count = osNetworkLibrary.muxWait(mux, events, maxEvents, timeout);
                     if(count < Constants.ZERO) {
-                        int errno = n.errno();
-                        if(errno == n.interruptCode()) {
+                        int errno = osNetworkLibrary.errno();
+                        if(errno == osNetworkLibrary.interruptCode()) {
                             continue;
                         }else {
                             throw new FrameworkException(ExceptionType.NETWORK, "Multiplexing wait failed with errno : %d".formatted(errno));
                         }
                     }
                     state = processReaderTasks(state);
-                    if(state < Constants.ZERO) {
+                    if(state == STOPPED) {
                         break ;
                     }
                     for(int index = Constants.ZERO; index < count; index++) {
                         MemorySegment buffer = bufArray[index];
-                        n.waitForData(socketMap, buffer, events, index);
+                        long r = osNetworkLibrary.workerWait(buffer, events, index);
+                        int socket = (int) r;
+                        Actor actor = actorMap.get(socket);
+                        if(actor != null) {
+                            long event = r - socket;
+                            if(event == OsNetworkLibrary.W) {
+                                actor.canWrite();
+                            }else if(event == OsNetworkLibrary.R) {
+                                actor.canRead(buffer);
+                            }else {
+                                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+                            }
+                        }
                     }
                 }
             }finally {
                 log.debug(STR."Exiting Net reader, sequence : \{sequence}");
-                n.exitMux(mux);
+                osNetworkLibrary.exitMux(mux);
             }
         });
     }
@@ -143,9 +154,11 @@ public final class Worker {
             }
             switch (readerTask.type()) {
                 case ADD_ACCEPTOR -> {
-                    Acceptor acceptor = readerTask.acceptor();
-                    socketMap.put(acceptor.socket(), acceptor);
-                    counter.getAndIncrement();
+                    if(currentState == RUNNING) {
+                        Acceptor acceptor = readerTask.acceptor();
+                        register(acceptor.socket(), acceptor);
+                        counter.getAndIncrement();
+                    }
                 }
                 case CLOSE_ACCEPTOR -> readerTask.acceptor().close();
                 case CLOSE_CHANNEL -> readerTask.channel().close();
@@ -155,11 +168,9 @@ public final class Worker {
                             submitWriterTask(new WriterTask(WriterTask.WriterTaskType.EXIT, null, null, null));
                             return STOPPED;
                         }else {
-                            log.debug(STR."Net worker awaiting for termination,  sequence : \{sequence}, socket count : \{socketMap.size()}");
-                            socketMap.values().forEach(actor -> actor.canShutdown(readerTask.shutdown()));
+                            actorMap.toList().forEach(actor -> actor.canShutdown(readerTask.duration()));
+                            return CLOSING;
                         }
-                    }else {
-                        throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
                     }
                 }
                 case POSSIBLE_SHUTDOWN -> {
@@ -175,10 +186,10 @@ public final class Worker {
     /**
      *   Create worker's writer thread
      */
-    private Thread createWriterThread() {
+    private Thread createWriterThread(WorkerConfig workerConfig, int sequence) {
         return ThreadUtil.platform("Worker-w-" + sequence, () -> {
             log.debug(STR."Initializing Net worker's writer, sequence : \{sequence}");
-            final long writeBufferSize = networkConfig.getWriteBufferSize();
+            final long writeBufferSize = workerConfig.getWriteBufferSize();
             try(Arena arena = Arena.ofConfined()){
                 MemorySegment reservedSegment = arena.allocateArray(ValueLayout.JAVA_BYTE, writeBufferSize);
                 processWriterTasks(reservedSegment);
@@ -228,8 +239,8 @@ public final class Worker {
                 }
                 case SHUTDOWN -> {
                     Sender sender = channelMap.get(channel);
-                    if(sender != null && writerTask.msg() instanceof Shutdown shutdown) {
-                        sender.shutdown(channel, shutdown);
+                    if(sender != null && writerTask.msg() instanceof Duration duration) {
+                        sender.shutdown(channel, duration);
                     }
                 }
                 default -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -241,26 +252,14 @@ public final class Worker {
             WriteBuffer writeBuffer,
             WriterCallback callback
     ){
-        void release() {
-            writeBuffer.close();
-            if(callback != null) {
-                callback.onSuccess();
-            }
-        }
 
-        void fail() {
-            writeBuffer.close();
-            if(callback != null) {
-                callback.onFailure();
-            }
-        }
     }
     
     private final class Sender {
         /**
          *   Whether the sender has been shutdown, normally it's null, could exists when tempBuffer is not null
          */
-        private Shutdown shutdown;
+        private Duration duration;
         /**
          *   Tasks exist means current channel is not writable, incoming data should be wrapped into tasks list first, normally it's null
          */
@@ -301,12 +300,13 @@ public final class Worker {
 
         public void becomeWritable(Channel channel) {
             if(tasks != null) {
-                for (int i = 0; i < tasks.size(); i++) {
+                for (int i = Constants.ZERO; i < tasks.size(); i++) {
                     SenderTask st = tasks.get(i);
                     switch (channel.protocol().doWrite(channel, st.writeBuffer())) {
                         case SUCCESS -> {
                             // release local memory, invoking callback
-                            st.release();
+                            st.writeBuffer().close();
+                            Optional.ofNullable(st.callback()).ifPresent(WriterCallback::onSuccess);
                         }
                         case PENDING -> {
                             // writeBuffer has been truncated internally
@@ -317,34 +317,38 @@ public final class Worker {
                             channelMap.remove(channel);
                             submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, null, channel, null));
                             for(int j = i; j < tasks.size(); j++) {
-                                tasks.get(j).fail();
+                                SenderTask followingSt = tasks.get(j);
+                                followingSt.writeBuffer().close();
+                                Optional.ofNullable(followingSt.callback()).ifPresent(WriterCallback::onFailure);
                             }
+                            return ;
                         }
                     }
                 }
                 tasks = null;
-                if(shutdown != null) {
+                if(duration != null) {
                     // pending buffer has been flushed, do shutdown right now
-                    doShutdown(channel, shutdown);
+                    doShutdown(channel, duration);
                 }
             }
         }
 
-        public void shutdown(Channel channel, Shutdown s) {
+        public void shutdown(Channel channel, Duration d) {
             if(tasks == null) {
                 // current channel could be safely shutdown
-                doShutdown(channel, s);
-            }else if(shutdown == null){
+                doShutdown(channel, d);
+            }else if(duration == null){
                 // still have some underlying data to be transferred
-                this.shutdown = s;
+                this.duration = d;
             }
         }
 
         public void close(Channel channel) {
             channelMap.remove(channel);
             if(tasks != null) {
-                for (SenderTask task : tasks) {
-                    task.fail();
+                for (SenderTask st : tasks) {
+                    st.writeBuffer().close();
+                    Optional.ofNullable(st.callback()).ifPresent(WriterCallback::onFailure);
                 }
             }
         }
@@ -394,12 +398,12 @@ public final class Worker {
         /**
          *   Perform the actual shutdown operation, no longer receiving write tasks
          */
-        private void doShutdown(Channel channel, Shutdown s) {
+        private void doShutdown(Channel channel, Duration duration) {
             if (!channelMap.remove(channel, this)) {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
             channel.protocol().doShutdown(channel);
-            Wheel.wheel().addJob(() -> submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, null, channel, null)), s.timeout(), s.timeUnit());
+            Wheel.wheel().addJob(() -> submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, null, channel, null)), duration);
         }
     }
 }

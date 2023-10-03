@@ -12,7 +12,6 @@ import java.lang.invoke.VarHandle;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 
 /**
  *  Native Helper class for accessing native memory and methods
@@ -30,7 +29,7 @@ public final class NativeUtil {
      *   Current dynamic library path that tenet application will look up for
      */
     private static final String libPath = System.getProperty(Constants.TENET_LIBRARY_PATH);
-    private static final OsType osType;
+    private static final OsType osType = detectOsType();
     private static final int CPU_CORES = Runtime.getRuntime().availableProcessors();
     private static final Linker linker = Linker.nativeLinker();
     /**
@@ -47,23 +46,17 @@ public final class NativeUtil {
     private static final VarHandle shortHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_SHORT_UNALIGNED);
     private static final VarHandle intHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_INT_UNALIGNED);
     private static final VarHandle longHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_LONG_UNALIGNED);
-    private static final MemorySegment stdout;
-    private static final MemorySegment stderr;
+    private static final long I_MAX = Integer.MAX_VALUE;
+    private static final long I_MIN = Integer.MIN_VALUE;
 
-    static {
-        osType = detectOsType();
-        if(libPath == null || libPath.isEmpty()) {
-            throw new FrameworkException(ExceptionType.NATIVE, STR."\{Constants.TENET_LIBRARY_PATH} not found in environment variables");
+    /**
+     *  Safely cast long to int, throw a exception if overflow
+     */
+    public static int castInt(long l) {
+        if(l < I_MIN || l > I_MAX) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED);
         }
-        try{
-            SymbolLookup symbolLookup = NativeUtil.loadLibrary(Constants.TENET);
-            MethodHandle stdoutHandle = NativeUtil.methodHandle(symbolLookup, "get_stdout", FunctionDescriptor.of(ValueLayout.ADDRESS));
-            stdout = (MemorySegment) stdoutHandle.invokeExact();
-            MethodHandle stderrHandle = NativeUtil.methodHandle(symbolLookup, "get_stderr", FunctionDescriptor.of(ValueLayout.ADDRESS));
-            stderr = (MemorySegment) stderrHandle.invokeExact();
-        }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
-        }
+        return (int) l;
     }
 
     private static OsType detectOsType() {
@@ -82,6 +75,15 @@ public final class NativeUtil {
         throw new UnsupportedOperationException();
     }
 
+    private static final String IPV4_MAPPED_FORMAT = "::ffff:";
+    public static boolean isIpv4MappedIpv6Address(String ip) {
+        return ip.startsWith(IPV4_MAPPED_FORMAT);
+    }
+
+    public static String toIpv4Address(String ip) {
+        return ip.substring(IPV4_MAPPED_FORMAT.length());
+    }
+
     private static String getDynamicLibraryName(String identifier) {
         return switch (osType) {
             case Windows -> STR."lib\{identifier}.dll";
@@ -97,18 +99,6 @@ public final class NativeUtil {
 
     public static Arena autoArena() {
         return autoArena;
-    }
-
-    public static MemorySegment stdout() {
-        return stdout;
-    }
-
-    public static MemorySegment stderr() {
-        return stderr;
-    }
-
-    public static String osName() {
-        return osName;
     }
 
     public static OsType ostype() {
@@ -157,6 +147,10 @@ public final class NativeUtil {
         return memorySegment == null || memorySegment.address() == Constants.ZERO;
     }
 
+    public static byte toAsciiByte(int i) {
+        return (byte) (i + 48);
+    }
+
     public static byte getByte(MemorySegment memorySegment, long index) {
         return (byte) byteHandle.get(memorySegment, index);
     }
@@ -195,7 +189,7 @@ public final class NativeUtil {
      *   Usually this method is used to find a target separator in a sequence
      */
     public static boolean matches(MemorySegment m, long offset, byte[] bytes) {
-        for(int index = 0; index < bytes.length; index++) {
+        for(int index = Constants.ZERO; index < bytes.length; index++) {
             if (getByte(m, offset + index) != bytes[index]) {
                 return false;
             }
@@ -250,10 +244,5 @@ public final class NativeUtil {
             }
         }
         throw new FrameworkException(ExceptionType.NATIVE, "Not a valid C style string");
-    }
-
-    // TODO remove
-    public static MemorySegment accessPtr(MemorySegment pp, Arena arena, Consumer<MemorySegment> cleanup) {
-        return pp.get(ValueLayout.ADDRESS, Constants.ZERO).reinterpret(ValueLayout.ADDRESS.byteSize(), arena, cleanup);
     }
 }

@@ -1,11 +1,13 @@
 package cn.zorcc.common.network;
 
 
+import java.time.Duration;
+
 public record ReaderTask (
     ReaderTaskType type,
     Acceptor acceptor,
     Channel channel,
-    Shutdown shutdown
+    Duration duration
 ) {
     enum ReaderTaskType {
         ADD_ACCEPTOR,

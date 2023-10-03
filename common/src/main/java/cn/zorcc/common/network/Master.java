@@ -8,8 +8,8 @@ import cn.zorcc.common.pojo.Loc;
 import cn.zorcc.common.util.ThreadUtil;
 
 import java.lang.foreign.Arena;
+import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -19,87 +19,63 @@ import java.util.function.Supplier;
  */
 public final class Master {
     private static final Logger log = new Logger(Master.class);
-    private static final Native n = Native.n;
-    private final Supplier<Encoder> encoderSupplier;
-    private final Supplier<Decoder> decoderSupplier;
-    private final Supplier<Handler> handlerSupplier;
-    private final Supplier<Connector> connectorSupplier;
-    /**
-     *   In current implementation, a master will always be bounded to all the workers
-     */
-    private final List<Worker> workers;
-    private final Loc loc;
-    private final NetworkConfig networkConfig;
-    private final MuxConfig muxConfig;
-    private final int sequence;
-    private final Socket socket;
-    private final Mux mux;
+    private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
     private final Thread thread;
-    /**
-     *   To perform round-robin worker selection for each master instance
-     */
     private final AtomicInteger acceptCounter = new AtomicInteger(Constants.ZERO);
 
-    public Master(Supplier<Encoder> e, Supplier<Decoder> d, Supplier<Handler> h, Supplier<Connector> c,
-                  List<Worker> workers, Loc loc, NetworkConfig networkConfig, MuxConfig muxConfig, int sequence) {
-        this.encoderSupplier = e;
-        this.decoderSupplier = d;
-        this.handlerSupplier = h;
-        this.connectorSupplier = c;
-        this.workers = Collections.unmodifiableList(workers);
-        this.loc = loc;
-        this.networkConfig = networkConfig;
-        this.muxConfig = muxConfig;
-        this.sequence = sequence;
-        this.socket = n.createSocket();
-        n.configureSocket(networkConfig, socket);
-        this.mux = n.createMux();
-        this.thread = createMasterThread();
+    public Master(MasterConfig masterConfig, List<Worker> workers, int sequence) {
+        this.thread = createMasterThread(masterConfig, workers, sequence);
     }
 
-    private Thread createMasterThread() {
+    private Thread createMasterThread(MasterConfig masterConfig, List<Worker> workers, int sequence) {
         return ThreadUtil.platform("Master-" + sequence, () -> {
-            int maxEvents = muxConfig.getMaxEvents();
-            Thread currentThread = Thread.currentThread();
+            final Supplier<Encoder> encoderSupplier = masterConfig.getEncoderSupplier();
+            final Supplier<Decoder> decoderSupplier = masterConfig.getDecoderSupplier();
+            final Supplier<Handler> handlerSupplier = masterConfig.getHandlerSupplier();
+            final Provider provider = masterConfig.getProvider();
+            final Loc loc = masterConfig.getLoc();
+            final int maxEvents = masterConfig.getMaxEvents();
+            final int muxTimeout = masterConfig.getMuxTimeout();
+            final int backlog = masterConfig.getBacklog();
+            final Thread currentThread = Thread.currentThread();
+            final Socket socket = osNetworkLibrary.createSocket(loc);
+            osNetworkLibrary.configureServerSocket(socket, loc, masterConfig.getSocketOptions());
+            final Mux mux = osNetworkLibrary.createMux();
             try(Arena arena = Arena.ofConfined()){
                 log.debug(STR."Master start listening on port : \{loc.port()}, sequence : \{sequence}");
-                Timeout timeout = Timeout.of(arena, muxConfig.getMuxTimeout());
-                MemorySegment events = n.createEventsArray(muxConfig, arena);
-                n.bindAndListen(loc, muxConfig, socket);
-                n.ctl(mux, socket, Native.REGISTER_NONE, Native.REGISTER_READ);
+                Timeout timeout = Timeout.of(arena, muxTimeout);
+                MemorySegment events = arena.allocate(MemoryLayout.sequenceLayout(maxEvents, osNetworkLibrary.eventLayout()));
+                osNetworkLibrary.bindAndListen(socket, loc, backlog);
+                osNetworkLibrary.ctl(mux, socket, OsNetworkLibrary.REGISTER_NONE, OsNetworkLibrary.REGISTER_READ);
                 while (!currentThread.isInterrupted()) {
-                    int count = n.multiplexingWait(mux, events, maxEvents, timeout);
+                    int count = osNetworkLibrary.muxWait(mux, events, maxEvents, timeout);
                     if(count < Constants.ZERO) {
-                        int errno = n.errno();
-                        if(errno == n.interruptCode()) {
+                        int errno = osNetworkLibrary.errno();
+                        if(errno == osNetworkLibrary.interruptCode()) {
                             continue;
                         }else {
                             throw new FrameworkException(ExceptionType.NETWORK, STR."Multiplexing wait failed with errno : \{errno}");
                         }
                     }
-                    for(int index = 0; index < count; ++index) {
-                        ClientSocket clientSocket = n.waitForAccept(networkConfig, socket, events, index);
-                        Socket socket = clientSocket.socket();
-                        Loc loc = clientSocket.loc();
+                    for(int index = Constants.ZERO; index < count; ++index) {
+                        osNetworkLibrary.masterWait(socket, events, index);
+                        ClientSocket clientSocket = osNetworkLibrary.accept(masterConfig, loc, socket);
                         Worker worker = Net.chooseWorker(workers, acceptCounter);
                         Encoder encoder = encoderSupplier.get();
                         Decoder decoder = decoderSupplier.get();
                         Handler handler = handlerSupplier.get();
-                        Connector connector = connectorSupplier.get();
-                        Acceptor acceptor = new Acceptor(socket, encoder, decoder, handler, connector, worker, loc);
+                        Connector connector = provider.newConnector();
+                        Acceptor acceptor = new Acceptor(clientSocket.socket(), encoder, decoder, handler, connector, worker, clientSocket.loc());
                         Net.mount(acceptor);
                     }
                 }
             } finally {
                 log.debug(STR."Exiting Net master, sequence : \{sequence}");
-                n.exitMux(mux);
-                n.closeSocket(socket);
+                provider.close();
+                osNetworkLibrary.exitMux(mux);
+                osNetworkLibrary.closeSocket(socket);
             }
         });
-    }
-
-    public Loc loc() {
-        return loc;
     }
 
     public Thread thread() {
