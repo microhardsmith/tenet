@@ -3,8 +3,8 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.pojo.IpType;
-import cn.zorcc.common.pojo.Loc;
+import cn.zorcc.common.structure.IpType;
+import cn.zorcc.common.structure.Loc;
 import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.Arena;
@@ -88,7 +88,7 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
 
     private MemorySegment createIpv4SockAddr(Loc loc, Arena arena) {
         MemorySegment r = arena.allocate(ipv4AddressSize());
-        MemorySegment ip = loc.ip() == null ? NativeUtil.NULL_POINTER : NativeUtil.allocateStr(arena, loc.ip(), ipv4AddressLen());
+        MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? NativeUtil.NULL_POINTER : NativeUtil.allocateStr(arena, loc.ip(), ipv4AddressLen());
         if(checkInt(setIpv4SockAddr(r, ip, loc.shortPort()), "set ipv4 address") == Constants.ZERO) {
             throw new FrameworkException(ExceptionType.NETWORK, STR."Ipv4 address is not valid : \{loc.ip()}");
         }
@@ -97,7 +97,7 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
 
     private MemorySegment createIpv6SockAddr(Loc loc, Arena arena) {
         MemorySegment r = arena.allocate(ipv6AddressSize());
-        MemorySegment ip = loc.ip() == null ? NativeUtil.NULL_POINTER : NativeUtil.allocateStr(arena, loc.ip(), ipv6AddressLen());
+        MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? NativeUtil.NULL_POINTER : NativeUtil.allocateStr(arena, loc.ip(), ipv6AddressLen());
         if(checkInt(setIpv6SockAddr(r, ip, loc.shortPort()), "set ipv6 address") == Constants.ZERO) {
             throw new FrameworkException(ExceptionType.NETWORK, STR."Ipv6 address is not valid : \{loc.ip()}");
         }

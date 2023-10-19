@@ -46,6 +46,7 @@ public final class Context {
         }
         if(success) {
             Runtime.getRuntime().addShutdownHook(ThreadUtil.platform("Exit", () -> cycles.reversed().forEach(LifeCycle::UninterruptibleExit)));
+            contextListener.onStarted();
         }else {
             System.exit(Constants.ONE);
         }
@@ -67,6 +68,7 @@ public final class Context {
             if(target instanceof LifeCycle lifeCycle) {
                 cycles.add(lifeCycle);
             }
+            contextListener.onLoaded(target, type);
         }finally {
             lock.unlock();
         }
@@ -76,7 +78,7 @@ public final class Context {
     public static <T> T get(Class<T> type) {
         lock.lock();
         try{
-            Object o = containerMap.computeIfAbsent(type, t -> contextListener.onRequested(type));
+            Object o = containerMap.computeIfAbsent(type, contextListener::onRequested);
             if(o == null) {
                 throw new FrameworkException(ExceptionType.CONTEXT, STR."Unable to find target container : \{type.getName()}");
             }

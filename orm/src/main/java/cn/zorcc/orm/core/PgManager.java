@@ -6,7 +6,7 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.Net;
-import cn.zorcc.common.pojo.Loc;
+import cn.zorcc.common.structure.Loc;
 import cn.zorcc.orm.PgConfig;
 
 import java.util.concurrent.LinkedTransferQueue;

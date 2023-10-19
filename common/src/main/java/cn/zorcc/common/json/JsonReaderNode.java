@@ -100,7 +100,7 @@ public abstract class JsonReaderNode {
      *   Convert unicode to utf-8 bytes
      */
     public static void readUnicode(ReadBuffer readBuffer, WriteBuffer writeBuffer) {
-        if(!readBuffer.checkRemainingLength(4)) {
+        if(readBuffer.available() < 4) {
             throw new JsonParseException(readBuffer);
         }
         int data = Constants.ZERO;
@@ -158,7 +158,7 @@ public abstract class JsonReaderNode {
     }
 
     private static void readEscape(ReadBuffer readBuffer, WriteBuffer writeBuffer) {
-        if(!readBuffer.checkRemainingLength(Constants.ONE)) {
+        if(readBuffer.available() < 1) {
             throw new JsonParseException(readBuffer);
         }
         switch (readBuffer.readByte()) {
@@ -208,7 +208,7 @@ public abstract class JsonReaderNode {
      *   If first byte is 't', then the value could be true
      */
     public static void readFollowingTrueValue(ReadBuffer readBuffer) {
-        if (!readBuffer.checkRemainingLength(3)) {
+        if (readBuffer.available() < 3) {
             throw new JsonParseException(readBuffer);
         }
         byte b1 = readBuffer.readByte();
@@ -223,7 +223,7 @@ public abstract class JsonReaderNode {
      *   If first byte is 'f', then the value could be false
      */
     public static void readFollowingFalseValue(ReadBuffer readBuffer) {
-        if (!readBuffer.checkRemainingLength(4)) {
+        if (readBuffer.available() < 4) {
             throw new JsonParseException(readBuffer);
         }
         byte b1 = readBuffer.readByte();
@@ -239,7 +239,7 @@ public abstract class JsonReaderNode {
      *   If first byte is 'n', then the value could be null
      */
     public static void readFollowingNullValue(ReadBuffer readBuffer) {
-        if (!readBuffer.checkRemainingLength(3)) {
+        if (readBuffer.available() < 3) {
             throw new JsonParseException(readBuffer);
         }
         byte b1 = readBuffer.readByte();

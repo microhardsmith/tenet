@@ -6,9 +6,9 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.pojo.Loc;
+import cn.zorcc.common.structure.Loc;
+import cn.zorcc.common.structure.Wheel;
 import cn.zorcc.common.util.NativeUtil;
-import cn.zorcc.common.wheel.Wheel;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -146,7 +146,7 @@ public final class Net extends AbstractLifeCycle {
                 int errno = osNetworkLibrary.errno();
                 if (errno == osNetworkLibrary.connectBlockCode()) {
                     mount(acceptor);
-                    Wheel.wheel().addJob(() -> worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_ACCEPTOR, acceptor, null, null)), duration);
+                    Wheel.wheel().addJob(() -> worker.submitReaderTask(ReaderTask.createAddAcceptorTask(acceptor)), duration);
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to connect, errno : \{errno}");
                 }
@@ -171,7 +171,7 @@ public final class Net extends AbstractLifeCycle {
      *   Mount target acceptor to its worker thread for write events to happen
      */
     public static void mount(Acceptor acceptor) {
-        acceptor.worker().submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.ADD_ACCEPTOR, acceptor, null, null));
+        acceptor.worker().submitReaderTask(ReaderTask.createAddAcceptorTask(acceptor));
         if (acceptor.state().compareAndSet(OsNetworkLibrary.REGISTER_NONE, OsNetworkLibrary.REGISTER_WRITE)) {
             osNetworkLibrary.ctl(acceptor.worker().mux(), acceptor.socket(), OsNetworkLibrary.REGISTER_NONE, OsNetworkLibrary.REGISTER_WRITE);
         }else {
@@ -202,7 +202,7 @@ public final class Net extends AbstractLifeCycle {
                 master.thread().join();
             }
             for (Worker worker : workers) {
-                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.GRACEFUL_SHUTDOWN, null, null, DEFAULT_GRACEFUL_SHUTDOWN_DURATION));
+                worker.submitReaderTask(ReaderTask.createGracefulShutdownTask(DEFAULT_GRACEFUL_SHUTDOWN_DURATION));
             }
             for(Worker worker : workers) {
                 worker.reader().join();

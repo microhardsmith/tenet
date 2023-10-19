@@ -1,5 +1,6 @@
 package cn.zorcc.common.util;
 
+import cn.zorcc.common.binding.DeflateBinding;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -30,7 +31,7 @@ public class CompressionTest {
     public void testLibDeflateCompress() {
         byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
         MemorySegment m = MemorySegment.ofArray(str.getBytes(StandardCharsets.UTF_8));
-        MemorySegment compressed = CompressUtil.compressUsingDeflate(m, CompressUtil.LIBDEFLATE_FASTEST_LEVEL);
+        MemorySegment compressed = CompressUtil.compressUsingDeflate(m, DeflateBinding.LIBDEFLATE_FASTEST_LEVEL);
         MemorySegment decompressed = CompressUtil.decompressUsingDeflate(compressed);
         Assertions.assertArrayEquals(bytes, decompressed.toArray(ValueLayout.JAVA_BYTE));
     }
@@ -39,7 +40,7 @@ public class CompressionTest {
     public void testLibGzipCompress() {
         byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
         MemorySegment m = MemorySegment.ofArray(str.getBytes(StandardCharsets.UTF_8));
-        MemorySegment compressed = CompressUtil.compressUsingGzip(m, CompressUtil.LIBDEFLATE_FASTEST_LEVEL);
+        MemorySegment compressed = CompressUtil.compressUsingGzip(m, DeflateBinding.LIBDEFLATE_FASTEST_LEVEL);
         MemorySegment decompressed = CompressUtil.decompressUsingGzip(compressed);
         Assertions.assertArrayEquals(bytes, decompressed.toArray(ValueLayout.JAVA_BYTE));
     }

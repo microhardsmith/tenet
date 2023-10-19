@@ -1,4 +1,4 @@
-package cn.zorcc.common.pojo;
+package cn.zorcc.common.structure;
 
 public enum IpType {
     IPV4,

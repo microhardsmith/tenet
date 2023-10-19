@@ -36,6 +36,7 @@ public final class SqliteBinding {
     private static final MethodHandle columnDoubleHandle;
     private static final MethodHandle columnTextHandle;
     private static final MethodHandle columnBlobHandle;
+    private static final MethodHandle columnTypeHandle;
     private static final MethodHandle resetHandle;
     private static final MethodHandle clearBindingsHandle;
     private static final MethodHandle finalizeHandle;
@@ -69,6 +70,7 @@ public final class SqliteBinding {
         columnDoubleHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_double", FunctionDescriptor.of(ValueLayout.JAVA_DOUBLE, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         columnTextHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_text", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         columnBlobHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_blob", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        columnTypeHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_type", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         resetHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_reset", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         clearBindingsHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_clear_bindings", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         finalizeHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_finalize", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
@@ -93,7 +95,7 @@ public final class SqliteBinding {
         try{
             return (int) threadHandle.invokeExact();
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Unable to call threadsafe", throwable);
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -101,7 +103,7 @@ public final class SqliteBinding {
         try{
             return (int) configHandle.invokeExact(Constants.SQLITE_CONFIG_MULTITHREAD);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to config");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -109,7 +111,7 @@ public final class SqliteBinding {
         try{
             return (int) initializeHandle.invokeExact();
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to initialize");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -117,7 +119,7 @@ public final class SqliteBinding {
         try{
             return (int) openHandle.invokeExact(fileName, ppDb, flags, NativeUtil.NULL_POINTER);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to open");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -125,7 +127,7 @@ public final class SqliteBinding {
         try{
             return (int) prepareHandle.invokeExact(sqlite, sql, len, flags, ppStmt, NativeUtil.NULL_POINTER);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to prepare");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -133,7 +135,7 @@ public final class SqliteBinding {
         try{
             return (int) bindIntHandle.invokeExact(stmt, index, value);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to bind int");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -141,7 +143,7 @@ public final class SqliteBinding {
         try{
             return (int) bindLongHandle.invokeExact(stmt, index, value);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to bind long");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -149,7 +151,7 @@ public final class SqliteBinding {
         try{
             return (int) bindDoubleHandle.invokeExact(stmt, index, value);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to bind double");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -157,7 +159,7 @@ public final class SqliteBinding {
         try{
             return (int) bindTextHandle.invokeExact(stmt, index, ptr, ptr.byteSize(), sqliteTransient, Constants.SQLITE_UTF8);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to bind text");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -165,7 +167,7 @@ public final class SqliteBinding {
         try{
             return (int) bindBlobHandle.invokeExact(stmt, index, ptr, ptr.byteSize(), sqliteTransient);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to bind blob");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -173,7 +175,7 @@ public final class SqliteBinding {
         try{
             return (int) bindNullHandle.invokeExact(stmt, index);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to bind null");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -181,7 +183,7 @@ public final class SqliteBinding {
         try{
             return (int) stepHandle.invokeExact(stmt);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to step");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -189,7 +191,7 @@ public final class SqliteBinding {
         try{
             return (int) columnBytesHandle.invokeExact(stmt, index);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to columnBytes");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -197,7 +199,7 @@ public final class SqliteBinding {
         try{
             return (int) columnIntHandle.invokeExact(stmt, index);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to columnInt");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -205,7 +207,7 @@ public final class SqliteBinding {
         try{
             return (long) columnLongHandle.invokeExact(stmt, index);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to columnLong");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -213,7 +215,7 @@ public final class SqliteBinding {
         try{
             return (double) columnDoubleHandle.invokeExact(stmt, index);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to columnDouble");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -221,7 +223,7 @@ public final class SqliteBinding {
         try{
             return (MemorySegment) columnTextHandle.invokeExact(stmt, index);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to columnText");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -229,7 +231,15 @@ public final class SqliteBinding {
         try{
             return (MemorySegment) columnBlobHandle.invokeExact(stmt, index);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to columnBlob");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static int columnType(MemorySegment stmt, int index) {
+        try{
+            return (int) columnTypeHandle.invokeExact(stmt, index);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -237,7 +247,7 @@ public final class SqliteBinding {
         try{
             return (int) resetHandle.invokeExact(pStmt);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to reset");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -245,7 +255,7 @@ public final class SqliteBinding {
         try{
             return (int) clearBindingsHandle.invokeExact(pStmt);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to clearBindings");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -253,7 +263,7 @@ public final class SqliteBinding {
         try{
             return (long) changesHandle.invokeExact(sqlite);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to get changes");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -261,7 +271,7 @@ public final class SqliteBinding {
         try{
             return (int) finalizeHandle.invokeExact(pStmt);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to finalize");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -269,7 +279,7 @@ public final class SqliteBinding {
         try{
             return (MemorySegment) backupInitHandle.invokeExact(dest, destName, source, sourceName);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to backupInit");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -277,7 +287,7 @@ public final class SqliteBinding {
         try{
             return (int) backupStepHandle.invokeExact(backup, nPage);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to backupStep");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -285,7 +295,7 @@ public final class SqliteBinding {
         try{
             return (int) backupFinishHandle.invokeExact(backup);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to backupFinish");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -293,7 +303,7 @@ public final class SqliteBinding {
         try{
             freeHandle.invokeExact(ptr);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to free");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -301,7 +311,7 @@ public final class SqliteBinding {
         try{
             return (int) closeHandle.invokeExact(sqlite);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to close");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -309,7 +319,7 @@ public final class SqliteBinding {
         try {
             return (int) shutdownHandle.invokeExact();
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to shutdown");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -317,7 +327,7 @@ public final class SqliteBinding {
         try{
             return (MemorySegment) errMsgHandle.invokeExact(sqlite);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to get errMsg");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -325,7 +335,7 @@ public final class SqliteBinding {
         try{
             return (int) execHandle.invokeExact(sqlite, sql, NativeUtil.NULL_POINTER, NativeUtil.NULL_POINTER, err);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.SQLITE, "Failed to exec");
+            throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
     }
 }

@@ -1,4 +1,4 @@
-package cn.zorcc.common.pojo;
+package cn.zorcc.common.structure;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
@@ -13,6 +13,14 @@ public record Loc (
         int port
 ) {
     private static final int PORT_MAX = 65535;
+
+    /**
+     *   Create a default local address
+     */
+    public Loc(IpType ipType, int port) {
+        this(ipType, Constants.EMPTY_STRING, port);
+    }
+
     /**
      *   Convert a int port to a unsigned short type, this method force retain the lower 16bits, the result could be negative
      */

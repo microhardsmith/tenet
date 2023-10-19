@@ -7,10 +7,10 @@ import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.http.*;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.log.LoggerConsumer;
-import cn.zorcc.common.pojo.IpType;
-import cn.zorcc.common.pojo.Loc;
+import cn.zorcc.common.structure.IpType;
+import cn.zorcc.common.structure.Loc;
+import cn.zorcc.common.structure.Wheel;
 import cn.zorcc.common.util.CompressUtil;
-import cn.zorcc.common.wheel.Wheel;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.MemorySegment;
@@ -126,7 +126,7 @@ public class HttpServerTest {
             }else {
                 httpResponse.setData(body);
             }
-            channel.send(httpResponse);
+            channel.sendMsg(httpResponse);
         }
 
         @Override

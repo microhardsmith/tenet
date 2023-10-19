@@ -1,4 +1,4 @@
-package cn.zorcc.common.wheel;
+package cn.zorcc.common.structure;
 
 public interface Job {
     /**

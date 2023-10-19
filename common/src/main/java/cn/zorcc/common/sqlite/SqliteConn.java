@@ -1,5 +1,6 @@
-package cn.zorcc.common;
+package cn.zorcc.common.sqlite;
 
+import cn.zorcc.common.Constants;
 import cn.zorcc.common.binding.SqliteBinding;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
@@ -8,19 +9,28 @@ import cn.zorcc.common.util.NativeUtil;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ *   Delegate a sqlite connection, all the read-write operations should be controlled inside the sqliteConn object rather than directly using SqliteBindings
+ */
 public final class SqliteConn implements AutoCloseable {
     private static final AtomicLong counter = new AtomicLong(Constants.ZERO);
     private static final int DEFAULT_OPEN_FLAGS = Constants.SQLITE_OPEN_READWRITE |
             Constants.SQLITE_OPEN_CREATE | Constants.SQLITE_OPEN_PRIVATECACHE |
             Constants.SQLITE_OPEN_NOFOLLOW | Constants.SQLITE_OPEN_NOMUTEX;
+    private static final String FETCH_METADATA = """
+    SELECT * FROM sqlite_master'
+    """;
     private final MemorySegment sqlite;
-    private final Arena arena = Arena.ofConfined();
-    private final MemorySegment transactionBegin = arena.allocateUtf8String("BEGIN");
-    private final MemorySegment transactionRollback = arena.allocateUtf8String("ROLLBACK");
-    private final MemorySegment transactionCommit = arena.allocateUtf8String("COMMIT");
-    private final MemorySegment ppErr = arena.allocate(ValueLayout.ADDRESS).reinterpret(ValueLayout.ADDRESS.byteSize());
+    private final Arena reservedArena = Arena.ofConfined();
+    private final MemorySegment transactionBegin = reservedArena.allocateUtf8String("BEGIN");
+    private final MemorySegment transactionRollback = reservedArena.allocateUtf8String("ROLLBACK");
+    private final MemorySegment transactionCommit = reservedArena.allocateUtf8String("COMMIT");
+    private final MemorySegment ppErr = reservedArena.allocate(ValueLayout.ADDRESS).reinterpret(ValueLayout.ADDRESS.byteSize());
     public SqliteConn(String filePath) {
         if(counter.getAndIncrement() == Constants.ZERO) {
             SqliteBinding.check(SqliteBinding.config(), "config");
@@ -61,6 +71,28 @@ public final class SqliteConn implements AutoCloseable {
 
     public void rollback() {
         exec(transactionRollback);
+    }
+
+    public List<SqliteMetadata> fetchingMetadata() {
+        try(Arena arena = Arena.ofConfined()) {
+            List<SqliteMetadata> result = new ArrayList<>();
+            MemorySegment stmt = prepareNormalizeStatement(arena.allocateUtf8String(FETCH_METADATA));
+            for( ; ; ) {
+                int r = SqliteBinding.step(stmt);
+                if(r == Constants.SQLITE_DONE) {
+                    return result;
+                }else if(r == Constants.SQLITE_ROW) {
+                    String type = columnText(stmt, 1);
+                    String name = columnText(stmt, 2);
+                    String tblName = columnText(stmt, 3);
+                    Integer rootPage = columnInt(stmt, 4);
+                    String sql = columnText(stmt, 5);
+                    result.add(new SqliteMetadata(type, name, tblName, rootPage, sql));
+                }else {
+                    throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED);
+                }
+            }
+        }
     }
 
     public MemorySegment prepareNormalizeStatement(MemorySegment sql) {
@@ -113,6 +145,56 @@ public final class SqliteConn implements AutoCloseable {
     }
     public void bindNull(MemorySegment stmt, int index) {
         SqliteBinding.check(SqliteBinding.bindNull(stmt, index), "Failed to bind null value");
+    }
+
+    public Integer columnInt(MemorySegment stmt, int index) {
+        int r = SqliteBinding.columnInt(stmt, index);
+        if(r == Constants.ZERO && SqliteBinding.columnType(stmt, index) == Constants.SQLITE_NULL) {
+            return null;
+        }else {
+            return r;
+        }
+    }
+    public Long columnLong(MemorySegment stmt, int index) {
+        long r = SqliteBinding.columnLong(stmt, index);
+        if(r == Constants.ZERO && SqliteBinding.columnType(stmt, index) == Constants.SQLITE_NULL) {
+            return null;
+        }else {
+            return r;
+        }
+    }
+
+    public Double columnDouble(MemorySegment stmt, int index) {
+        double d = SqliteBinding.columnDouble(stmt, index);
+        if(Math.abs(d) < Double.MIN_VALUE && SqliteBinding.columnType(stmt, index) == Constants.SQLITE_NULL) {
+            return null;
+        }else {
+            return d;
+        }
+    }
+
+    public String columnText(MemorySegment stmt, int index) {
+        MemorySegment r = SqliteBinding.columnText(stmt, index);
+        if(NativeUtil.checkNullPointer(r) && SqliteBinding.columnType(stmt, index) == Constants.SQLITE_DONE) {
+            return null;
+        }else {
+            int len = SqliteBinding.columnBytes(stmt, index);
+            return new String(r.reinterpret(len).toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8);
+        }
+    }
+
+    public MemorySegment columnBlob(MemorySegment stmt, int index) {
+        MemorySegment r = SqliteBinding.columnBlob(stmt, index);
+        if(NativeUtil.checkNullPointer(r) && SqliteBinding.columnType(stmt, index) == Constants.SQLITE_DONE) {
+            return null;
+        }else {
+            int len = SqliteBinding.columnBytes(stmt, index);
+            r = r.reinterpret(len);
+            byte[] bytes = new byte[len];
+            MemorySegment m = MemorySegment.ofArray(bytes);
+            MemorySegment.copy(r, Constants.ZERO, m, Constants.ZERO, len);
+            return m;
+        }
     }
 
     public void exec(MemorySegment sql) {

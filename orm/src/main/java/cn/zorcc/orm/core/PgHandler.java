@@ -25,7 +25,7 @@ public class PgHandler implements Handler {
     @Override
     public void onConnected(Channel channel) {
         pgManager.registerConn(new PgConn(pgManager, channel, available, msgQueue));
-        channel.send(new PgStartUpMsg(pgManager.pgConfig()));
+        channel.sendMsg(new PgStartUpMsg(pgManager.pgConfig()));
     }
 
     @Override
@@ -37,7 +37,7 @@ public class PgHandler implements Handler {
 
     @Override
     public void onShutdown(Channel channel) {
-        channel.send(PgTerminateMsg.INSTANCE);
+        channel.sendMsg(PgTerminateMsg.INSTANCE);
     }
 
     @Override

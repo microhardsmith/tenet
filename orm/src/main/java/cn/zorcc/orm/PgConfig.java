@@ -1,8 +1,8 @@
 package cn.zorcc.orm;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.pojo.IpType;
-import cn.zorcc.common.pojo.Loc;
+import cn.zorcc.common.structure.IpType;
+import cn.zorcc.common.structure.Loc;
 import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.orm.core.PgConstants;
 

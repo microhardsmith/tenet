@@ -176,7 +176,7 @@ public class SslProtocol implements Protocol {
                 channel.close();
             }else {
                 // In this case, the channel close operation might be delayed a little bit
-                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, null, channel, null));
+                worker.submitReaderTask(ReaderTask.createCloseChannelTask(channel));
             }
         }
     }

@@ -1,6 +1,6 @@
 package cn.zorcc.common.network;
 
-import cn.zorcc.common.pojo.Loc;
+import cn.zorcc.common.structure.Loc;
 
 import java.util.function.Supplier;
 
@@ -23,6 +23,9 @@ public final class MasterConfig {
     private Provider provider;
     /**
      *   Target host:port to bind and listen
+     *   For Ipv6 server, it's recommended to listen on "::"
+     *   For Ipv4 server, it's recommended to listen on "0.0.0.0"
+     *   You could always set loc's ip to null or a empty string to use system default ip address, which is best for most applications
      */
     private Loc loc;
     /**

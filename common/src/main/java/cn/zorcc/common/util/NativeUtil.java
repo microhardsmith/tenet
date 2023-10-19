@@ -43,9 +43,16 @@ public final class NativeUtil {
     private static final Arena globalArena = Arena.global();
     private static final Arena autoArena = Arena.ofAuto();
     private static final VarHandle byteHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_BYTE);
-    private static final VarHandle shortHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_SHORT_UNALIGNED);
-    private static final VarHandle intHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_INT_UNALIGNED);
-    private static final VarHandle longHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_LONG_UNALIGNED);
+    private static final VarHandle shortHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_SHORT);
+    private static final VarHandle intHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_INT);
+    private static final VarHandle longHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_LONG);
+    private static final VarHandle floatHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_FLOAT);
+    private static final VarHandle doubleHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_DOUBLE);
+    public static final long SHORT_SIZE = ValueLayout.JAVA_SHORT.byteSize();
+    public static final long INT_SIZE = ValueLayout.JAVA_INT.byteSize();
+    public static final long LONG_SIZE = ValueLayout.JAVA_LONG.byteSize();
+    public static final long FLOAT_SIZE = ValueLayout.JAVA_FLOAT.byteSize();
+    public static final long DOUBLE_SIZE = ValueLayout.JAVA_DOUBLE.byteSize();
     private static final long I_MAX = Integer.MAX_VALUE;
     private static final long I_MIN = Integer.MIN_VALUE;
 
@@ -73,6 +80,21 @@ public final class NativeUtil {
 
     private NativeUtil() {
         throw new UnsupportedOperationException();
+    }
+
+    public static MemorySegment toNativeSegment(MemorySegment memorySegment) {
+        return toNativeSegment(autoArena, memorySegment);
+    }
+
+    public static MemorySegment toNativeSegment(Arena arena, MemorySegment memorySegment) {
+        if(memorySegment.isNative()) {
+            return memorySegment;
+        }else {
+            long byteSize = memorySegment.byteSize();
+            MemorySegment nativeSegment = arena.allocateArray(ValueLayout.JAVA_BYTE, byteSize);
+            MemorySegment.copy(memorySegment, Constants.ZERO, nativeSegment, Constants.ZERO, byteSize);
+            return nativeSegment;
+        }
     }
 
     private static final String IPV4_MAPPED_FORMAT = "::ffff:";
@@ -183,6 +205,22 @@ public final class NativeUtil {
         longHandle.set(memorySegment, index, value);
     }
 
+    public static float getFloat(MemorySegment memorySegment, long index) {
+        return (float) floatHandle.get(memorySegment, index);
+    }
+
+    public static void setFloat(MemorySegment memorySegment, long index, float value) {
+        floatHandle.set(memorySegment, index, value);
+    }
+
+    public static double getDouble(MemorySegment memorySegment, long index) {
+        return (double) doubleHandle.get(memorySegment, index);
+    }
+
+    public static void setDouble(MemorySegment memorySegment, long index, double value) {
+        doubleHandle.set(memorySegment, index, value);
+    }
+
     /**
      *   Using brute-force search for target bytes in a memorySegment
      *   This method could be optimized for better efficiency using other algorithms like BM or KMP, however when bytes.length is small and unrepeated, BF is simple and good enough
@@ -225,9 +263,9 @@ public final class NativeUtil {
     }
 
     public static String getStr(MemorySegment ptr, int maxLength) {
-        if(maxLength > 0) {
+        if(maxLength > Constants.ZERO) {
             byte[] bytes = new byte[maxLength];
-            for(int i = 0; i < maxLength; i++) {
+            for(int i = Constants.ZERO; i < maxLength; i++) {
                 byte b = getByte(ptr, i);
                 if(b == Constants.NUT) {
                     return new String(bytes, Constants.ZERO, i, StandardCharsets.UTF_8);
@@ -236,7 +274,7 @@ public final class NativeUtil {
                 }
             }
         }else {
-            for(int i = 0; i < Integer.MAX_VALUE; i++) {
+            for(int i = Constants.ZERO; i < Integer.MAX_VALUE; i++) {
                 byte b = getByte(ptr, i);
                 if(b == Constants.NUT) {
                     return new String(ptr.asSlice(Constants.ZERO, i).toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8);

@@ -1,13 +1,14 @@
 package cn.zorcc.common.network;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.Mix;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
+import cn.zorcc.common.structure.IntIntMap;
+import cn.zorcc.common.structure.IntMap;
+import cn.zorcc.common.structure.Wheel;
 import cn.zorcc.common.util.ThreadUtil;
-import cn.zorcc.common.wheel.Wheel;
 import org.jctools.queues.atomic.MpscUnboundedAtomicArrayQueue;
 
 import java.lang.foreign.Arena;
@@ -19,6 +20,8 @@ import java.util.*;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TransferQueue;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  *   Network worker
@@ -31,7 +34,8 @@ public final class Worker {
     private static final int STOPPED = 3;
     private final AtomicLong counter = new AtomicLong(Constants.ZERO);
     private final Mux mux;
-    private final ActorMap actorMap;
+    private final IntMap<Actor> actorMap;
+    private final IntIntMap<TaggedMsg> taggedMsgMap;
     private final Map<Channel, Sender> channelMap;
     private final Queue<ReaderTask> readerTaskQueue = new MpscUnboundedAtomicArrayQueue<>(Constants.QUEUE_SIZE);
     private final TransferQueue<WriterTask> writerTaskQueue = new LinkedTransferQueue<>();
@@ -41,7 +45,8 @@ public final class Worker {
     public Worker(WorkerConfig workerConfig, int sequence) {
         this.mux = osNetworkLibrary.createMux();
         final int mapSize = workerConfig.getMapSize();
-        this.actorMap = new ActorMap(mapSize);
+        this.actorMap = new IntMap<>(mapSize);
+        this.taggedMsgMap = new IntIntMap<>(mapSize);
         this.channelMap = new HashMap<>(mapSize);
         this.reader = createReaderThread(mux, workerConfig, sequence);
         this.writer = createWriterThread(workerConfig, sequence);
@@ -162,6 +167,18 @@ public final class Worker {
                 }
                 case CLOSE_ACCEPTOR -> readerTask.acceptor().close();
                 case CLOSE_CHANNEL -> readerTask.channel().close();
+                case ADD_TAG -> {
+                    Channel channel = readerTask.channel();
+                    TaggedMsg taggedMsg = readerTask.taggedMsg();
+                    taggedMsgMap.put(channel.socket().intValue(), taggedMsg.getTag(), taggedMsg);
+                }
+                case REMOVE_TAG -> {
+                    Channel channel = readerTask.channel();
+                    TaggedMsg taggedMsg = readerTask.taggedMsg();
+                    if (!taggedMsgMap.remove(channel.socket().intValue(), taggedMsg.getTag(), taggedMsg)) {
+                        throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+                    }
+                }
                 case GRACEFUL_SHUTDOWN -> {
                     if(currentState == RUNNING) {
                         if(counter.get() == Constants.ZERO) {
@@ -178,6 +195,23 @@ public final class Worker {
                         submitWriterTask(new WriterTask(WriterTask.WriterTaskType.EXIT, null, null, null));
                         return STOPPED;
                     }
+                }
+            }
+        }
+    }
+
+    public void receiveTaggedMsg(Channel channel, int tag, Object received) {
+        if(Thread.currentThread() != reader) {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        }
+        int fd = channel.socket().intValue();
+        TaggedMsg taggedMsg = taggedMsgMap.get(fd, tag);
+        if(taggedMsg != null) {
+            AtomicReference<Object> target = taggedMsg.getTarget();
+            if(target != null && target.compareAndSet(TaggedMsg.HOLDER, received)) {
+                LockSupport.unpark(taggedMsg.getThread());
+                if(!taggedMsgMap.remove(fd, tag, taggedMsg)) {
+                    throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
                 }
             }
         }
@@ -213,10 +247,10 @@ public final class Worker {
                     return ;
                 }
                 case INITIATE -> channelMap.put(channel, new Sender());
-                case MIX_OF_MSG -> {
+                case MULTIPLE_MSG -> {
                     Sender sender = channelMap.get(channel);
-                    if(sender != null && writerTask.msg() instanceof Mix mix) {
-                        sender.sendMix(channel, reservedSegment, mix, writerTask.callback());
+                    if(sender != null && writerTask.msg() instanceof List<?> list) {
+                        sender.sendMultipleMsg(channel, reservedSegment, list, writerTask.callback());
                     }
                 }
                 case MSG -> {
@@ -265,10 +299,10 @@ public final class Worker {
          */
         private List<SenderTask> tasks;
 
-        public void sendMix(Channel channel, MemorySegment reserved, Mix mix, WriterCallback callback) {
+        public void sendMultipleMsg(Channel channel, MemorySegment reserved, List<?> msgList, WriterCallback callback) {
             try(final WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(reserved)) {
                 WriteBuffer wb = writeBuffer;
-                for (Object msg : mix.objects()) {
+                for (Object msg : msgList) {
                     wb = channel.encoder().encode(wb, msg);
                 }
                 if(wb.writeIndex() > Constants.ZERO) {
@@ -315,7 +349,7 @@ public final class Worker {
                         case FAILURE -> {
                             // channel should be closed, suspend afterwards writing
                             channelMap.remove(channel);
-                            submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, null, channel, null));
+                            submitReaderTask(ReaderTask.createCloseChannelTask(channel));
                             for(int j = i; j < tasks.size(); j++) {
                                 SenderTask followingSt = tasks.get(j);
                                 followingSt.writeBuffer().close();
@@ -374,7 +408,7 @@ public final class Worker {
                     case FAILURE -> {
                         // channel should be closed, suspend afterwards writing, fail the callback
                         channelMap.remove(channel);
-                        submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, null, channel, null));
+                        submitReaderTask(ReaderTask.createCloseChannelTask(channel));
                         if(callback != null) {
                             callback.onFailure();
                         }
@@ -403,7 +437,7 @@ public final class Worker {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
             channel.protocol().doShutdown(channel);
-            Wheel.wheel().addJob(() -> submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, null, channel, null)), duration);
+            Wheel.wheel().addJob(() -> submitReaderTask(ReaderTask.createCloseChannelTask(channel)), duration);
         }
     }
 }

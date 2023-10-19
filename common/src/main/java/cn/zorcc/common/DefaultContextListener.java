@@ -2,6 +2,8 @@ package cn.zorcc.common;
 
 import cn.zorcc.common.log.Logger;
 
+import java.util.Optional;
+
 public final class DefaultContextListener implements ContextListener {
     private static final Logger log = new Logger(DefaultContextListener.class);
     @Override
@@ -10,7 +12,12 @@ public final class DefaultContextListener implements ContextListener {
     }
 
     @Override
-    public Object onRequested(Class<?> type) {
-        return null;
+    public <T> Optional<T> onRequested(Class<T> type) {
+        return Optional.empty();
+    }
+
+    @Override
+    public void onStarted() {
+
     }
 }

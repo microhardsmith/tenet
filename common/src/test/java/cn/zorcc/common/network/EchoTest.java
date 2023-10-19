@@ -8,9 +8,9 @@ import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.log.LoggerConsumer;
-import cn.zorcc.common.pojo.IpType;
-import cn.zorcc.common.pojo.Loc;
-import cn.zorcc.common.wheel.Wheel;
+import cn.zorcc.common.structure.IpType;
+import cn.zorcc.common.structure.Loc;
+import cn.zorcc.common.structure.Wheel;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -19,6 +19,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class EchoTest {
     private static final Logger log = new Logger(EchoTest.class);
+    private static final int port = 8002;
+    private static final Loc serverLoc = new Loc(IpType.IPV6, port);
+    private static final Loc clientIpv4Loc = new Loc(IpType.IPV4, "127.0.0.1", port);
 
     @Test
     public void testEchoClient() throws InterruptedException {
@@ -27,7 +30,18 @@ public class EchoTest {
         Net netClient = createEchoNetClient();
         Context.load(netClient, Net.class);
         Context.init();
-        netClient.connect(new Loc(IpType.IPV6, "::1", 8002), new EchoEncoder(), new EchoDecoder(), new EchoClientHandler(), new TcpConnector());
+        netClient.connect(serverLoc, new EchoEncoder(), new EchoDecoder(), new EchoClientHandler(), new TcpConnector());
+        Thread.sleep(Long.MAX_VALUE);
+    }
+
+    @Test
+    public void testIpv4EchoClient() throws InterruptedException {
+        Context.load(Wheel.wheel(), Wheel.class);
+        Context.load(new LoggerConsumer(), LoggerConsumer.class);
+        Net netClient = createEchoNetClient();
+        Context.load(netClient, Net.class);
+        Context.init();
+        netClient.connect(clientIpv4Loc, new EchoEncoder(), new EchoDecoder(), new EchoClientHandler(), new TcpConnector());
         Thread.sleep(Long.MAX_VALUE);
     }
 
@@ -50,7 +64,7 @@ public class EchoTest {
         @Override
         public void onConnected(Channel channel) {
             log.info("Client channel connected");
-            Wheel.wheel().addPeriodicJob(() -> channel.send("Hello : " + counter.getAndIncrement()), Duration.ZERO, Duration.ofSeconds(Constants.ONE));
+            Wheel.wheel().addPeriodicJob(() -> channel.sendMsg("Hello : " + counter.getAndIncrement()), Duration.ZERO, Duration.ofSeconds(Constants.ONE));
         }
 
         @Override
@@ -64,7 +78,7 @@ public class EchoTest {
 
         @Override
         public void onShutdown(Channel channel) {
-            channel.send("Client going to shutdown");
+            channel.sendMsg("Client going to shutdown");
         }
 
         @Override
@@ -79,7 +93,7 @@ public class EchoTest {
         masterConfig.setDecoderSupplier(EchoDecoder::new);
         masterConfig.setHandlerSupplier(EchoServerHandler::new);
         masterConfig.setProvider(Net.tcpProvider());
-        masterConfig.setLoc(new Loc(IpType.IPV6, "::1", 8002));
+        masterConfig.setLoc(serverLoc);
         return new Net(masterConfig, Constants.ONE);
     }
 
@@ -93,7 +107,7 @@ public class EchoTest {
         public void onRecv(Channel channel, Object data) {
             if(data instanceof String str) {
                 log.info(STR."Msg received : [\{str}]");
-                channel.send(str);
+                channel.sendMsg(str);
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }

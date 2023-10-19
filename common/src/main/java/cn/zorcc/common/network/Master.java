@@ -4,7 +4,7 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.pojo.Loc;
+import cn.zorcc.common.structure.Loc;
 import cn.zorcc.common.util.ThreadUtil;
 
 import java.lang.foreign.Arena;

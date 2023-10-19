@@ -1,10 +1,10 @@
 package cn.zorcc.common.log;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.SqliteConn;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.sqlite.SqliteConn;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;

@@ -11,11 +11,13 @@ public enum ExceptionType {
     HTTP,
     JSON,
     SQLITE,
+    DUCKDB,
     NETWORK,
     SQL,
     CLUSTER,
     AUTH,
     FILE,
     LOG,
-    COMPRESS
+    COMPRESS,
+    MINT
 }

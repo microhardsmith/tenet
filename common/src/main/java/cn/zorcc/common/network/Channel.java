@@ -1,18 +1,22 @@
 package cn.zorcc.common.network;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.Mix;
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.pojo.Loc;
+import cn.zorcc.common.structure.Loc;
+import cn.zorcc.common.structure.Wheel;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
+import java.util.function.IntFunction;
 
 /**
  *   Network channel abstraction, could only get evolved from acceptor
@@ -22,6 +26,9 @@ public final class Channel implements Actor {
     private static final Logger log = new Logger(Channel.class);
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
     private static final Duration defaultShutdownDuration = Duration.ofSeconds(5);
+    private static final Duration defaultSendTimeoutDuration = Duration.ofSeconds(30);
+    private static final Wheel wheel = Wheel.wheel();
+    private final AtomicInteger tagGenerator = new AtomicInteger(Constants.ZERO);
     private final Socket socket;
     private final AtomicInteger state;
     private final Encoder encoder;
@@ -141,19 +148,69 @@ public final class Channel implements Actor {
      *   the msg will be processed by the writer thread, there is no guarantee that the msg will delivery, the callBack only indicates that calling operating system's API was successful
      *   the caller should provide a timeout mechanism to ensure the msg is not dropped, such as retransmission timeout
      */
-    public void send(Object msg, WriterCallback callBack) {
-        switch (msg) {
-            case null -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-            case Mix mix -> worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.MIX_OF_MSG, this, mix, callBack));
-            default -> worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.MSG, this, msg, callBack));
+    public void sendMsg(Object msg, WriterCallback callback) {
+        if(msg == null) {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
+        worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.MSG, this, msg, callback));
+    }
+
+    public void sendMsg(Object msg) {
+        sendMsg(msg, null);
+    }
+
+    public void sendMultipleMsg(List<Object> msgList, WriterCallback callback) {
+        if(msgList == null || msgList.isEmpty()) {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        }
+        worker.submitWriterTask(new WriterTask(WriterTask.WriterTaskType.MULTIPLE_MSG, this, msgList, callback));
+    }
+
+    public void sendMultipleMsg(List<Object> msgList) {
+        sendMultipleMsg(msgList, null);
     }
 
     /**
-     *   send msg over the channel with no callBack
+     *   Send msg using a taggedFunction, this approach allows a virtual thread to wait until the response
+     *   there are several things developers should take care:
+     *   1. You must only use this method in virtual threads, since platform thread blocking is much more expensive than virtual threads, there is no point in using this method in platform threads
+     *   2. The request and the response should always be in the same channel, or it won't be detected
+     *   3. We don't care how you deal with the tag in your own msg payload, but it must could be resolved from the response
      */
-    public void send(Object msg) {
-        send(msg, null);
+    public Object sendTaggedMsg(IntFunction<Object> taggedFunction, Duration timeout, WriterCallback callBack) {
+        int tag = tagGenerator.getAndIncrement();
+        Object msg = taggedFunction.apply(tag);
+        TaggedMsg taggedMsg = new TaggedMsg(tag);
+        wheel.addJob(() -> {
+            AtomicReference<Object> target = taggedMsg.getTarget();
+            if(target != null && target.compareAndSet(TaggedMsg.HOLDER, null)) {
+                LockSupport.unpark(taggedMsg.getThread());
+                worker.submitReaderTask(ReaderTask.createRemoveTagTask(this, taggedMsg));
+            }
+        }, timeout);
+        worker.submitReaderTask(ReaderTask.createAddTagTask(this, taggedMsg));
+        sendMsg(msg, callBack);
+        LockSupport.park();
+        return taggedMsg.getTarget().get();
+    }
+
+    public Object sendTaggedMsg(IntFunction<Object> taggedFunction, Duration timeout) {
+        return sendTaggedMsg(taggedFunction, timeout, null);
+    }
+
+    public Object sendTaggedMsg(IntFunction<Object> taggedFunction, WriterCallback callBack) {
+        return sendTaggedMsg(taggedFunction, defaultSendTimeoutDuration, callBack);
+    }
+
+    public Object sendTaggedMsg(IntFunction<Object> taggedFunction) {
+        return sendTaggedMsg(taggedFunction, defaultSendTimeoutDuration, null);
+    }
+
+    /**
+     *   After receiving a msg with a tag, this method could be invoked in Handler.onRecv() to unpark the sender thread
+     */
+    public void receiveTaggedMsg(int tag, Object received) {
+        worker.receiveTaggedMsg(this, tag, received);
     }
 
     /**
@@ -192,7 +249,7 @@ public final class Channel implements Actor {
             protocol.doClose(this);
             handler.onRemoved(this);
             if (worker.counter().decrementAndGet() == Constants.ZERO) {
-                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.POSSIBLE_SHUTDOWN, null, null, null));
+                worker.submitReaderTask(ReaderTask.POSSIBLE_SHUTDOWN_TASK);
             }
         }
     }

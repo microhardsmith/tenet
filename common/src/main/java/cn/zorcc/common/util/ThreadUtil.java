@@ -1,6 +1,8 @@
 package cn.zorcc.common.util;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.exception.FrameworkException;
 
 /**
  *  虚拟线程工具类
@@ -47,5 +49,13 @@ public class ThreadUtil {
         }else {
             return threadName;
         }
+    }
+
+    public static Thread checkVirtualThread() {
+        Thread currentThread = Thread.currentThread();
+        if(!currentThread.isVirtual()) {
+            throw new FrameworkException(ExceptionType.CONTEXT, "Must be invoked in virtual thread");
+        }
+        return currentThread;
     }
 }

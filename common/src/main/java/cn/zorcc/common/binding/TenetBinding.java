@@ -11,6 +11,7 @@ import java.lang.foreign.SymbolLookup;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 
+@SuppressWarnings("unused")
 public final class TenetBinding {
     private static final MethodHandle getStdoutHandle;
     private static final MethodHandle getStderrHandle;

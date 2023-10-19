@@ -4,9 +4,9 @@ import cn.zorcc.common.AbstractLifeCycle;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.structure.Wheel;
 import cn.zorcc.common.util.ConfigUtil;
 import cn.zorcc.common.util.ThreadUtil;
-import cn.zorcc.common.wheel.Wheel;
 
 import java.time.Duration;
 import java.util.ArrayList;

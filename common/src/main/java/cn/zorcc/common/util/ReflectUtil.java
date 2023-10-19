@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -79,7 +80,7 @@ public final class ReflectUtil {
 
 
     /**
-     *   Create a constructor method using lambda
+     *   Create a plain-class's constructor method using lambda
      */
     @SuppressWarnings("unchecked")
     public static <T> Supplier<T> createConstructor(Class<T> type) {
@@ -96,18 +97,41 @@ public final class ReflectUtil {
         }
     }
 
+    /**
+     *   Create a record's constructor method using lambda
+     */
     @SuppressWarnings("unchecked")
     public static <T> Function<Object[], T> createRecordConstructor(Class<T> recordClass, List<Class<?>> parameterTypes) {
         try{
-            MethodHandle cmh = MethodHandles.lookup().findConstructor(recordClass, MethodType.methodType(void.class, parameterTypes)).asSpreader(Object[].class, parameterTypes.size());
+            MethodHandle cmh = Constants.LOOKUP.findConstructor(recordClass, MethodType.methodType(void.class, parameterTypes)).asSpreader(Object[].class, parameterTypes.size());
             MethodType methodType = cmh.type();
             CallSite callSite = LambdaMetafactory.metafactory(Constants.LOOKUP,
                     Constants.APPLY,
                     MethodType.methodType(Function.class, MethodHandle.class),
                     methodType.erase(),
-                    MethodHandles.exactInvoker(methodType), // target MethodHandle.invokeExact
+                    MethodHandles.exactInvoker(methodType),
                     methodType);
             return (Function<Object[], T>) callSite.getTarget().invokeExact(cmh);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED, throwable);
+        }
+    }
+
+    /**
+     *   Create a public method invoker using lambda
+     */
+    @SuppressWarnings("unchecked")
+    public static BiFunction<Object, Object[], Object> createMethodCaller(Class<?> targetType, String methodName, Class<?> returnType, List<Class<?>> parameterTypes) {
+        try{
+            MethodHandle cmh = Constants.LOOKUP.findVirtual(targetType, methodName, MethodType.methodType(returnType, parameterTypes)).asSpreader(Object[].class, parameterTypes.size());
+            MethodType methodType = cmh.type();
+            CallSite callSite = LambdaMetafactory.metafactory(Constants.LOOKUP,
+                    Constants.APPLY,
+                    MethodType.methodType(BiFunction.class, MethodHandle.class),
+                    methodType.erase(),
+                    MethodHandles.exactInvoker(methodType),
+                    methodType);
+            return (BiFunction<Object, Object[], Object>) callSite.getTarget().invokeExact(cmh);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED, throwable);
         }

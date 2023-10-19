@@ -25,6 +25,7 @@ public final class Constants {
     public static final String SSL = "ssl";
     public static final String DEFLATE = "deflate";
     public static final String SQLITE = "sqlite";
+    public static final String DUCKDB = "duckdb";
     public static final String TENET_LIBRARY_PATH = "TENET_LIBRARY_PATH";
     public static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
     public static final String GET = "get";
@@ -348,6 +349,12 @@ public final class Constants {
     public static final int SQLITE_CONFIG_SINGLETHREAD = 1;
     public static final int SQLITE_CONFIG_MULTITHREAD = 2;
     public static final int SQLITE_CONFIG_SERIALIZED = 3;
+
+    public static final int SQLITE_INTEGER = 1;
+    public static final int SQLITE_FLOAT = 2;
+    public static final int SQLITE_TEXT = 3;
+    public static final int SQLITE_BLOB = 4;
+    public static final int SQLITE_NULL = 5;
 
     public static final int SQLITE_ROW = 100;
     public static final int SQLITE_DONE = 101;

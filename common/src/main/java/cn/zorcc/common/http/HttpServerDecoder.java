@@ -145,7 +145,7 @@ public final class HttpServerDecoder implements Decoder {
         if (readBuffer.size() - readBuffer.readIndex() < len) {
             return ResultStatus.INCOMPLETE;
         }
-        current.setData(tryDecompress(readBuffer.readSegment(len)));
+        current.setData(tryDecompress(readBuffer.readHeapSegment(len)));
         decodingStatus = DecodingStatus.INITIAL;
         return ResultStatus.FINISHED;
     }
@@ -180,11 +180,11 @@ public final class HttpServerDecoder implements Decoder {
         if (readBuffer.size() - readBuffer.readIndex() < len) {
             return ResultStatus.INCOMPLETE;
         }
-        byte[] bytes = readBuffer.readBytes(len);
+        MemorySegment data = readBuffer.readSegment(len);
         if(readBuffer.readUntil(Constants.CR, Constants.LF) != Constants.EMPTY_BYTES) {
             throw new FrameworkException(ExceptionType.HTTP, "Unresolved http chunked data");
         }
-        tempBuffer.writeBytes(bytes);
+        tempBuffer.writeSegment(data);
         decodingStatus = DecodingStatus.DECODING_CHUNKED_DATA_LENGTH;
         return ResultStatus.CONTINUE;
     }

@@ -112,13 +112,13 @@ public final class PgConn {
             }
             clientFinalProcessor.receiveServerFinalMessage(serverFinalMsg);
         } catch (ScramInvalidServerSignatureException e) {
-            channel.send(PgTerminateMsg.INSTANCE);
+            channel.sendMsg(PgTerminateMsg.INSTANCE);
             throw new FrameworkException(ExceptionType.SQL, "Invalid server signature", e);
         } catch (ScramParseException e) {
-            channel.send(PgTerminateMsg.INSTANCE);
+            channel.sendMsg(PgTerminateMsg.INSTANCE);
             throw new FrameworkException(ExceptionType.SQL, "Can't parse server final msg", e);
         } catch (ScramServerErrorException e) {
-            channel.send(PgTerminateMsg.INSTANCE);
+            channel.sendMsg(PgTerminateMsg.INSTANCE);
             throw new FrameworkException(ExceptionType.SQL, "Scram server err", e);
         }
     }
@@ -135,9 +135,9 @@ public final class PgConn {
             String clientFinalMsg = clientFinalProcessor.clientFinalMessage();
             log.debug(STR."Generating client final msg ： \{clientFinalMsg}");
             variable.setClientFinalProcessor(clientFinalProcessor);
-            channel.send(new PgAuthSaslResponseMsg(clientFinalMsg));
+            channel.sendMsg(new PgAuthSaslResponseMsg(clientFinalMsg));
         }catch (ScramException e) {
-            channel.send(PgTerminateMsg.INSTANCE);
+            channel.sendMsg(PgTerminateMsg.INSTANCE);
             throw new FrameworkException(ExceptionType.SQL, "Invalid server first SASL message", e);
         }
     }
@@ -154,7 +154,7 @@ public final class PgConn {
             log.debug(STR."Generating client first msg : \{clientFirstMsg}");
             variable.setScramClient(scramClient);
             variable.setScramSession(scramSession);
-            channel.send(new PgAuthSaslInitialResponseMsg(mechanism, clientFirstMsg));
+            channel.sendMsg(new PgAuthSaslInitialResponseMsg(mechanism, clientFirstMsg));
         }else {
             throw new FrameworkException(ExceptionType.SQL, "No mechanism provided");
         }
@@ -169,7 +169,7 @@ public final class PgConn {
             byte[] d = PgUtil.toHexString(digest.digest()).getBytes(StandardCharsets.UTF_8);
             digest.update(d);
             digest.update(salt);
-            channel.send(new PgPasswordMsg("md5" + PgUtil.toHexString(digest.digest())));
+            channel.sendMsg(new PgPasswordMsg("md5" + PgUtil.toHexString(digest.digest())));
             variable.setState(PgVariable.WAITING_AUTH_OK);
         }catch (NoSuchAlgorithmException e) {
             throw new FrameworkException(ExceptionType.SQL, Constants.UNREACHED);
@@ -178,7 +178,7 @@ public final class PgConn {
 
     private void handleAuthClearPwd() {
         String password = pgManager.pgConfig().getPassword();
-        channel.send(new PgPasswordMsg(password));
+        channel.sendMsg(new PgPasswordMsg(password));
         variable.setState(PgVariable.WAITING_AUTH_OK);
     }
 
@@ -190,7 +190,7 @@ public final class PgConn {
     }
 
     private void handleTerminate(PgTerminateMsg pgTerminateMsg) {
-        channel.send(pgTerminateMsg);
+        channel.sendMsg(pgTerminateMsg);
         channel.shutdown(Duration.ofMillis(pgManager.pgConfig().getShutdownTimeout()));
         Thread.currentThread().interrupt();
     }

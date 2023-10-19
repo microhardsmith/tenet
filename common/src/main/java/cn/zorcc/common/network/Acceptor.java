@@ -3,7 +3,7 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.pojo.Loc;
+import cn.zorcc.common.structure.Loc;
 
 import java.lang.foreign.MemorySegment;
 import java.time.Duration;
@@ -106,7 +106,7 @@ public final class Acceptor implements Actor {
             }
             connector.doClose(this);
             if (worker.counter().decrementAndGet() == Constants.ZERO) {
-                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.POSSIBLE_SHUTDOWN, null, null, null));
+                worker.submitReaderTask(ReaderTask.POSSIBLE_SHUTDOWN_TASK);
             }
         }
     }

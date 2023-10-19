@@ -1,4 +1,4 @@
-package cn.zorcc.common.wheel;
+package cn.zorcc.common.structure;
 
 import cn.zorcc.common.AbstractLifeCycle;
 import cn.zorcc.common.Clock;

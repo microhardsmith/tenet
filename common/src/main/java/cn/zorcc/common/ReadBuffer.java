@@ -33,7 +33,7 @@ public final class ReadBuffer {
     }
 
     public void setReadIndex(long index) {
-        if(index < 0 || index > size) {
+        if(index < Constants.ZERO || index > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "ReadIndex out of bound");
         }
         readIndex = index;
@@ -47,8 +47,8 @@ public final class ReadBuffer {
         return readIndex;
     }
 
-    public boolean checkRemainingLength(int len) {
-        return readIndex + len <= size;
+    public long available() {
+        return size - readIndex;
     }
 
     public byte readByte() {
@@ -61,6 +61,9 @@ public final class ReadBuffer {
         return b;
     }
 
+    /**
+     *   The returning segment would have the same scope as current ReadBuffer
+     */
     public MemorySegment readSegment(long count) {
         long nextIndex = readIndex + count;
         if(nextIndex > size) {
@@ -71,8 +74,30 @@ public final class ReadBuffer {
         return result;
     }
 
+    /**
+     *   The returning segment would always be on-heap
+     */
+    public MemorySegment readHeapSegment(long count) {
+        MemorySegment m = readSegment(count);
+        if(m.isNative()) {
+            long len = m.byteSize();
+            byte[] bytes = new byte[(int) len];
+            MemorySegment h = MemorySegment.ofArray(bytes);
+            MemorySegment.copy(m, Constants.ZERO, h, Constants.ZERO, len);
+            return h;
+        }else {
+            return m;
+        }
+    }
+
     public byte[] readBytes(long count) {
-        return readSegment(count).toArray(ValueLayout.JAVA_BYTE);
+        long nextIndex = readIndex + count;
+        if(nextIndex > size) {
+            throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
+        }
+        byte[] result = segment.asSlice(readIndex, count).toArray(ValueLayout.JAVA_BYTE);
+        readIndex = nextIndex;
+        return result;
     }
 
     public short readShort() {

@@ -21,7 +21,7 @@ public record WriterTask(
         /**
          *   Send a mix of several msg
          */
-        MIX_OF_MSG,
+        MULTIPLE_MSG,
         /**
          *   Send a single msg
          */

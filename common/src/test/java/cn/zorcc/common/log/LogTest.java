@@ -2,7 +2,7 @@ package cn.zorcc.common.log;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.Context;
-import cn.zorcc.common.wheel.Wheel;
+import cn.zorcc.common.structure.Wheel;
 import org.junit.jupiter.api.Test;
 
 public class LogTest {
