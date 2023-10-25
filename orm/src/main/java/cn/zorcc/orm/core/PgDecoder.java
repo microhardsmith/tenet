@@ -21,7 +21,7 @@ public class PgDecoder implements Decoder {
         byte msgType = readBuffer.readByte();
         int msgLength = readBuffer.readInt();
         if(size < msgLength + 1) {
-            readBuffer.setReadIndex(Constants.ZERO);
+            readBuffer.setReadIndex(0);
             return null;
         }
         switch (msgType) {

@@ -217,8 +217,6 @@ public final class Constants {
     public static final String NOT_LOGIN = "Current user not login";
     public static final String ALREADY_EXIST = "User already exist";
     public static final String DB_CONNECTION_ERR = "Can't send message to postgresql";
-    public static final int ONE = 1;
-    public static final int ZERO = 0;
     public static final String AUTHORIZATION = "Authorization";
     public static final String BEARER = "Bearer ";
     public static final Integer BEARER_SIZE = BEARER.length();

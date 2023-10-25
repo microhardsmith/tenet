@@ -15,9 +15,11 @@ import java.util.concurrent.locks.ReentrantLock;
 /**
  *   Protocol using SSL encryption
  */
-public class SslProtocol implements Protocol {
+public final class SslProtocol implements Protocol {
     private static final Logger log = new Logger(SslProtocol.class);
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
+    private final Receiver receiver;
+    private final Channel channel;
     private final MemorySegment ssl;
     private final Lock lock = new ReentrantLock();
     private int state = 0;
@@ -27,7 +29,9 @@ public class SslProtocol implements Protocol {
     private static final int SHUTDOWN_WANT_TO_READ = 1 << 3;
     private static final int SHUTDOWN_WANT_TO_WRITE = 1 << 4;
 
-    public SslProtocol(MemorySegment ssl) {
+    public SslProtocol(Receiver receiver, MemorySegment ssl) {
+        this.receiver = receiver;
+        this.channel = receiver.getChannel();
         this.ssl = ssl;
     }
 
@@ -38,57 +42,57 @@ public class SslProtocol implements Protocol {
      *
      */
     @Override
-    public void canRead(Channel channel, MemorySegment memorySegment) {
+    public void canRead(MemorySegment reserved) {
         ReadBuffer rb = null;
         lock.lock();
         try {
-            if((state & SHUTDOWN_WANT_TO_READ) != Constants.ZERO) {
+            if((state & SHUTDOWN_WANT_TO_READ) != 0) {
                 state ^= SHUTDOWN_WANT_TO_READ;
-                performShutdown(channel);
+                doShutdownInReaderThread(receiver);
             }
-            if((state & SEND_WANT_TO_READ) != Constants.ZERO) {
+            if((state & SEND_WANT_TO_READ) != 0) {
                 state ^= SEND_WANT_TO_READ;
                 channel.worker().submitWriterTask(new WriterTask(WriterTask.WriterTaskType.WRITABLE, channel, null, null));
             }
-            if((state & RECV_WANT_TO_WRITE) == Constants.ZERO) {
-                int len = (int) memorySegment.byteSize();
-                int received = SslBinding.sslRead(ssl, memorySegment, len);
+            if((state & RECV_WANT_TO_WRITE) == 0) {
+                int len = (int) reserved.byteSize();
+                int received = SslBinding.sslRead(ssl, reserved, len);
                 if(received <= 0) {
                     int err = SslBinding.sslGetErr(ssl, received);
                     switch (err) {
                         case Constants.SSL_ERROR_WANT_WRITE -> state &= RECV_WANT_TO_WRITE;
-                        case Constants.SSL_ERROR_ZERO_RETURN -> performShutdown(channel);
+                        case Constants.SSL_ERROR_ZERO_RETURN -> doShutdownInReaderThread(receiver);
                         case Constants.SSL_ERROR_WANT_READ -> {}
                         default -> {
                             log.debug(STR."\{channel.loc()} ssl recv err, ssl_err : \{err}");
-                            channel.close();
+                            receiver.close();
                         }
                     }
                 }else {
-                    rb = new ReadBuffer(received == len ? memorySegment : memorySegment.asSlice(Constants.ZERO, received));
+                    rb = new ReadBuffer(received == len ? reserved : reserved.asSlice(0, received));
                 }
             }
         }finally {
             lock.unlock();
         }
         if (rb != null) {
-            channel.onReadBuffer(rb);
+            receiver.onChannelBuffer(rb);
         }
     }
 
     @Override
-    public void canWrite(Channel channel) {
+    public void canWrite() {
         lock.lock();
         try {
-            if((state & SHUTDOWN_WANT_TO_WRITE) != Constants.ZERO) {
+            if((state & SHUTDOWN_WANT_TO_WRITE) != 0) {
                 state ^= SHUTDOWN_WANT_TO_WRITE;
-                performShutdown(channel);
+                doShutdownInReaderThread(receiver);
             }
-            if((state & SEND_WANT_TO_WRITE) != Constants.ZERO) {
+            if((state & SEND_WANT_TO_WRITE) != 0) {
                 state ^= SEND_WANT_TO_WRITE;
                 channel.worker().submitWriterTask(new WriterTask(WriterTask.WriterTaskType.WRITABLE, channel, null, null));
             }
-            if((state & RECV_WANT_TO_WRITE) != Constants.ZERO) {
+            if((state & RECV_WANT_TO_WRITE) != 0) {
                 state ^= RECV_WANT_TO_WRITE;
             }
         }finally {
@@ -102,14 +106,14 @@ public class SslProtocol implements Protocol {
     }
 
     @Override
-    public WriteStatus doWrite(Channel channel, WriteBuffer writeBuffer) {
+    public WriteStatus doWrite(WriteBuffer writeBuffer) {
         boolean registerWrite = false;
         MemorySegment segment = writeBuffer.toSegment();
         int len = (int) segment.byteSize();
         lock.lock();
         try{
             int r = SslBinding.sslWrite(ssl, segment, len);
-            if(r <= Constants.ZERO) {
+            if(r <= 0) {
                 int err = SslBinding.sslGetErr(ssl, r);
                 if(err == Constants.SSL_ERROR_WANT_WRITE) {
                     state &= SEND_WANT_TO_WRITE;
@@ -122,7 +126,7 @@ public class SslProtocol implements Protocol {
                 }
 
             }else if(r < len){
-                return doWrite(channel, writeBuffer.truncate(r));
+                return doWrite(writeBuffer.truncate(r));
             }else {
                 return WriteStatus.SUCCESS;
             }
@@ -136,53 +140,60 @@ public class SslProtocol implements Protocol {
     }
 
     @Override
-    public void doShutdown(Channel channel) {
-        performShutdown(channel);
+    public void doShutdown() {
+        doShutdownInWriterThread(channel);
     }
 
     /**
-     *   Perform the actual shutdown operation, this function must be guarded by lock
+     *   If shutdown was immediately finished in writer thread, we need to tell the read thread to close the channel manually
      */
-    private void performShutdown(Channel channel) {
-        int r;
-        boolean registerWrite = false, errOccur = false;
+    private void doShutdownInWriterThread(Channel channel) {
+        if(shutdown()) {
+            channel.worker().submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_ACTOR, null, channel, null, null));
+        }
+    }
+
+    /**
+     *   If shutdown was immediately finished in reader thread, we can close the channel without concern
+     */
+    private void doShutdownInReaderThread(Receiver receiver) {
+        if(shutdown()) {
+            receiver.close();
+        }
+    }
+
+    /**
+     *   Perform the actual shutdown operation, return if current channel needs to be immediately shutdown
+     *   We have two situations that needs to be immediately shutdown:
+     *   1. SSL shutdown failed, and we are not able to deal with the err code
+     *   2. SSL shutdown return 1, means the remote has already closed the channel
+     */
+    private boolean shutdown() {
+        int r, err = 0;
         lock.lock();
         try {
             r = SslBinding.sslShutdown(ssl);
             if(r < 0) {
-                int err = SslBinding.sslGetErr(ssl, r);
-                switch (err) {
-                    case Constants.SSL_ERROR_WANT_READ -> state &= SHUTDOWN_WANT_TO_READ;
-                    case Constants.SSL_ERROR_WANT_WRITE -> {
-                        state &= SHUTDOWN_WANT_TO_WRITE;
-                        registerWrite = true;
-                    }
-                    default -> {
-                        log.error(STR."SSL shutdown failed with err : \{err}");
-                        errOccur = true;
-                    }
+                err = SslBinding.sslGetErr(ssl, r);
+                if(err == Constants.SSL_ERROR_WANT_READ) {
+                    state &= SHUTDOWN_WANT_TO_READ;
+                }else if(err == Constants.SSL_ERROR_WANT_WRITE) {
+                    state &= SHUTDOWN_WANT_TO_WRITE;
+                }else {
+                    log.error(STR."SSL shutdown failed with err : \{err}");
                 }
             }
         }finally {
             lock.unlock();
         }
-        if(registerWrite && channel.state().compareAndSet(OsNetworkLibrary.REGISTER_READ, OsNetworkLibrary.REGISTER_READ_WRITE)) {
+        if(r == Constants.SSL_ERROR_WANT_WRITE && channel.state().compareAndSet(OsNetworkLibrary.REGISTER_READ, OsNetworkLibrary.REGISTER_READ_WRITE)) {
             osNetworkLibrary.ctl(channel.worker().mux(), channel.socket(), OsNetworkLibrary.REGISTER_READ, OsNetworkLibrary.REGISTER_READ_WRITE);
         }
-        if(errOccur || r == Constants.ONE) {
-            // if openssl.sslShutdown() return 1, then the channel is safe to be closed
-            Worker worker = channel.worker();
-            if(Thread.currentThread() == worker.reader()) {
-                channel.close();
-            }else {
-                // In this case, the channel close operation might be delayed a little bit
-                worker.submitReaderTask(ReaderTask.createCloseChannelTask(channel));
-            }
-        }
+        return err < 0 || r == 1;
     }
 
     @Override
-    public void doClose(Channel channel) {
+    public void doClose() {
         SslBinding.sslFree(ssl);
         osNetworkLibrary.closeSocket(channel.socket());
     }

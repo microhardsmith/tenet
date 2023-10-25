@@ -24,7 +24,7 @@ public final class WriteBuffer extends OutputStream {
     private WriteBuffer(MemorySegment segment, WriteBufferPolicy policy) {
         this.segment = segment;
         this.size = segment.byteSize();
-        this.writeIndex = Constants.ZERO;
+        this.writeIndex = 0;
         this.policy = policy;
     }
 
@@ -60,7 +60,7 @@ public final class WriteBuffer extends OutputStream {
     }
 
     public void resize(long nextIndex) {
-        if(nextIndex < Constants.ZERO) {
+        if(nextIndex < 0) {
             throw new FrameworkException(ExceptionType.NATIVE, "Index overflow");
         }else if(nextIndex > size) {
             policy.resize(this, nextIndex);
@@ -68,7 +68,7 @@ public final class WriteBuffer extends OutputStream {
     }
 
     public void writeByte(byte b) {
-        long nextIndex = writeIndex + 1;
+        long nextIndex = writeIndex + NativeUtil.getByteSize();
         resize(nextIndex);
         NativeUtil.setByte(segment, writeIndex, b);
         writeIndex = nextIndex;
@@ -81,7 +81,7 @@ public final class WriteBuffer extends OutputStream {
 
     @Override
     public void write(byte[] b, int off, int len) {
-        if(len < Constants.ZERO || off + len > b.length) {
+        if(len < 0 || off + len > b.length) {
             throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
         }
         long nextIndex = writeIndex + len;
@@ -98,26 +98,26 @@ public final class WriteBuffer extends OutputStream {
     public void writeBytes(byte... bytes) {
         long nextIndex = writeIndex + bytes.length;
         resize(nextIndex);
-        MemorySegment.copy(MemorySegment.ofArray(bytes), Constants.ZERO, segment, writeIndex, bytes.length);
+        MemorySegment.copy(MemorySegment.ofArray(bytes), 0, segment, writeIndex, bytes.length);
         writeIndex = nextIndex;
     }
 
     public void writeShort(short s) {
-        long nextIndex = writeIndex + 2;
+        long nextIndex = writeIndex + NativeUtil.getShortSize();
         resize(nextIndex);
         NativeUtil.setShort(segment, writeIndex, s);
         writeIndex = nextIndex;
     }
 
     public void writeInt(int i) {
-        long nextIndex = writeIndex + 4;
+        long nextIndex = writeIndex + NativeUtil.getIntSize();
         resize(nextIndex);
         NativeUtil.setInt(segment, writeIndex, i);
         writeIndex = nextIndex;
     }
 
     public void writeLong(long l) {
-        long nextIndex = writeIndex + 8L;
+        long nextIndex = writeIndex + NativeUtil.getLongSize();
         resize(nextIndex);
         NativeUtil.setLong(segment, writeIndex, l);
         writeIndex = nextIndex;
@@ -126,9 +126,9 @@ public final class WriteBuffer extends OutputStream {
     public void writeCStr(String str) {
         MemorySegment m = MemorySegment.ofArray(str.getBytes(StandardCharsets.UTF_8));
         long len = m.byteSize();
-        long nextIndex = writeIndex + len + Constants.ONE;
+        long nextIndex = writeIndex + len + 1;
         resize(nextIndex);
-        MemorySegment.copy(m, Constants.ZERO, segment, writeIndex, len);
+        MemorySegment.copy(m, 0, segment, writeIndex, len);
         NativeUtil.setByte(segment, writeIndex + len, Constants.NUT);
         writeIndex = nextIndex;
     }
@@ -137,7 +137,7 @@ public final class WriteBuffer extends OutputStream {
         long len = memorySegment.byteSize();
         long nextIndex = writeIndex + len;
         resize(nextIndex);
-        MemorySegment.copy(memorySegment, Constants.ZERO, segment, writeIndex, len);
+        MemorySegment.copy(memorySegment, 0, segment, writeIndex, len);
         writeIndex = nextIndex;
     }
 
@@ -148,7 +148,7 @@ public final class WriteBuffer extends OutputStream {
         }else {
             long nextIndex = writeIndex + minWidth;
             resize(nextIndex);
-            MemorySegment.copy(memorySegment, Constants.ZERO, segment, writeIndex, len);
+            MemorySegment.copy(memorySegment, 0, segment, writeIndex, len);
             segment.asSlice(writeIndex + len, minWidth - len).fill(padding);
             writeIndex = nextIndex;
         }
@@ -199,7 +199,7 @@ public final class WriteBuffer extends OutputStream {
      *   Return current written segment, from 0 ~ writeIndex, calling content() will not modify current writeBuffer's writeIndex
      */
     public MemorySegment content() {
-        return writeIndex == size ? segment : segment.asSlice(Constants.ZERO, writeIndex);
+        return writeIndex == size ? segment : segment.asSlice(0, writeIndex);
     }
 
     /**
@@ -225,11 +225,11 @@ public final class WriteBuffer extends OutputStream {
             throw new FrameworkException(ExceptionType.NATIVE, "String size overflow");
         }
         final int index = (int) writeIndex;
-        writeIndex = Constants.ZERO;
+        writeIndex = 0;
         if(policy instanceof HeapWriteBufferPolicy heapWriteBufferPolicy) {
-            return new String(heapWriteBufferPolicy.data, Constants.ZERO, index, StandardCharsets.UTF_8);
+            return new String(heapWriteBufferPolicy.data, 0, index, StandardCharsets.UTF_8);
         }else {
-            return new String(segment.toArray(ValueLayout.JAVA_BYTE), Constants.ZERO, index, StandardCharsets.UTF_8);
+            return new String(segment.toArray(ValueLayout.JAVA_BYTE), 0, index, StandardCharsets.UTF_8);
         }
     }
 
@@ -238,20 +238,20 @@ public final class WriteBuffer extends OutputStream {
             throw new FrameworkException(ExceptionType.NATIVE, "String size overflow");
         }
         final int index = (int) writeIndex;
-        writeIndex = Constants.ZERO;
+        writeIndex = 0;
         if(policy instanceof HeapWriteBufferPolicy heapWriteBufferPolicy) {
-            return Arrays.copyOfRange(heapWriteBufferPolicy.data, Constants.ZERO, index);
+            return Arrays.copyOfRange(heapWriteBufferPolicy.data, 0, index);
         }else {
             byte[] bytes = new byte[index];
             MemorySegment m = MemorySegment.ofArray(bytes);
-            MemorySegment.copy(segment, Constants.ZERO, m, Constants.ZERO, index);
+            MemorySegment.copy(segment, 0, m, 0, index);
             return bytes;
         }
     }
 
     public MemorySegment toSegment() {
         MemorySegment m = content();
-        writeIndex = Constants.ZERO;
+        writeIndex = 0;
         return m;
     }
 
@@ -267,12 +267,12 @@ public final class WriteBuffer extends OutputStream {
 
         @Override
         public void resize(WriteBuffer writeBuffer, long nextIndex) {
-            long newLen = Math.max(nextIndex, writeBuffer.size() << Constants.ONE);
-            if(newLen < Constants.ZERO) {
+            long newLen = Math.max(nextIndex, writeBuffer.size() << 1);
+            if(newLen < 0) {
                 throw new FrameworkException(ExceptionType.NATIVE, "MemorySize overflow");
             }
             MemorySegment newSegment = arena.allocateArray(ValueLayout.JAVA_BYTE, newLen);
-            MemorySegment.copy(writeBuffer.segment, Constants.ZERO, newSegment, Constants.ZERO, writeBuffer.writeIndex);
+            MemorySegment.copy(writeBuffer.segment, 0, newSegment, 0, writeBuffer.writeIndex);
             writeBuffer.segment = newSegment;
             writeBuffer.size = newLen;
         }
@@ -284,7 +284,7 @@ public final class WriteBuffer extends OutputStream {
     }
 
     /**
-     *   Ignore writeBufferPolicy, throw a exception if current WriteBuffer wants to resize
+     *   Ignore writeBufferPolicy, throw an exception if current WriteBuffer wants to resize
      */
     static final class FixedWriteBufferPolicy implements WriteBufferPolicy {
         private final Arena arena;
@@ -312,15 +312,15 @@ public final class WriteBuffer extends OutputStream {
 
         @Override
         public void resize(WriteBuffer writeBuffer, long nextIndex) {
-            long newLen = Math.max(nextIndex, writeBuffer.size() << Constants.ONE);
-            if(newLen < Constants.ZERO) {
+            long newLen = Math.max(nextIndex, writeBuffer.size() << 1);
+            if(newLen < 0) {
                 throw new FrameworkException(ExceptionType.NATIVE, "MemorySize overflow");
             }
             if(arena == null) {
                 arena = Arena.ofConfined();
             }
             MemorySegment newSegment = arena.allocateArray(ValueLayout.JAVA_BYTE, newLen);
-            MemorySegment.copy(writeBuffer.segment, Constants.ZERO, newSegment, Constants.ZERO, writeBuffer.writeIndex);
+            MemorySegment.copy(writeBuffer.segment, 0, newSegment, 0, writeBuffer.writeIndex);
             writeBuffer.segment = newSegment;
             writeBuffer.size = newLen;
         }
@@ -344,12 +344,12 @@ public final class WriteBuffer extends OutputStream {
             if(nextIndex > Integer.MAX_VALUE) {
                 throw new FrameworkException(ExceptionType.NATIVE, "Heap writeBuffer size overflow");
             }
-            int newLen = Math.max((int) nextIndex, data.length << Constants.ONE);
-            if(newLen < Constants.ZERO) {
+            int newLen = Math.max((int) nextIndex, data.length << 1);
+            if(newLen < 0) {
                 throw new FrameworkException(ExceptionType.NATIVE, "MemorySize overflow");
             }
             byte[] newData = new byte[newLen];
-            System.arraycopy(data, Constants.ZERO, newData, Constants.ZERO, (int) writeBuffer.writeIndex);
+            System.arraycopy(data, 0, newData, 0, (int) writeBuffer.writeIndex);
             data = newData;
             writeBuffer.segment = MemorySegment.ofArray(newData);
             writeBuffer.size = newLen;
@@ -357,7 +357,7 @@ public final class WriteBuffer extends OutputStream {
 
         @Override
         public void close(WriteBuffer writeBuffer) {
-            // Skip
+            // No external close operation needed for heapWriteBuffer
         }
     }
 }

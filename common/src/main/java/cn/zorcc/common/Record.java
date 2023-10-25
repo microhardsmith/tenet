@@ -73,7 +73,7 @@ public final class Record<T> {
             List<Class<?>> parameterTypes = new ArrayList<>();
             Object[] elementArray = new Object[fields.length];
             Map<String, Integer> elementIndexMap = new HashMap<>();
-            int index = Constants.ZERO;
+            int index = 0;
             for (Field f : fields) {
                 Class<?> fieldType = f.getType();
                 parameterTypes.add(fieldType);
@@ -87,7 +87,7 @@ public final class Record<T> {
             for (Field f : Arrays.stream(fields).sorted((o1, o2) -> {
                 Ordinal a1 = o1.getAnnotation(Ordinal.class);
                 Ordinal a2 = o2.getAnnotation(Ordinal.class);
-                return (a1 == null || a2 == null) ? Constants.ZERO : Integer.compare(a1.sequence(), a2.sequence());
+                return (a1 == null || a2 == null) ? 0 : Integer.compare(a1.sequence(), a2.sequence());
             }).toList()) {
                 String fieldName = f.getName();
                 Class<?> fieldClass = f.getType();

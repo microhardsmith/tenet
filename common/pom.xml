@@ -11,7 +11,7 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.github.JCTools.JCTools</groupId>
+            <groupId>org.jctools</groupId>
             <artifactId>jctools-core</artifactId>
             <version>${jctools.version}</version>
         </dependency>

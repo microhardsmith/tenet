@@ -7,7 +7,6 @@ import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 
 import java.lang.foreign.MemorySegment;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  *   Connector using SSL encryption
@@ -18,97 +17,99 @@ public final class SslConnector implements Connector {
     private static final int INITIAL = 0;
     private static final int WANT_READ = 1;
     private static final int WANT_WRITE = 2;
+    private final Receiver receiver;
+    private final Channel channel;
     private final boolean clientSide;
     private final MemorySegment ssl;
-    private final AtomicInteger status = new AtomicInteger(INITIAL);
+    private int status = INITIAL;
 
-    public SslConnector(boolean clientSide, MemorySegment ssl) {
+    public SslConnector(Receiver receiver, boolean clientSide, MemorySegment ssl) {
+        this.receiver = receiver;
+        this.channel = receiver.getChannel();
         this.clientSide = clientSide;
         this.ssl = ssl;
     }
 
     @Override
-    public void doClose(Acceptor acceptor) {
-        SslBinding.sslFree(ssl);
-        osNetworkLibrary.closeSocket(acceptor.socket());
-    }
-
-    @Override
-    public void canRead(Acceptor acceptor, MemorySegment buffer) {
-        int currentStatus = status.get();
-        if (currentStatus == WANT_READ) {
-            unregisterState(acceptor, OsNetworkLibrary.REGISTER_READ);
-            doHandshake(acceptor);
+    public void canRead(MemorySegment buffer) {
+        if (status == WANT_READ) {
+            unregisterState(OsNetworkLibrary.REGISTER_READ);
+            doHandshake();
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
     @Override
-    public void canWrite(Acceptor acceptor) {
-        int currentStatus = status.get();
-        if (currentStatus == INITIAL) {
-            unregisterState(acceptor, OsNetworkLibrary.REGISTER_WRITE);
-            Socket socket = acceptor.socket();
-            int errOpt = osNetworkLibrary.getErrOpt(acceptor.socket());
+    public void canWrite() {
+        if (status == INITIAL) {
+            unregisterState(OsNetworkLibrary.REGISTER_WRITE);
+            Socket socket = channel.socket();
+            int errOpt = osNetworkLibrary.getErrOpt(socket);
             if(errOpt == 0) {
                 int r = SslBinding.sslSetFd(ssl, socket.intValue());
                 if(r == 1) {
-                    doHandshake(acceptor);
+                    doHandshake();
                 }else {
                     log.error(STR."Failed to set fd for ssl, err : \{ SslBinding.sslGetErr(ssl, r)}");
-                    acceptor.close();
+                    receiver.close();
                 }
             }else {
                 log.error(STR."Failed to establish ssl connection, errno : \{ osNetworkLibrary.errno()}");
-                acceptor.close();
+                receiver.close();
             }
-        }else if (currentStatus == WANT_WRITE) {
-            unregisterState(acceptor, OsNetworkLibrary.REGISTER_WRITE);
-            doHandshake(acceptor);
+        }else if (status == WANT_WRITE) {
+            unregisterState(OsNetworkLibrary.REGISTER_WRITE);
+            doHandshake();
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
+    }
+
+    @Override
+    public void doClose() {
+        SslBinding.sslFree(ssl);
+        osNetworkLibrary.closeSocket(channel.socket());
     }
 
     /**
      *   Register read or write state from target acceptor
      */
-    private static void registerState(Acceptor acceptor, int val) {
-        int current = acceptor.state().getAndUpdate(i -> (i & val) == 0 ? i + val : i);
+    private void registerState(int val) {
+        int current = channel.state().getAndUpdate(i -> (i & val) == 0 ? i + val : i);
         if((current & val) == 0) {
-            osNetworkLibrary.ctl(acceptor.worker().mux(), acceptor.socket(), current, current + val);
+            osNetworkLibrary.ctl(channel.worker().mux(), channel.socket(), current, current + val);
         }
     }
 
     /**
      *   Unregister read or write state from target acceptor
      */
-    private static void unregisterState(Acceptor acceptor, int val) {
-        int current = acceptor.state().getAndUpdate(i -> (i & val) != 0 ? i - val : i);
+    private void unregisterState(int val) {
+        int current = channel.state().getAndUpdate(i -> (i & val) != 0 ? i - val : i);
         if((current & val) != 0) {
-            osNetworkLibrary.ctl(acceptor.worker().mux(), acceptor.socket(), current, current - val);
+            osNetworkLibrary.ctl(channel.worker().mux(), channel.socket(), current, current - val);
         }
     }
 
     /**
      *   Performing actual SSL handshake
      */
-    private void doHandshake(Acceptor acceptor) {
+    private void doHandshake() {
         int r = clientSide ? SslBinding.sslConnect(ssl) : SslBinding.sslAccept(ssl);
         if(r == 1) {
-            acceptor.toChannel(new SslProtocol(ssl));
+            receiver.upgradeToChannel(new SslProtocol(receiver, ssl));
         }else if(r <= 0) {
             int err = SslBinding.sslGetErr(ssl, r);
             if(err == Constants.SSL_ERROR_WANT_READ) {
-                status.set(WANT_READ);
-                registerState(acceptor, OsNetworkLibrary.REGISTER_READ);
+                status = WANT_READ;
+                registerState(OsNetworkLibrary.REGISTER_READ);
             }else if(err == Constants.SSL_ERROR_WANT_WRITE) {
-                status.set(WANT_WRITE);
-                registerState(acceptor, OsNetworkLibrary.REGISTER_WRITE);
+                status = WANT_WRITE;
+                registerState(OsNetworkLibrary.REGISTER_WRITE);
             }else {
                 log.error(STR."Failed to perform ssl handshake, ssl err : \{err}");
-                acceptor.close();
+                receiver.close();
             }
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);

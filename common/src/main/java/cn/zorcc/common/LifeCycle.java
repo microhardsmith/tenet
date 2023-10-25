@@ -16,6 +16,9 @@ public interface LifeCycle {
      */
     void exit() throws InterruptedException;
 
+    /**
+     *  Shutdown a component with InterruptedException eaten
+     */
     default void UninterruptibleExit() {
         try{
             exit();

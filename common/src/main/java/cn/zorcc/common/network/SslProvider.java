@@ -38,14 +38,14 @@ public final class SslProvider implements Provider {
     private void configureServerSideCtx(String publicKeyFile, String privateKeyFile) {
         try(Arena arena = Arena.ofConfined()) {
             MemorySegment publicKey = NativeUtil.allocateStr(arena, publicKeyFile);
-            if (SslBinding.setPublicKey(ctx, publicKey, Constants.SSL_FILETYPE_PEM) <= Constants.ZERO) {
+            if (SslBinding.setPublicKey(ctx, publicKey, Constants.SSL_FILETYPE_PEM) <= 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, "SSL server public key err");
             }
             MemorySegment privateKey = NativeUtil.allocateStr(arena, privateKeyFile);
-            if (SslBinding.setPrivateKey(ctx, privateKey, Constants.SSL_FILETYPE_PEM) <= Constants.ZERO) {
+            if (SslBinding.setPrivateKey(ctx, privateKey, Constants.SSL_FILETYPE_PEM) <= 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, "SSL server private key err");
             }
-            if (SslBinding.checkPrivateKey(ctx) <= Constants.ZERO) {
+            if (SslBinding.checkPrivateKey(ctx) <= 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, "SSL server private key and public key doesn't match");
             }
         }

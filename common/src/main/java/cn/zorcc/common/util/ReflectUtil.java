@@ -16,6 +16,9 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+/**
+ *   Reflection helper class
+ */
 public final class ReflectUtil {
     private static final Map<Class<?>, Class<?>> wrapperMap = Map.of(byte.class, Byte.class,
             short.class, Short.class,
@@ -30,6 +33,9 @@ public final class ReflectUtil {
         throw new UnsupportedOperationException();
     }
 
+    /**
+     *   Get the corresponding wrapper type based on its primitive type
+     */
     public static Class<?> getWrapperClass(Class<?> primitiveClass) {
         return wrapperMap.get(primitiveClass);
     }
@@ -71,11 +77,11 @@ public final class ReflectUtil {
     }
 
     public static String getterName(Class<?> fieldType, String fieldName) {
-        return (fieldType == boolean.class ? Constants.IS : Constants.GET) + fieldName.substring(Constants.ZERO, Constants.ONE).toUpperCase() + fieldName.substring(Constants.ONE);
+        return (fieldType == boolean.class ? Constants.IS : Constants.GET) + fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1);
     }
 
     public static String setterName(String fieldName) {
-        return Constants.SET + fieldName.substring(Constants.ZERO, Constants.ONE).toUpperCase() + fieldName.substring(Constants.ONE);
+        return Constants.SET + fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1);
     }
 
 
@@ -165,7 +171,7 @@ public final class ReflectUtil {
         try{
             MethodType type = mh.type();
             if(fieldClass.isPrimitive()) {
-                type = type.changeParameterType(Constants.ONE, ReflectUtil.getWrapperClass(fieldClass));
+                type = type.changeParameterType(1, ReflectUtil.getWrapperClass(fieldClass));
             }
             CallSite callSite = LambdaMetafactory.metafactory(Constants.LOOKUP,
                     Constants.ACCEPT,

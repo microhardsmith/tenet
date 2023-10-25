@@ -37,7 +37,7 @@ public final class PgConn {
     /**
      *   Global counter for established postgresql connections
      */
-    private static final AtomicInteger counter = new AtomicInteger(Constants.ZERO);
+    private static final AtomicInteger counter = new AtomicInteger(0);
     private final int sequence;
     private final PgManager pgManager;
     private final Channel channel;

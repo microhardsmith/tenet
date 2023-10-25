@@ -21,7 +21,7 @@ public final class Master {
     private static final Logger log = new Logger(Master.class);
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
     private final Thread thread;
-    private final AtomicInteger acceptCounter = new AtomicInteger(Constants.ZERO);
+    private final AtomicInteger acceptCounter = new AtomicInteger(0);
 
     public Master(MasterConfig masterConfig, List<Worker> workers, int sequence) {
         this.thread = createMasterThread(masterConfig, workers, sequence);
@@ -49,7 +49,7 @@ public final class Master {
                 osNetworkLibrary.ctl(mux, socket, OsNetworkLibrary.REGISTER_NONE, OsNetworkLibrary.REGISTER_READ);
                 while (!currentThread.isInterrupted()) {
                     int count = osNetworkLibrary.muxWait(mux, events, maxEvents, timeout);
-                    if(count < Constants.ZERO) {
+                    if(count < 0) {
                         int errno = osNetworkLibrary.errno();
                         if(errno == osNetworkLibrary.interruptCode()) {
                             continue;
@@ -57,7 +57,7 @@ public final class Master {
                             throw new FrameworkException(ExceptionType.NETWORK, STR."Multiplexing wait failed with errno : \{errno}");
                         }
                     }
-                    for(int index = Constants.ZERO; index < count; ++index) {
+                    for(int index = 0; index < count; ++index) {
                         osNetworkLibrary.masterWait(socket, events, index);
                         ClientSocket clientSocket = osNetworkLibrary.accept(masterConfig, loc, socket);
                         Worker worker = Net.chooseWorker(workers, acceptCounter);
@@ -65,8 +65,8 @@ public final class Master {
                         Decoder decoder = decoderSupplier.get();
                         Handler handler = handlerSupplier.get();
                         Connector connector = provider.newConnector();
-                        Acceptor acceptor = new Acceptor(clientSocket.socket(), encoder, decoder, handler, connector, worker, clientSocket.loc());
-                        Net.mount(acceptor);
+                        Channel channel = new Channel(clientSocket.socket(), encoder, decoder, handler, worker, clientSocket.loc(), new AtomicInteger(OsNetworkLibrary.REGISTER_NONE));
+                        Net.mount(connector, channel);
                     }
                 }
             } finally {

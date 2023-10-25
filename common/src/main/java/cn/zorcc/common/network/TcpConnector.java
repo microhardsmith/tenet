@@ -10,28 +10,38 @@ import java.lang.foreign.MemorySegment;
 /**
  *   Connector for normal TCP connection
  */
-public class TcpConnector implements Connector {
+public final class TcpConnector implements Connector {
     private static final Logger log = new Logger(TcpConnector.class);
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
+    private final Receiver receiver;
+    private final Acceptor acceptor;
 
-    @Override
-    public void doClose(Acceptor acceptor) {
-        osNetworkLibrary.closeSocket(acceptor.socket());
+    public TcpConnector(Receiver receiver) {
+        this.receiver = receiver;
+        this.acceptor = receiver.getAcceptor();
     }
 
     @Override
-    public void canRead(Acceptor acceptor, MemorySegment buffer) {
+    public void canRead(MemorySegment buffer) {
         throw new FrameworkException(ExceptionType.NETWORK , Constants.UNREACHED);
     }
 
     @Override
-    public void canWrite(Acceptor acceptor) {
+    public void canWrite() {
         int errOpt = osNetworkLibrary.getErrOpt(acceptor.socket());
-        if(errOpt == Constants.ZERO) {
-            acceptor.toChannel(new TcpProtocol());
+        if(errOpt == 0) {
+            receiver.upgradeToChannel();
+            receiver.setProtocol(new TcpProtocol(receiver));
         }else {
             log.error(STR."Failed to establish tcp connection, errno : \{errOpt}");
-            acceptor.close();
+            receiver.close();
         }
+    }
+
+    @Override
+    public void doClose() {
+        osNetworkLibrary.closeSocket(acceptor.socket());
+        receiver.setAcceptor(null);
+        receiver.setConnector(null);
     }
 }

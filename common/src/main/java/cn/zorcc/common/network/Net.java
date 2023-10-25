@@ -44,7 +44,7 @@ public final class Net extends AbstractLifeCycle {
     private final List<Worker> workers = new ArrayList<>();
     private final Lock lock = new ReentrantLock();
     private final Set<Provider> customProviders = new HashSet<>();
-    private final AtomicInteger connectCounter = new AtomicInteger(Constants.ZERO);
+    private final AtomicInteger connectCounter = new AtomicInteger(0);
 
     public static Provider tcpProvider() {
         return tcpProvider;
@@ -137,16 +137,16 @@ public final class Net extends AbstractLifeCycle {
         Socket socket = osNetworkLibrary.createSocket(loc);
         osNetworkLibrary.configureClientSocket(socket, socketOptions);
         Worker worker = chooseWorker(workers, connectCounter);
-        Acceptor acceptor = new Acceptor(socket, encoder, decoder, handler, connector, worker, loc);
+        Channel channel = new Channel(socket, encoder, decoder, handler, worker, loc, new AtomicInteger(OsNetworkLibrary.REGISTER_NONE));
         try(Arena arena = Arena.ofConfined()) {
             MemorySegment sockAddr = osNetworkLibrary.createSockAddr(loc, arena);
-            if(osNetworkLibrary.connect(socket, sockAddr) == Constants.ZERO) {
-                mount(acceptor);
+            if(osNetworkLibrary.connect(socket, sockAddr) == 0) {
+                mount(connector, channel);
             }else {
                 int errno = osNetworkLibrary.errno();
                 if (errno == osNetworkLibrary.connectBlockCode()) {
-                    mount(acceptor);
-                    Wheel.wheel().addJob(() -> worker.submitReaderTask(ReaderTask.createAddAcceptorTask(acceptor)), duration);
+                    mount(connector, channel);
+                    Wheel.wheel().addJob(() -> worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, null, channel, null, null)), duration);
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to connect, errno : \{errno}");
                 }
@@ -168,12 +168,12 @@ public final class Net extends AbstractLifeCycle {
 
 
     /**
-     *   Mount target acceptor to its worker thread for write events to happen
+     *   Mount target connector and channel to its worker thread for registry
      */
-    public static void mount(Acceptor acceptor) {
-        acceptor.worker().submitReaderTask(ReaderTask.createAddAcceptorTask(acceptor));
-        if (acceptor.state().compareAndSet(OsNetworkLibrary.REGISTER_NONE, OsNetworkLibrary.REGISTER_WRITE)) {
-            osNetworkLibrary.ctl(acceptor.worker().mux(), acceptor.socket(), OsNetworkLibrary.REGISTER_NONE, OsNetworkLibrary.REGISTER_WRITE);
+    public static void mount(Connector connector, Channel channel) {
+        channel.worker().submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.ADD_CHANNEL, connector, channel, null, null));
+        if (channel.state().compareAndSet(OsNetworkLibrary.REGISTER_NONE, OsNetworkLibrary.REGISTER_WRITE)) {
+            osNetworkLibrary.ctl(channel.worker().mux(), channel.socket(), OsNetworkLibrary.REGISTER_NONE, OsNetworkLibrary.REGISTER_WRITE);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
@@ -202,7 +202,7 @@ public final class Net extends AbstractLifeCycle {
                 master.thread().join();
             }
             for (Worker worker : workers) {
-                worker.submitReaderTask(ReaderTask.createGracefulShutdownTask(DEFAULT_GRACEFUL_SHUTDOWN_DURATION));
+                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.GRACEFUL_SHUTDOWN, null, DEFAULT_GRACEFUL_SHUTDOWN_DURATION, null));
             }
             for(Worker worker : workers) {
                 worker.reader().join();

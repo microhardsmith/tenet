@@ -51,9 +51,9 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
             if(!Files.exists(dirPath)) {
                 Files.createDirectory(dirPath);
             }
-            flushThreshold = config.getFlushThreshold() <= Constants.ZERO ? Integer.MIN_VALUE : config.getFlushThreshold();
-            maxFileSize = config.getMaxFileSize() <= Constants.ZERO ? Long.MIN_VALUE : config.getMaxFileSize();
-            maxRecordingTime = config.getMaxRecordingTime() <= Constants.ZERO ? Long.MIN_VALUE : config.getMaxRecordingTime();
+            flushThreshold = config.getFlushThreshold() <= 0 ? Integer.MIN_VALUE : config.getFlushThreshold();
+            maxFileSize = config.getMaxFileSize() <= 0 ? Long.MIN_VALUE : config.getMaxFileSize();
+            maxRecordingTime = config.getMaxRecordingTime() <= 0 ? Long.MIN_VALUE : config.getMaxRecordingTime();
             reserved = reservedArena.allocate(config.getBuffer());
             openNewLogOutputFile();
         }catch (IOException e) {
@@ -78,11 +78,11 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
             MemorySegment path = arena.allocateUtf8String(absolutePath);
             MemorySegment mode = arena.allocateUtf8String("a");
             fileStream = FileUtil.fopen(path, mode);
-            if (FileUtil.setvbuf(fileStream, NativeUtil.NULL_POINTER, TenetBinding.nbf(), Constants.ZERO) != Constants.ZERO) {
+            if (FileUtil.setvbuf(fileStream, NativeUtil.NULL_POINTER, TenetBinding.nbf(), 0) != 0) {
                 throw new FrameworkException(ExceptionType.LOG, "Failed to set filestream to nbf mode");
             }
             currentCreateTime = now.toInstant(Constants.LOCAL_ZONE_OFFSET).toEpochMilli();
-            currentWrittenIndex = Constants.ZERO;
+            currentWrittenIndex = 0;
         }
     }
 
@@ -97,7 +97,7 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
 
     private void onMsg(LogEvent event) {
         eventList.add(event);
-        if(flushThreshold > Constants.ZERO && eventList.size() > flushThreshold) {
+        if(flushThreshold > 0 && eventList.size() > flushThreshold) {
             flush(true);
         }
     }
@@ -120,11 +120,11 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
     }
 
     private boolean exceedFileSizeLimitation() {
-        return maxFileSize > Constants.ZERO && currentWrittenIndex > maxFileSize;
+        return maxFileSize > 0 && currentWrittenIndex > maxFileSize;
     }
 
     private boolean exceedRecordingTimeLimitation() {
-        return maxRecordingTime > Constants.ZERO && eventList.getLast().timestamp() - currentCreateTime > maxRecordingTime;
+        return maxRecordingTime > 0 && eventList.getLast().timestamp() - currentCreateTime > maxRecordingTime;
     }
 
     private void shutdown() {

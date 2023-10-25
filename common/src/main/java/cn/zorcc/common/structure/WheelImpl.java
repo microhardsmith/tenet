@@ -19,7 +19,7 @@ import java.util.function.LongConsumer;
 
 public final class WheelImpl extends AbstractLifeCycle implements Wheel {
     private static final long ONCE = Long.MIN_VALUE;
-    private static final AtomicLong counter = new AtomicLong(Constants.ZERO);
+    private static final AtomicLong counter = new AtomicLong(0);
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
     private final int mask;
     private final long tick;
@@ -37,19 +37,19 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
         if(slots < 256) {
             throw new FrameworkException(ExceptionType.WHEEL, "Slots are too small for a wheel");
         }
-        this.mask = slots - Constants.ONE;
-        if((slots & mask) != Constants.ZERO) {
+        if(Integer.bitCount(slots) != 1) {
             throw new FrameworkException(ExceptionType.WHEEL, "Slots must be power of two");
         }
+        this.mask = slots - 1;
         this.tick = tick;
         this.tickNano = Duration.ofMillis(tick).toNanos();
         this.bound = slots * tick;
-        this.cMask = mask >> Constants.ONE;
+        this.cMask = mask >> 1;
         this.queue = new MpscUnboundedAtomicArrayQueue<>(slots);
         this.wheel = new JobImpl[slots];
         final Runnable empty = () -> {};
-        for(int i = Constants.ZERO; i < slots; i++) {
-            wheel[i] = new JobImpl(Constants.ZERO, Constants.ZERO, empty);
+        for(int i = 0; i < slots; i++) {
+            wheel[i] = new JobImpl(0, 0, empty);
         }
         // if we use virtual thread, then parkNanos() will internally use a ScheduledThreadPoolExecutor for unpark the current vthread
         // still there is a platform thread constantly waiting for lock and go to sleep and so on. So use platform thread would be more simplified
@@ -130,7 +130,7 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
                     break;
                 }
                 // if delay is smaller than current milli, we should run it in current slot, so we select tasks before running wheel
-                final long delayMillis = Math.max(job.execMilli - milli, Constants.ZERO);
+                final long delayMillis = Math.max(job.execMilli - milli, 0);
                 if(delayMillis >= bound) {
                     waitSet.add(job);
                 }else {
@@ -140,7 +140,7 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
             }
 
             // check if we need to scan the waiting queue
-            if((slot & cMask) == Constants.ZERO) {
+            if((slot & cMask) == 0) {
                 Iterator<JobImpl> iterator = waitSet.iterator();
                 while (iterator.hasNext()) {
                     JobImpl job = iterator.next();
@@ -258,7 +258,7 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
         private JobImpl next;
         private final Runnable mission;
         private final AtomicBoolean owner = new AtomicBoolean(false);
-        private final AtomicLong count = new AtomicLong(Constants.ZERO);
+        private final AtomicLong count = new AtomicLong(0);
         private final long period;
 
         JobImpl(long execMilli, long period, Runnable runnable) {

@@ -31,7 +31,7 @@ public abstract class JsonWriterNode {
     private JsonWriterNode prev;
     private JsonWriterNode next;
     private boolean notFirst = false;
-    private int pos = Constants.ZERO;
+    private int pos = 0;
 
     /**
      *   Unlink current JsonWriterNode with the prev node and return it
@@ -59,7 +59,7 @@ public abstract class JsonWriterNode {
         if(pos > CIRCULAR_REFERENCE_LIMITATION) {
             throw new JsonParseException("Possibly circular reference detected");
         }
-        n.pos = this.pos + Constants.ONE;
+        n.pos = this.pos + 1;
         next = n;
         n.prev = this;
         return n;
@@ -92,7 +92,7 @@ public abstract class JsonWriterNode {
             if(expectedType == String.class) {
                 writeStrBytes(writeBuffer, b);
             }else if(expectedType == boolean.class || expectedType == Boolean.class) {
-                writePrimitiveBoolean(writeBuffer, b > Constants.ZERO);
+                writePrimitiveBoolean(writeBuffer, b > 0);
             }else {
                 throw new JsonParseException(format, b);
             }
@@ -109,7 +109,7 @@ public abstract class JsonWriterNode {
             if(expectedType == String.class) {
                 writeStrBytes(writeBuffer, String.valueOf(c).getBytes(StandardCharsets.UTF_8));
             }else if(expectedType == boolean.class || expectedType == Boolean.class) {
-                writePrimitiveBoolean(writeBuffer, c > Constants.ZERO);
+                writePrimitiveBoolean(writeBuffer, c > 0);
             }else {
                 throw new JsonParseException(format, c);
             }
@@ -133,7 +133,7 @@ public abstract class JsonWriterNode {
             if(expectedType == String.class) {
                 writeStrBytes(writeBuffer, String.valueOf(s).getBytes(StandardCharsets.UTF_8));
             }else if(expectedType == boolean.class || expectedType == Boolean.class) {
-                writePrimitiveBoolean(writeBuffer, s > Constants.ZERO);
+                writePrimitiveBoolean(writeBuffer, s > 0);
             }else {
                 throw new JsonParseException(format, s);
             }
@@ -141,7 +141,7 @@ public abstract class JsonWriterNode {
     }
 
     private static void writePrimitiveShort(WriteBuffer writeBuffer, short s) {
-        while (s > Constants.ZERO) {
+        while (s > 0) {
             writeBuffer.writeByte((byte) (Constants.B_ZERO + s % 10));
             s /= 10;
         }
@@ -158,7 +158,7 @@ public abstract class JsonWriterNode {
             if(expectedType == String.class) {
                 writeStrBytes(writeBuffer, String.valueOf(i).getBytes(StandardCharsets.UTF_8));
             }else if(expectedType == boolean.class || expectedType == Boolean.class) {
-                writePrimitiveBoolean(writeBuffer, i > Constants.ZERO);
+                writePrimitiveBoolean(writeBuffer, i > 0);
             }else {
                 throw new JsonParseException(format, i);
             }
@@ -167,13 +167,13 @@ public abstract class JsonWriterNode {
 
     private static void writePrimitiveInt(WriteBuffer writeBuffer, int i) {
         try(WriteBuffer tempBuffer = WriteBuffer.newHeapWriteBuffer(INTEGER_BYTE_LENGTH)) {
-            while (i > Constants.ZERO) {
+            while (i > 0) {
                 tempBuffer.writeByte((byte) (Constants.B_ZERO + i % 10));
                 i /= 10;
             }
             MemorySegment segment = tempBuffer.toSegment();
             long len = segment.byteSize();
-            for(int t = Constants.ONE; t <= len; t++) {
+            for(int t = 1; t <= len; t++) {
                 writeBuffer.writeByte(NativeUtil.getByte(segment, len - t));
             }
         }
@@ -190,7 +190,7 @@ public abstract class JsonWriterNode {
             if(expectedType == String.class) {
                 writeStrBytes(writeBuffer, String.valueOf(l).getBytes(StandardCharsets.UTF_8));
             }else if(expectedType == boolean.class || expectedType == Boolean.class) {
-                writePrimitiveBoolean(writeBuffer, l > Constants.ZERO);
+                writePrimitiveBoolean(writeBuffer, l > 0);
             }else {
                 throw new JsonParseException(format, l);
             }
@@ -199,13 +199,13 @@ public abstract class JsonWriterNode {
 
     private static void writePrimitiveLong(WriteBuffer writeBuffer, long l) {
         try(WriteBuffer tempBuffer = WriteBuffer.newHeapWriteBuffer(LONG_BYTE_LENGTH)) {
-            while (l > Constants.ZERO) {
+            while (l > 0) {
                 tempBuffer.writeByte((byte) (Constants.B_ZERO + l % 10));
                 l /= 10;
             }
             MemorySegment segment = tempBuffer.toSegment();
             long len = segment.byteSize();
-            for(int t = Constants.ONE; t <= len; t++) {
+            for(int t = 1; t <= len; t++) {
                 writeBuffer.writeByte(NativeUtil.getByte(segment, len - t));
             }
         }
@@ -238,7 +238,7 @@ public abstract class JsonWriterNode {
             if(expectedType == String.class) {
                 writeStrBytes(writeBuffer, String.valueOf(f).getBytes(StandardCharsets.UTF_8));
             }else if(expectedType == boolean.class || expectedType == Boolean.class) {
-                writePrimitiveBoolean(writeBuffer, f > Constants.ZERO);
+                writePrimitiveBoolean(writeBuffer, f > 0);
             }else {
                 throw new JsonParseException(format, f);
             }
@@ -266,7 +266,7 @@ public abstract class JsonWriterNode {
             if(expectedType == String.class) {
                 writeStrBytes(writeBuffer, String.valueOf(d).getBytes(StandardCharsets.UTF_8));
             }else if(expectedType == boolean.class || expectedType == Boolean.class) {
-                writePrimitiveBoolean(writeBuffer, d > Constants.ZERO);
+                writePrimitiveBoolean(writeBuffer, d > 0);
             }else {
                 throw new JsonParseException(format, d);
             }

@@ -121,22 +121,22 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
 
     @Override
     public void setReuseAddr(Socket socket, boolean b) {
-        checkInt(TenetMacosBinding.setReuseAddr(socket.intValue(), b ? Constants.ONE : Constants.ZERO), "set SO_REUSE_ADDR");
+        checkInt(TenetMacosBinding.setReuseAddr(socket.intValue(), b ? 1 : 0), "set SO_REUSE_ADDR");
     }
 
     @Override
     public void setKeepAlive(Socket socket, boolean b) {
-        checkInt(TenetMacosBinding.setKeepAlive(socket.intValue(), b ? Constants.ONE : Constants.ZERO), "set SO_KEEPALIVE");
+        checkInt(TenetMacosBinding.setKeepAlive(socket.intValue(), b ? 1 : 0), "set SO_KEEPALIVE");
     }
 
     @Override
     public void setTcpNoDelay(Socket socket, boolean b) {
-        checkInt(TenetMacosBinding.setTcpNoDelay(socket.intValue(), b ? Constants.ONE : Constants.ZERO), "set TCP_NODELAY");
+        checkInt(TenetMacosBinding.setTcpNoDelay(socket.intValue(), b ? 1 : 0), "set TCP_NODELAY");
     }
 
     @Override
     public void setIpv6Only(Socket socket, boolean b) {
-        checkInt(TenetMacosBinding.setIpv6Only(socket.intValue(), b ? Constants.ONE : Constants.ZERO), "set IPv6 only");
+        checkInt(TenetMacosBinding.setIpv6Only(socket.intValue(), b ? 1 : 0), "set IPv6 only");
     }
 
     @Override
@@ -244,7 +244,7 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
         try(Arena arena = Arena.ofConfined()) {
             MemorySegment ptr = arena.allocate(ValueLayout.JAVA_INT, Integer.MIN_VALUE);
             checkInt(TenetMacosBinding.getErrOpt(socket.intValue(), ptr), "get socket err opt");
-            return NativeUtil.getInt(ptr, Constants.ZERO);
+            return NativeUtil.getInt(ptr, 0);
         }
     }
 

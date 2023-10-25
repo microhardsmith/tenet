@@ -49,7 +49,7 @@ public class PgConnector implements Connector {
         if(i == SSL_WAIT) {
             try(Arena arena = Arena.ofConfined()) {
                 MemorySegment segment = arena.allocate(ValueLayout.JAVA_BYTE);
-                if (osNetworkLibrary.recv(acceptor.socket(), segment, (int) segment.byteSize()) < Constants.ZERO) {
+                if (osNetworkLibrary.recv(acceptor.socket(), segment, (int) segment.byteSize()) < 0) {
                     log.error(STR."Unable to read, errno : \{ osNetworkLibrary.errno()}");
                     acceptor.close();
                 }

@@ -42,7 +42,7 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
     private final Arena reservedArena = Arena.ofConfined();
     private final MemorySegment reserved;
     private long currentCreateTime;
-    private long currentRowCount = Constants.ZERO;
+    private long currentRowCount = 0;
     private SqliteConn sqliteConn;
     private MemorySegment stmt;
 
@@ -54,9 +54,9 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
             if(!Files.exists(dirPath)) {
                 Files.createDirectory(dirPath);
             }
-            flushThreshold = config.getFlushThreshold() <= Constants.ZERO ? Integer.MIN_VALUE : config.getFlushThreshold();
-            maxRowCount = config.getMaxRowCount() <= Constants.ZERO ? Long.MIN_VALUE : config.getMaxRowCount();
-            maxRecordingTime = config.getMaxRecordingTime() <= Constants.ZERO ? Long.MIN_VALUE : config.getMaxRecordingTime();
+            flushThreshold = config.getFlushThreshold() <= 0 ? Integer.MIN_VALUE : config.getFlushThreshold();
+            maxRowCount = config.getMaxRowCount() <= 0 ? Long.MIN_VALUE : config.getMaxRowCount();
+            maxRecordingTime = config.getMaxRecordingTime() <= 0 ? Long.MIN_VALUE : config.getMaxRecordingTime();
             reserved = reservedArena.allocate(config.getBuffer());
             openNewSqliteDatabase();
         }catch (IOException e) {
@@ -86,7 +86,7 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
             oldConn.close();
         }
         currentCreateTime = instant.toEpochMilli();
-        currentRowCount = Constants.ZERO;
+        currentRowCount = 0;
     }
 
     @Override
@@ -100,7 +100,7 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
 
     private void onMsg(LogEvent event) {
         eventList.add(event);
-        if(flushThreshold > Constants.ZERO && eventList.size() > flushThreshold) {
+        if(flushThreshold > 0 && eventList.size() > flushThreshold) {
             flush(true);
         }
     }
@@ -138,11 +138,11 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
     }
 
     private boolean exceedMaxRowCountLimitation() {
-        return maxRowCount > Constants.ZERO && currentRowCount > maxRowCount;
+        return maxRowCount > 0 && currentRowCount > maxRowCount;
     }
 
     private boolean exceedMaxRecordingTimeLimitation() {
-        return maxRecordingTime > Constants.ZERO && eventList.getLast().timestamp() - currentCreateTime > maxRecordingTime;
+        return maxRecordingTime > 0 && eventList.getLast().timestamp() - currentCreateTime > maxRecordingTime;
     }
 
     private static MemorySegment wrapText(WriteBuffer writeBuffer, MemorySegment segment) {

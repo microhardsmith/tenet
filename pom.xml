@@ -33,13 +33,6 @@
     </developer>
   </developers>
 
-  <repositories>
-    <repository>
-      <id>jitpack.io</id>
-      <url>https://www.jitpack.io</url>
-    </repository>
-  </repositories>
-
   <properties>
     <project.version>0.0.1</project.version>
     <java.version>21</java.version>

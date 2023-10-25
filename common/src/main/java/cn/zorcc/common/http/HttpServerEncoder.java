@@ -29,7 +29,7 @@ public final class HttpServerEncoder implements Encoder {
         writeBuffer.writeBytes(Constants.CR, Constants.LF);
         HttpHeader headers = httpResponse.getHeaders();
         MemorySegment data = httpResponse.getData();
-        if(data == null || data.byteSize() == Constants.ZERO) {
+        if(data == null || data.byteSize() == 0) {
             throw new FrameworkException(ExceptionType.HTTP, "Http response without a request body is meaningless");
         }
         headers.put(HttpHeader.K_CONTENT_LENGTH, String.valueOf(data.byteSize()));

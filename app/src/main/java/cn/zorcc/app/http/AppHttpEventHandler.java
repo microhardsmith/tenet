@@ -118,7 +118,7 @@ public class AppHttpEventHandler implements AppHttpMapping {
         int methodIndex = 0; // 要根据impl和method去拿具体的 TODO
         Parameter[] parameters = method.getParameters();
         Function<AppHttpEvent, AppHttpEvent> func = event -> {
-            event.setArgIndex(Constants.ZERO);
+            event.setArgIndex(0);
             event.setArgs(new Object[parameters.length]);
             return event;
         };

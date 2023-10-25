@@ -3,7 +3,7 @@ package cn.zorcc.common;
 import cn.zorcc.common.structure.Loc;
 
 /**
- *   Peer represents a running node's information about itself
+ *   Peer represents a running node's information about it's Net server
  */
 public record Peer(
         Long appId,

@@ -8,7 +8,7 @@ import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- *   Global seq generator, default representation would use 16 bytes
+ *   Global seq generator, default representation would be using 16 bytes
  */
 public final class Seq {
     private static final int TIMESTAMP_BYTES = 6;
@@ -17,6 +17,10 @@ public final class Seq {
     private static final int SEQ_BYTES = 4;
     private static final int TOTAL_BYTES = TIMESTAMP_BYTES + ((APP_ID_BYTES + NODE_ID_BYTES) << 1) + SEQ_BYTES;
     private static final AtomicInteger sequence = new AtomicInteger(new Random().nextInt());
+
+    private Seq() {
+        throw new UnsupportedOperationException();
+    }
 
     public static int len() {
         return SEQ_BYTES;
@@ -28,7 +32,7 @@ public final class Seq {
 
     public static MemorySegment create(long timestamp, long currentAppId, long currentNodeId, long targetAppId, long targetNodeId) {
         MemorySegment memorySegment = MemorySegment.ofArray(new byte[TOTAL_BYTES]);
-        long currentIndex = Constants.ZERO;
+        long currentIndex = 0;
         currentIndex = write(memorySegment, currentIndex, timestamp, TIMESTAMP_BYTES);
         currentIndex = write(memorySegment, currentIndex, currentAppId, APP_ID_BYTES);
         currentIndex = write(memorySegment, currentIndex, currentNodeId, NODE_ID_BYTES);

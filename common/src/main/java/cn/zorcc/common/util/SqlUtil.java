@@ -29,7 +29,7 @@ public final class SqlUtil {
     }
 
     public static StringBuilder params(StringBuilder sb, int count) {
-        return params(sb, count, Constants.ONE);
+        return params(sb, count, 1);
     }
 
 

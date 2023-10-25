@@ -11,7 +11,7 @@ public final class JsonWriterObjectNode extends JsonWriterNode {
     private final WriteBuffer writeBuffer;
     private final Meta<?> meta;
     private final Object obj;
-    private int index = Constants.ZERO;
+    private int index = 0;
 
     public JsonWriterObjectNode(WriteBuffer writeBuffer, Object obj, Class<?> type) {
         this.writeBuffer = writeBuffer;

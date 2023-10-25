@@ -130,22 +130,22 @@ public final class WindowsNetworkLibrary implements OsNetworkLibrary {
 
     @Override
     public void setReuseAddr(Socket socket, boolean b) {
-        checkInt(TenetWindowsBinding.setReuseAddr(socket.longValue(), b ? Constants.ONE : Constants.ZERO), "set SO_REUSE_ADDR");
+        checkInt(TenetWindowsBinding.setReuseAddr(socket.longValue(), b ? 1 : 0), "set SO_REUSE_ADDR");
     }
 
     @Override
     public void setKeepAlive(Socket socket, boolean b) {
-        checkInt(TenetWindowsBinding.setKeepAlive(socket.longValue(), b ? Constants.ONE : Constants.ZERO), "set SO_KEEPALIVE");
+        checkInt(TenetWindowsBinding.setKeepAlive(socket.longValue(), b ? 1 : 0), "set SO_KEEPALIVE");
     }
 
     @Override
     public void setTcpNoDelay(Socket socket, boolean b) {
-        checkInt(TenetWindowsBinding.setTcpNoDelay(socket.longValue(), b ? Constants.ONE : Constants.ZERO), "set TCP_NODELAY");
+        checkInt(TenetWindowsBinding.setTcpNoDelay(socket.longValue(), b ? 1 : 0), "set TCP_NODELAY");
     }
 
     @Override
     public void setIpv6Only(Socket socket, boolean b) {
-        checkInt(TenetWindowsBinding.setIpv6Only(socket.longValue(), b ? Constants.ONE : Constants.ZERO), "set IPv6 only");
+        checkInt(TenetWindowsBinding.setIpv6Only(socket.longValue(), b ? 1 : 0), "set IPv6 only");
     }
 
     @Override
@@ -173,8 +173,8 @@ public final class WindowsNetworkLibrary implements OsNetworkLibrary {
         if(to == OsNetworkLibrary.REGISTER_NONE) {
             checkInt(TenetWindowsBinding.epollCtl(winHandle, Constants.EPOLL_CTL_DEL, fd, NativeUtil.NULL_POINTER), "epollCtl");
         }else {
-            int target = ((to & OsNetworkLibrary.REGISTER_READ) != Constants.ZERO ? Constants.EPOLL_IN | Constants.EPOLL_RDHUP : Constants.ZERO) |
-                    ((to & OsNetworkLibrary.REGISTER_WRITE) != Constants.ZERO ? Constants.EPOLL_OUT : Constants.ZERO);
+            int target = ((to & OsNetworkLibrary.REGISTER_READ) != 0 ? Constants.EPOLL_IN | Constants.EPOLL_RDHUP : 0) |
+                    ((to & OsNetworkLibrary.REGISTER_WRITE) != 0 ? Constants.EPOLL_OUT : 0);
             try(Arena arena = Arena.ofConfined()) {
                 MemorySegment ev = arena.allocate(epollEventLayout);
                 NativeUtil.setInt(ev, eventsOffset, target);
@@ -193,7 +193,7 @@ public final class WindowsNetworkLibrary implements OsNetworkLibrary {
     public void masterWait(Socket serverSocket, MemorySegment events, int index) {
         int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
         long socket = NativeUtil.getLong(events, index * eventSize + dataOffset + sockOffset);
-        if(socket != serverSocket.longValue() || (event & Constants.EPOLL_IN) == Constants.ZERO) {
+        if(socket != serverSocket.longValue() || (event & Constants.EPOLL_IN) == 0) {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
@@ -202,9 +202,9 @@ public final class WindowsNetworkLibrary implements OsNetworkLibrary {
     public long workerWait(MemorySegment buffer, MemorySegment events, int index) {
         int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
         long socket = NativeUtil.getLong(events, index * eventSize + dataOffset + sockOffset);
-        if((event & (Constants.EPOLL_IN | Constants.EPOLL_HUP | Constants.EPOLL_RDHUP)) != Constants.ZERO) {
+        if((event & (Constants.EPOLL_IN | Constants.EPOLL_HUP | Constants.EPOLL_RDHUP)) != 0) {
             return R + socket;
-        }else if((event & Constants.EPOLL_OUT) != Constants.ZERO) {
+        }else if((event & Constants.EPOLL_OUT) != 0) {
             return W + socket;
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -257,7 +257,7 @@ public final class WindowsNetworkLibrary implements OsNetworkLibrary {
         try(Arena arena = Arena.ofConfined()) {
             MemorySegment ptr = arena.allocate(ValueLayout.JAVA_INT, Integer.MIN_VALUE);
             checkInt(TenetWindowsBinding.getErrOpt(socket.longValue(), ptr), "get socket err opt");
-            return NativeUtil.getInt(ptr, Constants.ZERO);
+            return NativeUtil.getInt(ptr, 0);
         }
     }
 

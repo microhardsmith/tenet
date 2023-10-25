@@ -172,7 +172,7 @@ public final class HttpServerDecoder implements Decoder {
             throw new FrameworkException(ExceptionType.HTTP, "Unresolved http chunked data length");
         }
         len = getTransferredLength(bytes);
-        decodingStatus = len == Constants.ZERO ? DecodingStatus.DECODING_CHUNKED_FINAL : DecodingStatus.DECODING_CHUNKED_DATA;
+        decodingStatus = len == 0 ? DecodingStatus.DECODING_CHUNKED_FINAL : DecodingStatus.DECODING_CHUNKED_DATA;
         return ResultStatus.CONTINUE;
     }
 

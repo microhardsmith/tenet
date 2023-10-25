@@ -89,7 +89,7 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     private MemorySegment createIpv4SockAddr(Loc loc, Arena arena) {
         MemorySegment r = arena.allocate(ipv4AddressSize());
         MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? NativeUtil.NULL_POINTER : NativeUtil.allocateStr(arena, loc.ip(), ipv4AddressLen());
-        if(checkInt(setIpv4SockAddr(r, ip, loc.shortPort()), "set ipv4 address") == Constants.ZERO) {
+        if(checkInt(setIpv4SockAddr(r, ip, loc.shortPort()), "set ipv4 address") == 0) {
             throw new FrameworkException(ExceptionType.NETWORK, STR."Ipv4 address is not valid : \{loc.ip()}");
         }
         return r;
@@ -98,7 +98,7 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     private MemorySegment createIpv6SockAddr(Loc loc, Arena arena) {
         MemorySegment r = arena.allocate(ipv6AddressSize());
         MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? NativeUtil.NULL_POINTER : NativeUtil.allocateStr(arena, loc.ip(), ipv6AddressLen());
-        if(checkInt(setIpv6SockAddr(r, ip, loc.shortPort()), "set ipv6 address") == Constants.ZERO) {
+        if(checkInt(setIpv6SockAddr(r, ip, loc.shortPort()), "set ipv6 address") == 0) {
             throw new FrameworkException(ExceptionType.NETWORK, STR."Ipv6 address is not valid : \{loc.ip()}");
         }
         return r;
@@ -152,7 +152,7 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
             MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, ipv6AddressLen);
             Socket clientSocket = accept(socket, clientAddr);
             configureClientSocket(clientSocket, masterConfig.getSocketOptions());
-            if(getIpv6Address(clientAddr, address) < Constants.ZERO) {
+            if(getIpv6Address(clientAddr, address) < 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Failed to get client socket's remote address, errno : %d".formatted(errno()));
             }
             String ip = NativeUtil.getStr(address, ipv6AddressLen);
@@ -173,7 +173,7 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
             MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, ipv4AddressLen);
             Socket clientSocket = accept(socket, clientAddr);
             configureClientSocket(clientSocket, config.getSocketOptions());
-            if(getIpv4Address(clientAddr, address) < Constants.ZERO) {
+            if(getIpv4Address(clientAddr, address) < 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Failed to get client socket's remote address, errno : %d".formatted(errno()));
             }
             String ip = NativeUtil.getStr(address, ipv4AddressLen);

@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *   Delegate a sqlite connection, all the read-write operations should be controlled inside the sqliteConn object rather than directly using SqliteBindings
  */
 public final class SqliteConn implements AutoCloseable {
-    private static final AtomicLong counter = new AtomicLong(Constants.ZERO);
+    private static final AtomicLong counter = new AtomicLong(0);
     private static final int DEFAULT_OPEN_FLAGS = Constants.SQLITE_OPEN_READWRITE |
             Constants.SQLITE_OPEN_CREATE | Constants.SQLITE_OPEN_PRIVATECACHE |
             Constants.SQLITE_OPEN_NOFOLLOW | Constants.SQLITE_OPEN_NOMUTEX;
@@ -32,10 +32,10 @@ public final class SqliteConn implements AutoCloseable {
     private final MemorySegment transactionCommit = reservedArena.allocateUtf8String("COMMIT");
     private final MemorySegment ppErr = reservedArena.allocate(ValueLayout.ADDRESS).reinterpret(ValueLayout.ADDRESS.byteSize());
     public SqliteConn(String filePath) {
-        if(counter.getAndIncrement() == Constants.ZERO) {
+        if(counter.getAndIncrement() == 0) {
             SqliteBinding.check(SqliteBinding.config(), "config");
             SqliteBinding.check(SqliteBinding.initialize(), "initialize");
-            if(SqliteBinding.threadSafe() == Constants.ZERO) {
+            if(SqliteBinding.threadSafe() == 0) {
                 throw new FrameworkException(ExceptionType.SQLITE, "Sqlite library was not compiled in multi thread mode");
             }
         }
@@ -47,11 +47,11 @@ public final class SqliteConn implements AutoCloseable {
             MemorySegment ppDb = arena.allocate(ValueLayout.ADDRESS);
             MemorySegment f = arena.allocateUtf8String(filePath);
             int r = SqliteBinding.open(f, ppDb, SqliteConn.DEFAULT_OPEN_FLAGS);
-            MemorySegment sqlite = ppDb.get(ValueLayout.ADDRESS, Constants.ZERO);
-            if(r != Constants.ZERO) {
+            MemorySegment sqlite = ppDb.get(ValueLayout.ADDRESS, 0);
+            if(r != 0) {
                 String err = NativeUtil.getStr(SqliteBinding.errMsg(sqlite));
                 int close = SqliteBinding.close(sqlite);
-                if(close != Constants.ZERO) {
+                if(close != 0) {
                     throw new FrameworkException(ExceptionType.SQLITE, STR."Failed to close unopened sqlite database, open err : \{err}, close err : \{close}");
                 }else {
                     throw new FrameworkException(ExceptionType.SQLITE, STR."Failed to open sqlite database, open err : \{err}");
@@ -107,7 +107,7 @@ public final class SqliteConn implements AutoCloseable {
         try(Arena arena = Arena.ofConfined()) {
             MemorySegment ppStmt = arena.allocate(ValueLayout.ADDRESS).reinterpret(ValueLayout.ADDRESS.byteSize());
             SqliteBinding.check(SqliteBinding.prepare(sqlite, sql, (int) sql.byteSize(), flags, ppStmt), "prepare statement");
-            return ppStmt.get(ValueLayout.ADDRESS, Constants.ZERO);
+            return ppStmt.get(ValueLayout.ADDRESS, 0);
         }
     }
 
@@ -149,7 +149,7 @@ public final class SqliteConn implements AutoCloseable {
 
     public Integer columnInt(MemorySegment stmt, int index) {
         int r = SqliteBinding.columnInt(stmt, index);
-        if(r == Constants.ZERO && SqliteBinding.columnType(stmt, index) == Constants.SQLITE_NULL) {
+        if(r == 0 && SqliteBinding.columnType(stmt, index) == Constants.SQLITE_NULL) {
             return null;
         }else {
             return r;
@@ -157,7 +157,7 @@ public final class SqliteConn implements AutoCloseable {
     }
     public Long columnLong(MemorySegment stmt, int index) {
         long r = SqliteBinding.columnLong(stmt, index);
-        if(r == Constants.ZERO && SqliteBinding.columnType(stmt, index) == Constants.SQLITE_NULL) {
+        if(r == 0 && SqliteBinding.columnType(stmt, index) == Constants.SQLITE_NULL) {
             return null;
         }else {
             return r;
@@ -192,16 +192,16 @@ public final class SqliteConn implements AutoCloseable {
             r = r.reinterpret(len);
             byte[] bytes = new byte[len];
             MemorySegment m = MemorySegment.ofArray(bytes);
-            MemorySegment.copy(r, Constants.ZERO, m, Constants.ZERO, len);
+            MemorySegment.copy(r, 0, m, 0, len);
             return m;
         }
     }
 
     public void exec(MemorySegment sql) {
         int r = SqliteBinding.exec(sqlite, sql, ppErr);
-        if(r != Constants.ZERO) {
-            String actualSql = sql.getUtf8String(Constants.ZERO);
-            MemorySegment pErr = ppErr.get(ValueLayout.ADDRESS, Constants.ZERO).reinterpret(Long.MAX_VALUE);
+        if(r != 0) {
+            String actualSql = sql.getUtf8String(0);
+            MemorySegment pErr = ppErr.get(ValueLayout.ADDRESS, 0).reinterpret(Long.MAX_VALUE);
             String err = NativeUtil.getStr(pErr);
             SqliteBinding.free(pErr);
             throw new FrameworkException(ExceptionType.SQLITE, STR."Unable to exec sql : [\{actualSql}], err : [\{err}]");
@@ -211,7 +211,7 @@ public final class SqliteConn implements AutoCloseable {
     @Override
     public void close() {
         SqliteBinding.close(sqlite);
-        if(counter.decrementAndGet() == Constants.ZERO) {
+        if(counter.decrementAndGet() == 0) {
             SqliteBinding.check(SqliteBinding.shutdown(), "shutdown");
         }
     }

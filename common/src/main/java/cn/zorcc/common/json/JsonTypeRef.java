@@ -18,10 +18,10 @@ public abstract class JsonTypeRef<T> {
         Type t = getClass().getGenericSuperclass();
         if (t instanceof ParameterizedType parameterizedType) {
             Type[] actualTypeArguments = parameterizedType.getActualTypeArguments();
-            if(actualTypeArguments.length != Constants.ONE) {
+            if(actualTypeArguments.length != 1) {
                 throw new FrameworkException(ExceptionType.JSON, Constants.UNREACHED);
             }
-            this.type = actualTypeArguments[Constants.ZERO];
+            this.type = actualTypeArguments[0];
         }else {
             throw new JsonParseException(Constants.UNREACHED);
         }

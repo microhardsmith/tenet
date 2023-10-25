@@ -133,10 +133,10 @@ public final class Logger {
     public static List<LogHandler> createLogHandlers(String logFormat, Function<String, LogHandler> transformer) {
         List<LogHandler> logHandlers = new ArrayList<>();
         MemorySegment format = MemorySegment.ofArray(logFormat.getBytes(StandardCharsets.UTF_8));
-        long index = Constants.ZERO;
+        long index = 0;
         for( ; ; ) {
             index = search(format, index, logHandlers, transformer);
-            if(index < Constants.ZERO) {
+            if(index < 0) {
                 return logHandlers;
             }
         }
@@ -144,7 +144,7 @@ public final class Logger {
 
     private static long search(MemorySegment format, long startIndex, List<LogHandler> handlers, Function<String, LogHandler> transformer) {
         long nextIndex = StringUtil.searchBytes(format, Constants.LCB, startIndex, segment -> handlers.add((writeBuffer, event) -> writeBuffer.writeSegment(segment)));
-        if(nextIndex < Constants.ZERO) {
+        if(nextIndex < 0) {
             if(startIndex < format.byteSize()) {
                 handlers.add((writeBuffer, event) -> writeBuffer.writeSegment(format.asSlice(startIndex, format.byteSize() - startIndex)));
             }
@@ -152,7 +152,7 @@ public final class Logger {
             return nextIndex;
         }
         nextIndex = StringUtil.searchBytes(format, Constants.RCB, nextIndex, segment -> handlers.add(transformer.apply(new String(segment.toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8))));
-        if(nextIndex < Constants.ZERO) {
+        if(nextIndex < 0) {
             handlers.add((writeBuffer, event) -> writeBuffer.writeByte(Constants.LF));
         }
         return nextIndex;

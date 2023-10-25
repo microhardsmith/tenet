@@ -21,5 +21,5 @@ public @interface Id {
     /**
      *   Column ordinal
      */
-    int ordinal() default Constants.ZERO;
+    int ordinal() default 0;
 }

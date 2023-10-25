@@ -45,14 +45,14 @@ public final class Metrics {
         try(Arena arena = Arena.ofConfined()) {
             MemorySegment ptr = arena.allocateArray(ValueLayout.JAVA_DOUBLE, loadAverageCount);
             int n = Metrics.getLoadAverage(ptr, loadAverageCount);
-            if(n < Constants.ZERO) {
+            if(n < 0) {
                 throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED);
             }
-            double l1 = n < 1 ? 0.0d : NativeUtil.getDouble(ptr, Constants.ZERO);
+            double l1 = n < 1 ? 0.0d : NativeUtil.getDouble(ptr, 0);
             System.out.println(l1);
-            double l2 = n < 2 ? 0.0d : NativeUtil.getDouble(ptr, NativeUtil.DOUBLE_SIZE);
+            double l2 = n < 2 ? 0.0d : NativeUtil.getDouble(ptr, NativeUtil.getDoubleSize());
             System.out.println(l2);
-            double l3 = n < 3 ? 0.0d : NativeUtil.getDouble(ptr, 2 * NativeUtil.DOUBLE_SIZE);
+            double l3 = n < 3 ? 0.0d : NativeUtil.getDouble(ptr, 2 * NativeUtil.getDoubleSize());
             System.out.println(l3);
             return new CpuLoadAverage(l1, l2, l3);
         }

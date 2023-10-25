@@ -106,9 +106,10 @@ public class HttpServerTest {
         }
 
         @Override
-        public void onRecv(Channel channel, Object data) {
+        public int onRecv(Channel channel, Object data) {
             if(data instanceof HttpRequest httpRequest) {
                 executor.execute(() -> onHttpRequest(channel, httpRequest));
+                return 0;
             }else {
                 throw new FrameworkException(ExceptionType.HTTP, Constants.UNREACHED);
             }

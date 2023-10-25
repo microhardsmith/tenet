@@ -8,124 +8,154 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class IntMap<T> {
-    private final Node<T>[] nodes;
+    private final IntMapNode<T>[] nodes;
     private final int mask;
 
     @SuppressWarnings("unchecked")
     public IntMap(int size) {
-        this.mask = size - Constants.ONE;
-        if((size & mask) != Constants.ZERO) {
-            throw new FrameworkException(ExceptionType.NETWORK, "size must be power of 2");
+        if(Integer.bitCount(size) != 1) {
+            throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
         }
-        this.nodes = (Node<T>[]) new Node[size];
-        for(int index = Constants.ZERO; index < size; index++) {
-            Node<T> header = new Node<>();
-            header.val = Constants.ZERO;
-            nodes[index] = header;
-        }
+        this.mask = size - 1;
+        this.nodes = (IntMapNode<T>[]) new IntMapNode[size];
     }
 
     /**
-     *   Get target value from the map, return null if it doesn't exist
+     *   Get target node from the map, return null if it doesn't exist
      */
-    public T get(int val) {
+    public IntMapNode<T> getNode(int val) {
         int slot = val & mask;
-        Node<T> header = nodes[slot];
-        Node<T> current = header.next;
+        IntMapNode<T> current = nodes[slot];
         while (current != null) {
-            if(current.val == val) {
-                return current.value;
+            if(current.getVal() == val) {
+                return current;
             }else {
-                current = current.next;
+                current = current.getNext();
             }
         }
         return null;
     }
 
     /**
+     *   Get target value from the map, return null if it doesn't exist
+     */
+    public T get(int val) {
+        IntMapNode<T> node = getNode(val);
+        return node == null ? null : node.getValue();
+    }
+
+    /**
      *   Insert a new object into the map, the value must not exist in the map before, or there will be unknown mistakes
      */
     public void put(int val, T value) {
-        Node<T> n = new Node<>();
-        n.val = val;
-        n.value = value;
+        IntMapNode<T> n = new IntMapNode<>();
+        n.setVal(val);
+        n.setValue(value);
         int slot = val & mask;
-        Node<T> header = nodes[slot];
-        Node<T> next = header.next;
-        header.next = n;
-        n.prev = header;
-        if(next != null) {
-            n.next = next;
-            next.prev = n;
+        IntMapNode<T> current = nodes[slot];
+        if (current != null) {
+            n.setNext(current);
+            current.setPrev(n);
         }
-        header.val += Constants.ONE;
+        nodes[slot] = n;
     }
 
     /**
-     *   Replace a existing key-value pair, the old key-value pair must already exist, or there will be unknown mistakes
+     *   Replace an existing key-value pair, the old key-value pair must already exist, or an Exception would be thrown
      */
     public void replace(int val, T value) {
         int slot = val & mask;
-        Node<T> header = nodes[slot];
-        Node<T> current = header.next;
+        IntMapNode<T> current = nodes[slot];
         while (current != null) {
-            if(current.val == val) {
-                current.value = value;
+            if(current.getVal() == val) {
+                current.setValue(value);
                 return ;
             }else {
-                current = current.next;
+                current = current.getNext();
             }
         }
-        throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
     }
 
     /**
-     *   Remove target actor from current map, return if removed successfully
+     *   Remove target node from current map, the node must already exist in the map
+     */
+    public void removeNode(int val, IntMapNode<T> node) {
+        int slot = val & mask;
+        IntMapNode<T> prev = node.getPrev();
+        IntMapNode<T> next = node.getNext();
+        if(prev == null) {
+            if(node == nodes[slot]) {
+                nodes[slot] = next;
+                next.setPrev(null);
+            }else {
+                throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
+            }
+        }else {
+            prev.setNext(next);
+            if(next != null) {
+                next.setPrev(prev);
+            }
+            node.setPrev(null);
+            node.setNext(null);
+        }
+    }
+
+    /**
+     *   Remove target value from current map, return if removed successfully
      */
     public boolean remove(int val, T value) {
         int slot = val & mask;
-        Node<T> header = nodes[slot];
-        Node<T> current = header.next;
+        IntMapNode<T> current = nodes[slot];
         for( ; ; ) {
             if(current == null) {
                 return false;
             }
-            if(current.val != val) {
-                current = current.next;
-            }else if(current.value != value) {
+            if(current.getVal() != val) {
+                current = current.getNext();
+            }else if(current.getValue() != value) {
                 return false;
             }else {
-                Node<T> prev = current.prev;
-                Node<T> next = current.next;
-                prev.next = next;
+                IntMapNode<T> prev = current.getPrev();
+                IntMapNode<T> next = current.getNext();
+                prev.setNext(next);
                 if(next != null) {
-                    next.prev = prev;
+                    next.setPrev(prev);
                 }
-                current.prev = null;
-                current.next = null;
-                header.val -= Constants.ONE;
+                current.setPrev(null);
+                current.setNext(null);
                 return true;
             }
         }
     }
 
-    public List<T> toList() {
+    public void remove(int val) {
+        int slot = val & mask;
+        IntMapNode<T> current = nodes[slot];
+        for( ; ; ) {
+            if(current == null) {
+                throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
+            }else if(current.getVal() == val) {
+                removeNode(val, current);
+                return ;
+            }else {
+                current = current.getNext();
+            }
+        }
+    }
+
+    /**
+     *   Convert current IntMap to a list
+     */
+    public List<T> asList() {
         List<T> result = new ArrayList<>();
-        for (Node<T> header : nodes) {
-            int len = header.val;
-            Node<T> current = header.next;
-            for(int i = Constants.ZERO; i < len; i++) {
-                result.add(current.value);
-                current = current.next;
+        for (IntMapNode<T> n : nodes) {
+            IntMapNode<T> t = n;
+            while (t != null) {
+                result.add(t.getValue());
+                t = t.getNext();
             }
         }
         return result;
-    }
-
-    private static class Node<T> {
-        private int val;
-        private T value;
-        private Node<T> prev;
-        private Node<T> next;
     }
 }

@@ -103,7 +103,7 @@ public abstract class JsonReaderNode {
         if(readBuffer.available() < 4) {
             throw new JsonParseException(readBuffer);
         }
-        int data = Constants.ZERO;
+        int data = 0;
         for(int i = 0; i < 4; i++) {
             data = data << 4 + readHexByte(readBuffer);
         }
@@ -291,10 +291,10 @@ public abstract class JsonReaderNode {
 
     private static Character stringToCharacter(String str) {
         char[] charArray = str.toCharArray();
-        if(charArray.length != Constants.ONE) {
+        if(charArray.length != 1) {
             throw new JsonParseException("String can't be converted to Character : %s".formatted(str));
         }
-        return charArray[Constants.ZERO];
+        return charArray[0];
     }
 
     /**
@@ -353,8 +353,8 @@ public abstract class JsonReaderNode {
     protected JsonReaderNode newObjectOrRecordNode(ReadBuffer readBuffer, Class<?> type, Type genericType) {
         if(Map.class.isAssignableFrom(type) && genericType instanceof ParameterizedType pt) {
             Type[] actualTypeArguments = pt.getActualTypeArguments();
-            if(actualTypeArguments[Constants.ZERO] instanceof Class<?> keyClass && keyClass == String.class) {
-                return toNext(new JsonReaderMapNode(readBuffer, type, actualTypeArguments[Constants.ONE]));
+            if(actualTypeArguments[0] instanceof Class<?> keyClass && keyClass == String.class) {
+                return toNext(new JsonReaderMapNode(readBuffer, type, actualTypeArguments[1]));
             }else {
                 throw new JsonParseException(Constants.JSON_KEY_TYPE_ERR);
             }
@@ -374,8 +374,8 @@ public abstract class JsonReaderNode {
             }
         }else if(elementType instanceof ParameterizedType parameterizedType && parameterizedType.getRawType() instanceof Class<?> c && Map.class.isAssignableFrom(c)) {
             Type[] actualTypeArguments = parameterizedType.getActualTypeArguments();
-            if(actualTypeArguments[Constants.ZERO] instanceof Class<?> keyClass && keyClass == String.class) {
-                return toNext(new JsonReaderMapNode(readBuffer, c, actualTypeArguments[Constants.ONE]));
+            if(actualTypeArguments[0] instanceof Class<?> keyClass && keyClass == String.class) {
+                return toNext(new JsonReaderMapNode(readBuffer, c, actualTypeArguments[1]));
             }else {
                 throw new JsonParseException(Constants.JSON_KEY_TYPE_ERR);
             }
@@ -388,7 +388,7 @@ public abstract class JsonReaderNode {
         if(type.isArray()) {
             return toNext(new JsonReaderCollectionNode(readBuffer, type, type.componentType()));
         }else if(Collection.class.isAssignableFrom(type) && genericType instanceof ParameterizedType pt ) {
-            return toNext(new JsonReaderCollectionNode(readBuffer, type, pt.getActualTypeArguments()[Constants.ZERO]));
+            return toNext(new JsonReaderCollectionNode(readBuffer, type, pt.getActualTypeArguments()[0]));
         }else {
             throw new JsonParseException(Constants.JSON_VALUE_TYPE_ERR);
         }
@@ -398,7 +398,7 @@ public abstract class JsonReaderNode {
         if(elementType instanceof Class<?> c && c.isArray()) {
             return toNext(new JsonReaderCollectionNode(readBuffer, c, c.componentType()));
         }else if(elementType instanceof ParameterizedType pt && pt.getRawType() instanceof Class<?> c && Collection.class.isAssignableFrom(c)) {
-            return toNext(new JsonReaderCollectionNode(readBuffer, c, pt.getActualTypeArguments()[Constants.ZERO]));
+            return toNext(new JsonReaderCollectionNode(readBuffer, c, pt.getActualTypeArguments()[0]));
         }else {
             throw new JsonParseException(Constants.JSON_VALUE_TYPE_ERR);
         }

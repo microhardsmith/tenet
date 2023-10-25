@@ -9,6 +9,7 @@ import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,7 +21,7 @@ public final class NativeUtil {
     /**
      *   Global NULL pointer, don't use it if the application would modify the actual address of this pointer
      */
-    public static final MemorySegment NULL_POINTER = MemorySegment.ofAddress(Constants.ZERO).reinterpret(ValueLayout.ADDRESS.byteSize(), Arena.global(), null);
+    public static final MemorySegment NULL_POINTER = MemorySegment.ofAddress(0).reinterpret(ValueLayout.ADDRESS.byteSize(), Arena.global(), null);
     /**
      *   Current operating system name
      */
@@ -42,17 +43,24 @@ public final class NativeUtil {
     private static final Map<String, MethodHandle> nativeMethodCache = new ConcurrentHashMap<>();
     private static final Arena globalArena = Arena.global();
     private static final Arena autoArena = Arena.ofAuto();
+    private static final ByteOrder byteOrder = ByteOrder.nativeOrder();
     private static final VarHandle byteHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_BYTE);
     private static final VarHandle shortHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_SHORT);
     private static final VarHandle intHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_INT);
     private static final VarHandle longHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_LONG);
     private static final VarHandle floatHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_FLOAT);
     private static final VarHandle doubleHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_DOUBLE);
-    public static final long SHORT_SIZE = ValueLayout.JAVA_SHORT.byteSize();
-    public static final long INT_SIZE = ValueLayout.JAVA_INT.byteSize();
-    public static final long LONG_SIZE = ValueLayout.JAVA_LONG.byteSize();
-    public static final long FLOAT_SIZE = ValueLayout.JAVA_FLOAT.byteSize();
-    public static final long DOUBLE_SIZE = ValueLayout.JAVA_DOUBLE.byteSize();
+    private static final VarHandle shortArrayHandle = MethodHandles.byteArrayViewVarHandle(short[].class, byteOrder);
+    private static final VarHandle intArrayHandle = MethodHandles.byteArrayViewVarHandle(int[].class, byteOrder);
+    private static final VarHandle longArrayHandle = MethodHandles.byteArrayViewVarHandle(long[].class, byteOrder);
+    private static final VarHandle floatArrayHandle = MethodHandles.byteArrayViewVarHandle(float[].class, byteOrder);
+    private static final VarHandle doubleArrayHandle = MethodHandles.byteArrayViewVarHandle(double[].class, byteOrder);
+    private static final long BYTE_SIZE = ValueLayout.JAVA_BYTE.byteSize();
+    private static final long SHORT_SIZE = ValueLayout.JAVA_SHORT.byteSize();
+    private static final long INT_SIZE = ValueLayout.JAVA_INT.byteSize();
+    private static final long LONG_SIZE = ValueLayout.JAVA_LONG.byteSize();
+    private static final long FLOAT_SIZE = ValueLayout.JAVA_FLOAT.byteSize();
+    private static final long DOUBLE_SIZE = ValueLayout.JAVA_DOUBLE.byteSize();
     private static final long I_MAX = Integer.MAX_VALUE;
     private static final long I_MIN = Integer.MIN_VALUE;
 
@@ -82,6 +90,30 @@ public final class NativeUtil {
         throw new UnsupportedOperationException();
     }
 
+    public static long getByteSize() {
+        return BYTE_SIZE;
+    }
+
+    public static long getShortSize() {
+        return SHORT_SIZE;
+    }
+
+    public static long getIntSize() {
+        return INT_SIZE;
+    }
+
+    public static long getLongSize() {
+        return LONG_SIZE;
+    }
+
+    public static long getFloatSize() {
+        return FLOAT_SIZE;
+    }
+
+    public static long getDoubleSize() {
+        return DOUBLE_SIZE;
+    }
+
     public static MemorySegment toNativeSegment(MemorySegment memorySegment) {
         return toNativeSegment(autoArena, memorySegment);
     }
@@ -92,7 +124,7 @@ public final class NativeUtil {
         }else {
             long byteSize = memorySegment.byteSize();
             MemorySegment nativeSegment = arena.allocateArray(ValueLayout.JAVA_BYTE, byteSize);
-            MemorySegment.copy(memorySegment, Constants.ZERO, nativeSegment, Constants.ZERO, byteSize);
+            MemorySegment.copy(memorySegment, 0, nativeSegment, 0, byteSize);
             return nativeSegment;
         }
     }
@@ -166,7 +198,7 @@ public final class NativeUtil {
     }
 
     public static boolean checkNullPointer(MemorySegment memorySegment) {
-        return memorySegment == null || memorySegment.address() == Constants.ZERO;
+        return memorySegment == null || memorySegment.address() == 0;
     }
 
     public static byte toAsciiByte(int i) {
@@ -189,12 +221,28 @@ public final class NativeUtil {
         shortHandle.set(memorySegment, index, value);
     }
 
+    public static short getShort(short[] arr, long index) {
+        return (short) shortArrayHandle.get(arr, index);
+    }
+
+    public static void setShort(short[] arr, long index, short value) {
+        shortArrayHandle.set(arr, index, value);
+    }
+
     public static int getInt(MemorySegment memorySegment, long index) {
         return (int) intHandle.get(memorySegment, index);
     }
 
     public static void setInt(MemorySegment memorySegment, long index, int value) {
         intHandle.set(memorySegment, index, value);
+    }
+
+    public static int getInt(int[] arr, long index) {
+        return (int) intArrayHandle.get(arr, index);
+    }
+
+    public static void setInt(int[] arr, long index, int value) {
+        intArrayHandle.set(arr, index, value);
     }
 
     public static long getLong(MemorySegment memorySegment, long index) {
@@ -205,12 +253,28 @@ public final class NativeUtil {
         longHandle.set(memorySegment, index, value);
     }
 
+    public static long getLong(long[] arr, long index) {
+        return (long) longArrayHandle.get(arr, index);
+    }
+
+    public static void setLong(long[] arr, long index, long value) {
+        longArrayHandle.set(arr, index, value);
+    }
+
     public static float getFloat(MemorySegment memorySegment, long index) {
         return (float) floatHandle.get(memorySegment, index);
     }
 
     public static void setFloat(MemorySegment memorySegment, long index, float value) {
         floatHandle.set(memorySegment, index, value);
+    }
+
+    public static float getFloat(float[] arr, long index) {
+        return (float) floatArrayHandle.get(arr, index);
+    }
+
+    public static void setFloat(float[] arr, long index, float value) {
+        floatArrayHandle.set(arr, index, value);
     }
 
     public static double getDouble(MemorySegment memorySegment, long index) {
@@ -221,13 +285,21 @@ public final class NativeUtil {
         doubleHandle.set(memorySegment, index, value);
     }
 
+    public static double getDouble(double[] arr, long index) {
+        return (double) doubleArrayHandle.get(arr, index);
+    }
+
+    public static void setDouble(double[] arr, long index, double value) {
+        doubleArrayHandle.set(arr, index, value);
+    }
+
     /**
      *   Using brute-force search for target bytes in a memorySegment
      *   This method could be optimized for better efficiency using other algorithms like BM or KMP, however when bytes.length is small and unrepeated, BF is simple and good enough
      *   Usually this method is used to find a target separator in a sequence
      */
     public static boolean matches(MemorySegment m, long offset, byte[] bytes) {
-        for(int index = Constants.ZERO; index < bytes.length; index++) {
+        for(int index = 0; index < bytes.length; index++) {
             if (getByte(m, offset + index) != bytes[index]) {
                 return false;
             }
@@ -259,25 +331,25 @@ public final class NativeUtil {
     }
 
     public static String getStr(MemorySegment memorySegment) {
-        return getStr(memorySegment, Constants.ZERO);
+        return getStr(memorySegment, 0);
     }
 
     public static String getStr(MemorySegment ptr, int maxLength) {
-        if(maxLength > Constants.ZERO) {
+        if(maxLength > 0) {
             byte[] bytes = new byte[maxLength];
-            for(int i = Constants.ZERO; i < maxLength; i++) {
+            for(int i = 0; i < maxLength; i++) {
                 byte b = getByte(ptr, i);
                 if(b == Constants.NUT) {
-                    return new String(bytes, Constants.ZERO, i, StandardCharsets.UTF_8);
+                    return new String(bytes, 0, i, StandardCharsets.UTF_8);
                 }else {
                     bytes[i] = b;
                 }
             }
         }else {
-            for(int i = Constants.ZERO; i < Integer.MAX_VALUE; i++) {
+            for(int i = 0; i < Integer.MAX_VALUE; i++) {
                 byte b = getByte(ptr, i);
                 if(b == Constants.NUT) {
-                    return new String(ptr.asSlice(Constants.ZERO, i).toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8);
+                    return new String(ptr.asSlice(0, i).toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8);
                 }
             }
         }

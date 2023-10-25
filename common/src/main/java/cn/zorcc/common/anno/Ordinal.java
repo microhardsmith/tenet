@@ -11,5 +11,5 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 public @interface Ordinal {
-    int sequence() default Constants.ZERO;
+    int sequence() default 0;
 }

@@ -39,10 +39,10 @@ public final class ConsoleLogEventHandler implements Consumer<LogEvent> {
             default -> throw new FrameworkException(ExceptionType.LOG, STR."Unresolved log format : \{s}");
         });
         flushThreshold = config.getFlushThreshold();
-        if (FileUtil.setvbuf(stdout, NativeUtil.NULL_POINTER, TenetBinding.nbf(), Constants.ZERO) != Constants.ZERO) {
+        if (FileUtil.setvbuf(stdout, NativeUtil.NULL_POINTER, TenetBinding.nbf(), 0) != 0) {
             throw new FrameworkException(ExceptionType.LOG, "Failed to set stdout to nbf mode");
         }
-        if (FileUtil.setvbuf(stderr, NativeUtil.NULL_POINTER, TenetBinding.nbf(), Constants.ZERO) != Constants.ZERO) {
+        if (FileUtil.setvbuf(stderr, NativeUtil.NULL_POINTER, TenetBinding.nbf(), 0) != 0) {
             throw new FrameworkException(ExceptionType.LOG, "Failed to set stderr to nbf mode");
         }
     }
@@ -57,7 +57,7 @@ public final class ConsoleLogEventHandler implements Consumer<LogEvent> {
 
     private void onMsg(LogEvent event) {
         eventList.add(event);
-        if((flushThreshold > Constants.ZERO && eventList.size() > flushThreshold) || event.throwable() != null) {
+        if((flushThreshold > 0 && eventList.size() > flushThreshold) || event.throwable() != null) {
             flush();
         }
     }
@@ -73,7 +73,7 @@ public final class ConsoleLogEventHandler implements Consumer<LogEvent> {
                     }
                 }
                 FileUtil.fwrite(outBuffer.toSegment(), stdout);
-                if(errBuffer.writeIndex() > Constants.ZERO) {
+                if(errBuffer.writeIndex() > 0) {
                     FileUtil.fwrite(errBuffer.toSegment(), stderr);
                 }
             }finally {

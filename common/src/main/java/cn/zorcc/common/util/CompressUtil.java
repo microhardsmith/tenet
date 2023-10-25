@@ -38,10 +38,10 @@ public final class CompressUtil {
             long outBytes = DeflateBinding.deflateCompressBound(compressor, inBytes);
             MemorySegment out = autoArena.allocateArray(ValueLayout.JAVA_BYTE, outBytes);
             long compressed = DeflateBinding.deflateCompress(compressor, in, inBytes, out, outBytes);
-            if(compressed <= Constants.ZERO) {
+            if(compressed <= 0) {
                 throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
             }
-            return out.asSlice(Constants.ZERO, compressed);
+            return out.asSlice(0, compressed);
         }finally {
             DeflateBinding.freeCompressor(compressor);
         }
@@ -58,10 +58,10 @@ public final class CompressUtil {
             long outBytes = DeflateBinding.gzipCompressBound(compressor, inBytes);
             MemorySegment out = autoArena.allocateArray(ValueLayout.JAVA_BYTE, outBytes);
             long compressed = DeflateBinding.gzipCompress(compressor, in, inBytes, out, outBytes);
-            if(compressed <= Constants.ZERO) {
+            if(compressed <= 0) {
                 throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
             }
-            return out.asSlice(Constants.ZERO, compressed);
+            return out.asSlice(0, compressed);
         }finally {
             DeflateBinding.freeCompressor(compressor);
         }
@@ -81,13 +81,13 @@ public final class CompressUtil {
             for( ; ; ) {
                 switch (DeflateBinding.deflateDecompress(decompressor, in, inBytes, out, out.byteSize(), actualOutBytes)) {
                     case DeflateBinding.LIBDEFLATE_SUCCESS -> {
-                        long written = NativeUtil.getLong(actualOutBytes, Constants.ZERO);
-                        return out.asSlice(Constants.ZERO, written);
+                        long written = NativeUtil.getLong(actualOutBytes, 0);
+                        return out.asSlice(0, written);
                     }
                     case DeflateBinding.LIBDEFLATE_BAD_DATA -> throw new FrameworkException(ExceptionType.COMPRESS, "Bad data");
-                    case DeflateBinding.LIBDEFLATE_SHORT_OUTPUT -> throw new FrameworkException(ExceptionType.COMPRESS, originalSize > Constants.ZERO ? "Fewer originalSize expected" : Constants.UNREACHED);
+                    case DeflateBinding.LIBDEFLATE_SHORT_OUTPUT -> throw new FrameworkException(ExceptionType.COMPRESS, originalSize > 0 ? "Fewer originalSize expected" : Constants.UNREACHED);
                     case DeflateBinding.LIBDEFLATE_INSUFFICIENT_SPACE -> {
-                        if(originalSize > Constants.ZERO) {
+                        if(originalSize > 0) {
                             throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
                         }else {
                             out = autoArena.allocateArray(ValueLayout.JAVA_BYTE, out.byteSize() << 1);
@@ -110,17 +110,17 @@ public final class CompressUtil {
         MemorySegment decompressor = DeflateBinding.allocDecompressor();
         try{
             MemorySegment out = autoArena.allocateArray(ValueLayout.JAVA_BYTE, originalSize > 0 ? originalSize : inBytes * ESTIMATE_RATIO);
-            MemorySegment actualOutBytes = originalSize > Constants.ZERO ? NativeUtil.NULL_POINTER : autoArena.allocate(ValueLayout.JAVA_LONG);
+            MemorySegment actualOutBytes = originalSize > 0 ? NativeUtil.NULL_POINTER : autoArena.allocate(ValueLayout.JAVA_LONG);
             for( ; ; ) {
                 switch (DeflateBinding.gzipDecompress(decompressor, in, inBytes, out, out.byteSize(), actualOutBytes)) {
                     case DeflateBinding.LIBDEFLATE_SUCCESS -> {
-                        long written = NativeUtil.getLong(actualOutBytes, Constants.ZERO);
-                        return out.asSlice(Constants.ZERO, written);
+                        long written = NativeUtil.getLong(actualOutBytes, 0);
+                        return out.asSlice(0, written);
                     }
                     case DeflateBinding.LIBDEFLATE_BAD_DATA -> throw new FrameworkException(ExceptionType.COMPRESS, "Bad data");
-                    case DeflateBinding.LIBDEFLATE_SHORT_OUTPUT -> throw new FrameworkException(ExceptionType.COMPRESS, originalSize > Constants.ZERO ? "Fewer originalSize expected" : Constants.UNREACHED);
+                    case DeflateBinding.LIBDEFLATE_SHORT_OUTPUT -> throw new FrameworkException(ExceptionType.COMPRESS, originalSize > 0 ? "Fewer originalSize expected" : Constants.UNREACHED);
                     case DeflateBinding.LIBDEFLATE_INSUFFICIENT_SPACE -> {
-                        if(originalSize > Constants.ZERO) {
+                        if(originalSize > 0) {
                             throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
                         }else {
                             out = autoArena.allocateArray(ValueLayout.JAVA_BYTE, out.byteSize() << 1);
@@ -177,7 +177,7 @@ public final class CompressUtil {
         try(WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer()) {
             while (!deflater.finished()) {
                 int len = deflater.deflate(buffer);
-                writeBuffer.write(buffer, Constants.ZERO, len);
+                writeBuffer.write(buffer, 0, len);
             }
             return writeBuffer.toArray();
         } finally {
@@ -192,7 +192,7 @@ public final class CompressUtil {
             byte[] buffer = new byte[CHUNK_SIZE];
             while (!inflater.finished()) {
                 int decompressLen = inflater.inflate(buffer);
-                writeBuffer.write(buffer, Constants.ZERO, decompressLen);
+                writeBuffer.write(buffer, 0, decompressLen);
             }
             return writeBuffer.toArray();
         }catch (DataFormatException e) {

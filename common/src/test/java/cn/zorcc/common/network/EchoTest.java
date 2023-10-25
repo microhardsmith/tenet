@@ -56,21 +56,22 @@ public class EchoTest {
     }
 
     private static Net createEchoNetClient() {
-        return new Net(Constants.ONE);
+        return new Net(1);
     }
 
     private static class EchoClientHandler implements Handler {
-        private final AtomicInteger counter = new AtomicInteger(Constants.ZERO);
+        private final AtomicInteger counter = new AtomicInteger(0);
         @Override
         public void onConnected(Channel channel) {
             log.info("Client channel connected");
-            Wheel.wheel().addPeriodicJob(() -> channel.sendMsg("Hello : " + counter.getAndIncrement()), Duration.ZERO, Duration.ofSeconds(Constants.ONE));
+            Wheel.wheel().addPeriodicJob(() -> channel.sendMsg("Hello : " + counter.getAndIncrement()), Duration.ZERO, Duration.ofSeconds(1));
         }
 
         @Override
-        public void onRecv(Channel channel, Object data) {
+        public int onRecv(Channel channel, Object data) {
             if(data instanceof String str) {
                 log.info(STR."Client receiving msg : \{str}");
+                return 0;
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
@@ -94,7 +95,7 @@ public class EchoTest {
         masterConfig.setHandlerSupplier(EchoServerHandler::new);
         masterConfig.setProvider(Net.tcpProvider());
         masterConfig.setLoc(serverLoc);
-        return new Net(masterConfig, Constants.ONE);
+        return new Net(masterConfig, 1);
     }
 
     private static class EchoServerHandler implements Handler {
@@ -104,10 +105,11 @@ public class EchoTest {
         }
 
         @Override
-        public void onRecv(Channel channel, Object data) {
+        public int onRecv(Channel channel, Object data) {
             if(data instanceof String str) {
                 log.info(STR."Msg received : [\{str}]");
                 channel.sendMsg(str);
+                return 0;
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }

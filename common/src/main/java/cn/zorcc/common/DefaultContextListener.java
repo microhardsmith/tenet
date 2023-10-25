@@ -4,6 +4,9 @@ import cn.zorcc.common.log.Logger;
 
 import java.util.Optional;
 
+/**
+ *   Default implementation for ContextListener, test-purpose only
+ */
 public final class DefaultContextListener implements ContextListener {
     private static final Logger log = new Logger(DefaultContextListener.class);
     @Override
@@ -18,6 +21,6 @@ public final class DefaultContextListener implements ContextListener {
 
     @Override
     public void onStarted() {
-
+        log.debug("DefaultContext started successfully");
     }
 }

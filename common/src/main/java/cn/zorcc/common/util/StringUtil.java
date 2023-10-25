@@ -19,7 +19,7 @@ public final class StringUtil {
                 if(index > startIndex) {
                     consumer.accept(data.asSlice(startIndex, index - startIndex));
                 }
-                return index + Constants.ONE == data.byteSize() ? Long.MIN_VALUE : index + Constants.ONE;
+                return index + 1 == data.byteSize() ? Long.MIN_VALUE : index + 1;
             }
         }
         return Long.MIN_VALUE;

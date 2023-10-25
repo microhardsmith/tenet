@@ -29,11 +29,11 @@ public final class ReadBuffer {
     public ReadBuffer(MemorySegment segment) {
         this.segment = segment;
         this.size = segment.byteSize();
-        this.readIndex = Constants.ZERO;
+        this.readIndex = 0;
     }
 
     public void setReadIndex(long index) {
-        if(index < Constants.ZERO || index > size) {
+        if(index < 0 || index > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "ReadIndex out of bound");
         }
         readIndex = index;
@@ -83,7 +83,7 @@ public final class ReadBuffer {
             long len = m.byteSize();
             byte[] bytes = new byte[(int) len];
             MemorySegment h = MemorySegment.ofArray(bytes);
-            MemorySegment.copy(m, Constants.ZERO, h, Constants.ZERO, len);
+            MemorySegment.copy(m, 0, h, 0, len);
             return h;
         }else {
             return m;
@@ -159,7 +159,7 @@ public final class ReadBuffer {
      *   Return the rest part of current ReadBuffer, before calling this method, readerIndex should be checked if there are still some data remaining
      */
     public MemorySegment rest() {
-        return readIndex == Constants.ZERO ? segment : segment.asSlice(readIndex, size - readIndex);
+        return readIndex == 0 ? segment : segment.asSlice(readIndex, size - readIndex);
     }
 
     @Override

@@ -4,21 +4,16 @@ import cn.zorcc.common.util.ThreadUtil;
 
 import java.util.concurrent.atomic.AtomicReference;
 
-public abstract class Carrier {
+/**
+ *  Representing a carrier task executing by a virtual thread
+ */
+public record Carrier(
+        Thread thread,
+        AtomicReference<Object> target
+) {
     public static final Object HOLDER = new Object();
-    private final Thread thread;
-    private final AtomicReference<Object> target;
 
-    protected Carrier() {
-        this.thread = ThreadUtil.checkVirtualThread();
-        this.target = new AtomicReference<>(HOLDER);
-    }
-
-    public Thread getThread() {
-        return thread;
-    }
-
-    public AtomicReference<Object> getTarget() {
-        return target;
+    public static Carrier create() {
+        return new Carrier(ThreadUtil.checkVirtualThread(), new AtomicReference<>(HOLDER));
     }
 }

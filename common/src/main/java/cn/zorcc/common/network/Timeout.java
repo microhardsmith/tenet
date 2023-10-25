@@ -13,7 +13,7 @@ import java.time.Duration;
 
 /**
  *   Timeout abstraction for different operating system
- *   Using a int val for windows or linux
+ *   Using an int val for windows or linux
  *   Using a pointer to struct timespec for macOS
  */
 public record Timeout(

@@ -12,7 +12,14 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.IntStream;
 
+/**
+ *   Context is the core of a tenet application, it serves as a singleton pool
+ *   Application developers should provide different ContextListener implementation to affect how Context works in their app
+ *   The containerMap was guarded by a lock, the performance of loading and getting container from Context is not our first consideration, you should load everything at startup, and let them die in sequence when application exit
+ *
+ */
 public final class Context {
     private static final Logger log = new Logger(Context.class);
     private static final AtomicBoolean initFlag = new AtomicBoolean(false);
@@ -28,29 +35,31 @@ public final class Context {
         long nano = Clock.nano();
         RuntimeMXBean runtimeMXBean = ManagementFactory.getRuntimeMXBean();
         String[] pidAndDevice = runtimeMXBean.getName().split("@");
-        log.info(STR."Process running with Pid: \{pidAndDevice[Constants.ZERO]} on Device: \{pidAndDevice[Constants.ONE]}");
-        List<LifeCycle> temp = new ArrayList<>();
-        boolean success = true;
-        lock.lock();
-        try{
-            cycles.forEach(c -> {
-                c.init();
-                temp.add(c);
-            });
-        }catch (FrameworkException e) {
-            log.error("Err caught when initializing container, exiting application now", e);
-            temp.reversed().forEach(LifeCycle::UninterruptibleExit);
-            success = false;
-        }finally {
-            lock.unlock();
-        }
-        if(success) {
+        log.info(STR."Process running with Pid: \{pidAndDevice[0]} on Device: \{pidAndDevice[1]}");
+        if(initializeContainers()) {
             Runtime.getRuntime().addShutdownHook(ThreadUtil.platform("Exit", () -> cycles.reversed().forEach(LifeCycle::UninterruptibleExit)));
             contextListener.onStarted();
         }else {
-            System.exit(Constants.ONE);
+            System.exit(1);
         }
         log.info(STR."Tenet application started in \{ Duration.ofNanos(Clock.elapsed(nano)).toMillis()} ms, JVM running for \{runtimeMXBean.getUptime()} ms");
+    }
+
+    private static boolean initializeContainers() {
+        int index = 0, size = cycles.size();
+        lock.lock();
+        try{
+            while (index < size)  {
+                cycles.get(index++).init();
+            }
+            return true;
+        }catch (FrameworkException e) {
+            log.error("Err caught when initializing container, exiting application now", e);
+            cycles.subList(0, index).reversed().forEach(LifeCycle::UninterruptibleExit);
+            return false;
+        }finally {
+            lock.unlock();
+        }
     }
 
     public static <T> void load(T target, Class<T> type) {
@@ -80,7 +89,7 @@ public final class Context {
         try{
             Object o = containerMap.computeIfAbsent(type, contextListener::onRequested);
             if(o == null) {
-                throw new FrameworkException(ExceptionType.CONTEXT, STR."Unable to find target container : \{type.getName()}");
+                throw new FrameworkException(ExceptionType.CONTEXT, STR."Unable to retrieve target container : \{type.getName()}");
             }
             return (T) o;
         }finally {

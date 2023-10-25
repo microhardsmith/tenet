@@ -2,14 +2,13 @@ package cn.zorcc.common.network;
 
 import cn.zorcc.common.Carrier;
 
-public class TaggedMsg extends Carrier {
-    private final int tag;
+/**
+ *   Network tagged msg
+ *   Int tag should work for 99.99% cases, if you think there is still a tag overflow potential, try using other technics to solve it
+*/
+public record TaggedMsg(
+        int tag,
+        Carrier carrier
+) {
 
-    public TaggedMsg(int tag) {
-        this.tag = tag;
-    }
-
-    public int getTag() {
-        return tag;
-    }
 }

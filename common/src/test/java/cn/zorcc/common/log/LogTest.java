@@ -25,7 +25,7 @@ public class LogTest {
         Context.load(Wheel.wheel(), Wheel.class);
         Context.load(new LoggerConsumer(), LoggerConsumer.class);
         Context.init();
-        for(int i = Constants.ZERO; i < Constants.KB; i++) {
+        for(int i = 0; i < Constants.KB; i++) {
             log.info(STR."hello , \{i}");
         }
     }
@@ -37,7 +37,7 @@ public class LogTest {
         logConfig.setFile(new FileLogConfig());
         Context.load(new LoggerConsumer(logConfig), LoggerConsumer.class);
         Context.init();
-        for(int i = Constants.ZERO; i < Constants.KB; i++) {
+        for(int i = 0; i < Constants.KB; i++) {
             log.info(STR."hello , \{i}");
         }
     }
@@ -49,7 +49,7 @@ public class LogTest {
         logConfig.setSqlite(new SqliteLogConfig());
         Context.load(new LoggerConsumer(logConfig), LoggerConsumer.class);
         Context.init();
-        for(int i = Constants.ZERO; i < Constants.KB; i++) {
+        for(int i = 0; i < Constants.KB; i++) {
             log.info(STR."hello , \{i}");
         }
     }

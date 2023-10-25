@@ -5,6 +5,9 @@ import cn.zorcc.common.exception.FrameworkException;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ *   Abstract lifecycle interface implementation, the init() and exit() methods are limited to be only invoked once
+ */
 public abstract class AbstractLifeCycle implements LifeCycle {
     private static final int INITIAL = 0;
     private static final int RUNNING = 1;

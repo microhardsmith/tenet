@@ -16,7 +16,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
- *   Gt stands for better accessing getter and setter methods
+ *   Meta is used for better accessing getter and setter methods with lmf
  */
 public final class Meta<T> {
     private static final Map<Class<?>, Meta<?>> metaMap = new ConcurrentHashMap<>(Constants.KB);
@@ -78,7 +78,7 @@ public final class Meta<T> {
             for (Field f : ReflectUtil.getAllFields(objectClass).stream().sorted((o1, o2) -> {
                 Ordinal a1 = o1.getAnnotation(Ordinal.class);
                 Ordinal a2 = o2.getAnnotation(Ordinal.class);
-                return (a1 == null || a2 == null) ? Constants.ZERO : Integer.compare(a1.sequence(), a2.sequence());
+                return (a1 == null || a2 == null) ? 0 : Integer.compare(a1.sequence(), a2.sequence());
             }).toList()) {
                 String fieldName = f.getName();
                 Class<?> fieldType = f.getType();
@@ -98,6 +98,7 @@ public final class Meta<T> {
 
 
     /**
+     *   TODO refactor
      *   Obtain all the field names with their values from target
      *   the returned fields could be different from parameter fields if the target has no such field
      */

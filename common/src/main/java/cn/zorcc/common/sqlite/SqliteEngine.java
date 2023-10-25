@@ -20,7 +20,7 @@ public final class SqliteEngine extends AbstractLifeCycle {
     private final TransferQueue<SqliteMsg> writerQueue = new LinkedTransferQueue<>();
     public SqliteEngine(SqliteConfig config) {
         List<Thread> readers = new ArrayList<>();
-        for(int i = Constants.ZERO; i < config.getReaders(); i++) {
+        for(int i = 0; i < config.getReaders(); i++) {
             readers.add(createReaderThread(config, readers.size()));
         }
         this.readers = Collections.unmodifiableList(readers);
@@ -59,9 +59,7 @@ public final class SqliteEngine extends AbstractLifeCycle {
         for( ; ; ) {
             final SqliteMsg msg = queue.take();
             consumers.forEach(sqliteMsgConsumer -> sqliteMsgConsumer.accept(msg));
-            if(msg == SqliteMsg.shutdownMsg) {
-                break;
-            }
+
         }
     }
 
@@ -75,11 +73,12 @@ public final class SqliteEngine extends AbstractLifeCycle {
 
     @Override
     protected void doExit() throws InterruptedException {
-        if (!writerQueue.offer(SqliteMsg.shutdownMsg)) {
+        SqliteMsg shutdownMsg = new SqliteMsg(SqliteMsgType.Shutdown, null, null);
+        if (!writerQueue.offer(shutdownMsg)) {
             throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED);
         }
-        for(int i = Constants.ZERO; i < readers.size(); i++) {
-            if (!readerQueue.offer(SqliteMsg.shutdownMsg)) {
+        for(int i = 0; i < readers.size(); i++) {
+            if (!readerQueue.offer(shutdownMsg)) {
                 throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED);
             }
         }

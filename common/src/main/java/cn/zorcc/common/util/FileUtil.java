@@ -43,7 +43,7 @@ public final class FileUtil {
     public static void fwrite(MemorySegment buffer, MemorySegment stream) {
         try{
             long r = (long) fwriteMethodHandle.invokeExact(buffer, ValueLayout.JAVA_BYTE.byteSize(), buffer.byteSize(), stream);
-            if(r < Constants.ZERO) {
+            if(r < 0) {
                 throw new FrameworkException(ExceptionType.LOG, "Unable to call fputs()");
             }
         }catch (Throwable throwable) {
@@ -54,7 +54,7 @@ public final class FileUtil {
     public static void fflush(MemorySegment stream) {
         try{
             int r = (int) fflushMethodHandle.invokeExact(stream);
-            if(r < Constants.ZERO) {
+            if(r < 0) {
                 throw new FrameworkException(ExceptionType.LOG, "Unable to call fflush()");
             }
         }catch (Throwable throwable) {
@@ -65,7 +65,7 @@ public final class FileUtil {
     public static void fclose(MemorySegment stream) {
         try{
             int r = (int) fcloseMethodHandle.invokeExact(stream);
-            if(r < Constants.ZERO) {
+            if(r < 0) {
                 throw new FrameworkException(ExceptionType.LOG, "Unable to call fclose()");
             }
         }catch (Throwable throwable) {
@@ -81,7 +81,7 @@ public final class FileUtil {
      */
     public static String toTmp(String resourcePath, Class<?> clazz) {
         int index = resourcePath.lastIndexOf('.');
-        String prefix = resourcePath.substring(Math.max(resourcePath.lastIndexOf(Constants.SEPARATOR), Constants.ZERO), index);
+        String prefix = resourcePath.substring(Math.max(resourcePath.lastIndexOf(Constants.SEPARATOR), 0), index);
         String suffix = resourcePath.substring(index);
         try(InputStream inputStream = (clazz == null ? FileUtil.class : clazz).getResourceAsStream(resourcePath)) {
             if(inputStream == null) {
