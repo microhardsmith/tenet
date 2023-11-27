@@ -1,10 +1,8 @@
 package cn.zorcc.common.json;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.Format;
 import cn.zorcc.common.WriteBuffer;
-import cn.zorcc.common.anno.Format;
-import cn.zorcc.common.enums.ExceptionType;
-import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.exception.JsonParseException;
 import cn.zorcc.common.util.NativeUtil;
 
@@ -29,7 +27,6 @@ public abstract class JsonWriterNode {
     private static final int INTEGER_BYTE_LENGTH = 16;
     private static final int LONG_BYTE_LENGTH = 32;
     private JsonWriterNode prev;
-    private JsonWriterNode next;
     private boolean notFirst = false;
     private int pos = 0;
 
@@ -37,15 +34,11 @@ public abstract class JsonWriterNode {
      *   Unlink current JsonWriterNode with the prev node and return it
      */
     protected JsonWriterNode toPrev() {
-        if(next != null) {
-            throw new FrameworkException(ExceptionType.JSON, Constants.UNREACHED);
-        }
-        final JsonWriterNode p = prev;
+        final JsonWriterNode p = this.prev;
         if(p == null) {
             return null;
         }
         this.prev = null;
-        p.next = null;
         return p;
     }
 
@@ -53,14 +46,10 @@ public abstract class JsonWriterNode {
      *   Link a new JsonWriterNode for the next and return it
      */
     protected JsonWriterNode toNext(JsonWriterNode n) {
-        if(next != null) {
-            throw new FrameworkException(ExceptionType.JSON, Constants.UNREACHED);
-        }
         if(pos > CIRCULAR_REFERENCE_LIMITATION) {
             throw new JsonParseException("Possibly circular reference detected");
         }
         n.pos = this.pos + 1;
-        next = n;
         n.prev = this;
         return n;
     }
@@ -308,7 +297,7 @@ public abstract class JsonWriterNode {
     }
 
     /**
-     *   Write a Enum value into the writeBuffer
+     *   Write an Enum value into the writeBuffer
      */
     private static void writeEnum(WriteBuffer writeBuffer, Enum<?> e) {
         writeStrBytes(writeBuffer, e.name().getBytes(StandardCharsets.UTF_8));
@@ -612,7 +601,7 @@ public abstract class JsonWriterNode {
     }
 
     /**
-     *   Write a value into the writeBuffer based on its type and format, return null if success, return next JsonWriterNode if needs to create a new one
+     *   Write a value into the writeBuffer based on its type and format, return null if success, return next JsonWriterNode if it needs to create a new one
      */
     protected JsonWriterNode writeValue(WriteBuffer writeBuffer, Object value, Format format) {
         JsonWriterNode result = null;

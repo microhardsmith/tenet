@@ -1,8 +1,8 @@
 package cn.zorcc.common.util;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.enums.ExceptionType;
-import cn.zorcc.common.enums.OsType;
+import cn.zorcc.common.ExceptionType;
+import cn.zorcc.common.OsType;
 import cn.zorcc.common.exception.FrameworkException;
 
 import java.lang.foreign.*;
@@ -12,6 +12,7 @@ import java.lang.invoke.VarHandle;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -26,6 +27,7 @@ public final class NativeUtil {
      *   Current operating system name
      */
     private static final String osName = System.getProperty("os.name").toLowerCase();
+    private static final boolean runningFromJar = runningFromJar();
     /**
      *   Current dynamic library path that tenet application will look up for
      */
@@ -65,13 +67,26 @@ public final class NativeUtil {
     private static final long I_MIN = Integer.MIN_VALUE;
 
     /**
-     *  Safely cast long to int, throw a exception if overflow
+     *  Safely cast long to int, throw an exception if overflow
      */
     public static int castInt(long l) {
         if(l < I_MIN || l > I_MAX) {
             throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED);
         }
         return (int) l;
+    }
+
+    /**
+     *   Detect if current program is running from a jar file
+     */
+    private static boolean runningFromJar() {
+        String className = NativeUtil.class.getName().replace('.', '/');
+        String classJar = Objects.requireNonNull(NativeUtil.class.getResource("/" + className + ".class")).toString();
+        return classJar.startsWith("jar:");
+    }
+
+    public static boolean isRunningFromJar() {
+        return runningFromJar;
     }
 
     private static OsType detectOsType() {
@@ -160,7 +175,7 @@ public final class NativeUtil {
     }
 
     /**
-     *   Return current CPU cores
+     *   Return current CPU cores count
      *   Note that usually a physical CPU core could usually carry two threads at the same time, the return value is actually the logical core numbers.
      */
     public static int getCpuCores() {
@@ -180,6 +195,9 @@ public final class NativeUtil {
      *  Load a native library by environment variable, return null if system library was not found in environment variables
      */
     public static SymbolLookup loadLibrary(String identifier) {
+        if(libPath == null) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Global libPath not found");
+        }
         return libraryCache.computeIfAbsent(identifier, i -> SymbolLookup.libraryLookup(libPath + Constants.SEPARATOR + getDynamicLibraryName(i), Arena.global()));
     }
 
@@ -295,7 +313,7 @@ public final class NativeUtil {
 
     /**
      *   Using brute-force search for target bytes in a memorySegment
-     *   This method could be optimized for better efficiency using other algorithms like BM or KMP, however when bytes.length is small and unrepeated, BF is simple and good enough
+     *   This method could be optimized for better efficiency using other algorithms like BM or KMP, however when the length of bytes are small and unrepeated, BF is simple and good enough
      *   Usually this method is used to find a target separator in a sequence
      */
     public static boolean matches(MemorySegment m, long offset, byte[] bytes) {

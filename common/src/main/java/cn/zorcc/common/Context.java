@@ -1,9 +1,7 @@
 package cn.zorcc.common;
 
-import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.util.ThreadUtil;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.RuntimeMXBean;
@@ -12,7 +10,6 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.IntStream;
 
 /**
  *   Context is the core of a tenet application, it serves as a singleton pool
@@ -36,8 +33,9 @@ public final class Context {
         RuntimeMXBean runtimeMXBean = ManagementFactory.getRuntimeMXBean();
         String[] pidAndDevice = runtimeMXBean.getName().split("@");
         log.info(STR."Process running with Pid: \{pidAndDevice[0]} on Device: \{pidAndDevice[1]}");
+        contextListener.beforeStarted();
         if(initializeContainers()) {
-            Runtime.getRuntime().addShutdownHook(ThreadUtil.platform("Exit", () -> cycles.reversed().forEach(LifeCycle::UninterruptibleExit)));
+            Runtime.getRuntime().addShutdownHook(Thread.ofPlatform().name("Exit").unstarted(() -> cycles.reversed().forEach(LifeCycle::UninterruptibleExit)));
             contextListener.onStarted();
         }else {
             System.exit(1);

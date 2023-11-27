@@ -1,10 +1,11 @@
 package cn.zorcc.common.log;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.WriteBuffer;
-import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.sqlite.SqliteConn;
+import cn.zorcc.common.util.FileUtil;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -49,7 +50,7 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
     public SqliteLogEventHandler(LogConfig logConfig) {
         try{
             SqliteLogConfig config = logConfig.getSqlite();
-            dir = config.getDir() == null || config.getDir().isEmpty() ? System.getProperty("user.dir") : config.getDir();
+            dir = FileUtil.normalizePath(config.getDir() == null || config.getDir().isEmpty() ? System.getProperty("user.dir") : config.getDir());
             Path dirPath = Path.of(dir);
             if(!Files.exists(dirPath)) {
                 Files.createDirectory(dirPath);

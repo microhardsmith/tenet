@@ -1,6 +1,6 @@
 package cn.zorcc.common.duckdb;
 
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 
 import java.util.Map;

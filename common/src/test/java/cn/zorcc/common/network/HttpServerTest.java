@@ -2,13 +2,12 @@ package cn.zorcc.common.network;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.Context;
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.http.*;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.log.LoggerConsumer;
-import cn.zorcc.common.structure.IpType;
-import cn.zorcc.common.structure.Loc;
+import cn.zorcc.common.network.api.Handler;
 import cn.zorcc.common.structure.Wheel;
 import cn.zorcc.common.util.CompressUtil;
 import org.junit.jupiter.api.Test;
@@ -18,77 +17,83 @@ import java.nio.charset.StandardCharsets;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.zip.Deflater;
 
 public class HttpServerTest {
     private static final Logger log = new Logger(HttpServerTest.class);
     private static final Loc HTTP_LOC = new Loc(IpType.IPV4, "0.0.0.0", 80);
     private static final Loc HTTPS_LOC = new Loc(IpType.IPV6, "0.0.0.0", 443);
-    private static final int WORKER_COUNT = 4;
-    private static final String PUBLIC_KEY_FILE = "/Users/liuxichen/workspace/ca/server.crt";
-    private static final String PRIVATE_KEY_FILE = "/Users/liuxichen/workspace/ca/server.key";
+    private static final String PUBLIC_KEY_FILE = "C:/workspace/ca/server.crt";
+    private static final String PRIVATE_KEY_FILE = "C:/workspace/ca/server.key";
     @Test
-    public void testHttpServer() {
+    public void testHttpServer() throws InterruptedException {
         Context.load(Wheel.wheel(), Wheel.class);
         Context.load(new LoggerConsumer(), LoggerConsumer.class);
         Context.load(createHttpNet(), Net.class);
         Context.init();
+        Thread.sleep(Long.MAX_VALUE);
     }
 
     @Test
-    public void testHttpsServer() {
+    public void testHttpsServer() throws InterruptedException {
         Context.load(Wheel.wheel(), Wheel.class);
         Context.load(new LoggerConsumer(), LoggerConsumer.class);
         Context.load(createHttpsNet(), Net.class);
         Context.init();
+        Thread.sleep(Long.MAX_VALUE);
     }
 
     @Test
-    public void testHttpAndHttpsServer() {
+    public void testHttpAndHttpsServer() throws InterruptedException {
         Context.load(Wheel.wheel(), Wheel.class);
         Context.load(new LoggerConsumer(), LoggerConsumer.class);
         Context.load(createHttpAndHttpsNet(), Net.class);
         Context.init();
+        Thread.sleep(Long.MAX_VALUE);
     }
 
     public static Net createHttpNet() {
-        MasterConfig httpMasterConfig = new MasterConfig();
-        httpMasterConfig.setEncoderSupplier(HttpServerEncoder::new);
-        httpMasterConfig.setDecoderSupplier(HttpServerDecoder::new);
-        httpMasterConfig.setHandlerSupplier(HttpTestHandler::new);
-        httpMasterConfig.setProvider(Net.tcpProvider());
-        httpMasterConfig.setLoc(HTTP_LOC);
-        return new Net(httpMasterConfig, WORKER_COUNT);
+        ListenerConfig httpListenerConfig = new ListenerConfig();
+        httpListenerConfig.setEncoderSupplier(HttpServerEncoder::new);
+        httpListenerConfig.setDecoderSupplier(HttpServerDecoder::new);
+        httpListenerConfig.setHandlerSupplier(HttpTestHandler::new);
+        httpListenerConfig.setProvider(Net.tcpProvider());
+        httpListenerConfig.setLoc(HTTP_LOC);
+        Net net = new Net();
+        net.addListener(httpListenerConfig);
+        return net;
     }
 
     public static Net createHttpsNet() {
-        MasterConfig httpsMasterConfig = new MasterConfig();
-        httpsMasterConfig.setEncoderSupplier(HttpServerEncoder::new);
-        httpsMasterConfig.setDecoderSupplier(HttpServerDecoder::new);
-        httpsMasterConfig.setHandlerSupplier(HttpTestHandler::new);
-        httpsMasterConfig.setProvider(SslProvider.newServerProvider(PUBLIC_KEY_FILE, PRIVATE_KEY_FILE));
-        httpsMasterConfig.setLoc(HTTPS_LOC);
-        return new Net(httpsMasterConfig, WORKER_COUNT);
+        ListenerConfig httpsListenerConfig = new ListenerConfig();
+        httpsListenerConfig.setEncoderSupplier(HttpServerEncoder::new);
+        httpsListenerConfig.setDecoderSupplier(HttpServerDecoder::new);
+        httpsListenerConfig.setHandlerSupplier(HttpTestHandler::new);
+        httpsListenerConfig.setProvider(SslProvider.newServerProvider(PUBLIC_KEY_FILE, PRIVATE_KEY_FILE));
+        httpsListenerConfig.setLoc(HTTPS_LOC);
+        Net net = new Net();
+        net.addListener(httpsListenerConfig);
+        return net;
     }
 
     public static Net createHttpAndHttpsNet() {
-        MasterConfig httpMasterConfig = new MasterConfig();
-        httpMasterConfig.setEncoderSupplier(HttpServerEncoder::new);
-        httpMasterConfig.setDecoderSupplier(HttpServerDecoder::new);
-        httpMasterConfig.setHandlerSupplier(HttpTestHandler::new);
-        httpMasterConfig.setProvider(Net.tcpProvider());
-        httpMasterConfig.setLoc(HTTP_LOC);
-        MasterConfig httpsMasterConfig = new MasterConfig();
-        httpsMasterConfig.setEncoderSupplier(HttpServerEncoder::new);
-        httpsMasterConfig.setDecoderSupplier(HttpServerDecoder::new);
-        httpsMasterConfig.setHandlerSupplier(HttpTestHandler::new);
-        httpsMasterConfig.setProvider(SslProvider.newServerProvider(PUBLIC_KEY_FILE, PRIVATE_KEY_FILE));
-        httpsMasterConfig.setLoc(HTTPS_LOC);
-        return new Net(List.of(httpMasterConfig, httpsMasterConfig), WORKER_COUNT);
+        ListenerConfig httpListenerConfig = new ListenerConfig();
+        httpListenerConfig.setEncoderSupplier(HttpServerEncoder::new);
+        httpListenerConfig.setDecoderSupplier(HttpServerDecoder::new);
+        httpListenerConfig.setHandlerSupplier(HttpTestHandler::new);
+        httpListenerConfig.setProvider(Net.tcpProvider());
+        httpListenerConfig.setLoc(HTTP_LOC);
+        ListenerConfig httpsListenerConfig = new ListenerConfig();
+        httpsListenerConfig.setEncoderSupplier(HttpServerEncoder::new);
+        httpsListenerConfig.setDecoderSupplier(HttpServerDecoder::new);
+        httpsListenerConfig.setHandlerSupplier(HttpTestHandler::new);
+        httpsListenerConfig.setProvider(SslProvider.newServerProvider(PUBLIC_KEY_FILE, PRIVATE_KEY_FILE));
+        httpsListenerConfig.setLoc(HTTPS_LOC);
+        Net net = new Net();
+        net.addListener(httpListenerConfig);
+        net.addListener(httpsListenerConfig);
+        return net;
     }
 
     private static class HttpTestHandler implements Handler {
@@ -99,17 +104,17 @@ public class HttpServerTest {
                 """.getBytes(StandardCharsets.UTF_8));
         private static final ZoneId gmt = ZoneId.of("GMT");
         private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss z", Locale.ENGLISH).withZone(gmt);
-        private static final Executor executor = Executors.newVirtualThreadPerTaskExecutor();
+
         @Override
         public void onConnected(Channel channel) {
             log.debug(STR."Http connection established : \{channel.loc()}");
         }
 
         @Override
-        public int onRecv(Channel channel, Object data) {
+        public TaggedResult onRecv(Channel channel, Object data) {
             if(data instanceof HttpRequest httpRequest) {
-                executor.execute(() -> onHttpRequest(channel, httpRequest));
-                return 0;
+                Thread.ofVirtual().start(() -> onHttpRequest(channel, httpRequest));
+                return null;
             }else {
                 throw new FrameworkException(ExceptionType.HTTP, Constants.UNREACHED);
             }

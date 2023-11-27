@@ -3,7 +3,9 @@ package cn.zorcc.common.log;
 import cn.zorcc.common.Constants;
 
 public final class ConsoleLogConfig {
-
+    /**
+     *  Flush threshold for console output
+     */
     private int flushThreshold = 5;
     /**
      *  Reserved length for log level output
@@ -17,6 +19,14 @@ public final class ConsoleLogConfig {
      *  Reserved length for log class-name output
      */
     private int classNameLen = 40;
+    /**
+     *  Default size for containing buffer for stdout
+     */
+    private int outBuffer = 4 * Constants.KB;
+    /**
+     *  Default size of containing buffer for stderr
+     */
+    private int errBuffer = 12 * Constants.KB;
     /**
      *  Console color for log time output
      */
@@ -64,6 +74,22 @@ public final class ConsoleLogConfig {
 
     public void setClassNameLen(int classNameLen) {
         this.classNameLen = classNameLen;
+    }
+
+    public int getOutBuffer() {
+        return outBuffer;
+    }
+
+    public void setOutBuffer(int outBuffer) {
+        this.outBuffer = outBuffer;
+    }
+
+    public int getErrBuffer() {
+        return errBuffer;
+    }
+
+    public void setErrBuffer(int errBuffer) {
+        this.errBuffer = errBuffer;
     }
 
     public String getTimeColor() {

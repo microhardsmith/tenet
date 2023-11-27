@@ -1,7 +1,7 @@
 package cn.zorcc.common.network;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
 

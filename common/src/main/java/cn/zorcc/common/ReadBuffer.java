@@ -1,12 +1,13 @@
 package cn.zorcc.common;
 
-import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  *   Direct memory ReadBuffer, not thread-safe, ReadBuffer is read-only, shouldn't be modified directly
@@ -32,6 +33,11 @@ public final class ReadBuffer {
         this.readIndex = 0;
     }
 
+
+    public long readIndex() {
+        return readIndex;
+    }
+
     public void setReadIndex(long index) {
         if(index < 0 || index > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "ReadIndex out of bound");
@@ -41,10 +47,6 @@ public final class ReadBuffer {
 
     public long size() {
         return size;
-    }
-
-    public long readIndex() {
-        return readIndex;
     }
 
     public long available() {
@@ -75,7 +77,7 @@ public final class ReadBuffer {
     }
 
     /**
-     *   The returning segment would always be on-heap
+     *   The returning segment would be converted to on-heap memorySegment
      */
     public MemorySegment readHeapSegment(long count) {
         MemorySegment m = readSegment(count);
@@ -131,7 +133,8 @@ public final class ReadBuffer {
     }
 
     /**
-     *   read until several separators occurred, if not sep found in the following bytes, no bytes would be read and null would be returned
+     *   Read until target several separators occurred in the readBuffer
+     *   If no separators were found in the sequence, no bytes would be read and null would be returned
      */
     public byte[] readUntil(byte... separators) {
         for(long cur = readIndex; cur <= size - separators.length; cur++) {
@@ -156,10 +159,29 @@ public final class ReadBuffer {
     }
 
     /**
-     *   Return the rest part of current ReadBuffer, before calling this method, readerIndex should be checked if there are still some data remaining
+     *   Read multiple C style string from current readBuffer, there must be an external NUT to indicate the end
      */
-    public MemorySegment rest() {
-        return readIndex == 0 ? segment : segment.asSlice(readIndex, size - readIndex);
+    public List<String> readMultipleCStr() {
+        List<String> result = new ArrayList<>();
+        for( ; ; ) {
+            byte[] bytes = readUntil(Constants.NUT);
+            if(bytes == null || bytes.length == 0) {
+                return result;
+            }else {
+                result.add(new String(bytes, StandardCharsets.UTF_8));
+            }
+        }
+    }
+
+    /**
+     *   Read the rest part of current ReadBuffer
+     */
+    public byte[] readAll() {
+        if(readIndex == size) {
+            return Constants.EMPTY_BYTES;
+        }else {
+            return segment.asSlice(readIndex, size - readIndex).toArray(ValueLayout.JAVA_BYTE);
+        }
     }
 
     @Override

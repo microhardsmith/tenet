@@ -10,5 +10,5 @@ public record CpuLoadAverage(
         double l2,
         double l3
 ) {
-    public static final CpuLoadAverage UNSUPPORTED = new CpuLoadAverage(0.0d, 0.0d, 0.0d);
+    public static final CpuLoadAverage UNSUPPORTED = new CpuLoadAverage(-1d, -1d, -1d);
 }

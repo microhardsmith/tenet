@@ -1,12 +1,12 @@
 package cn.zorcc.orm.common;
 
 import cn.zorcc.common.Meta;
-import cn.zorcc.common.Pair;
+import cn.zorcc.common.OldPair;
+import cn.zorcc.common.database.Filler;
+import cn.zorcc.common.database.Mapper;
+import cn.zorcc.common.database.Page;
+import cn.zorcc.common.database.Where;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.sql.Filler;
-import cn.zorcc.common.sql.Mapper;
-import cn.zorcc.common.sql.Page;
-import cn.zorcc.common.sql.Where;
 import cn.zorcc.common.util.SqlUtil;
 
 import java.util.Collection;
@@ -37,9 +37,9 @@ public final class SqlMapper<T> implements Mapper<T> {
         if(description.preFill() && po instanceof Filler filler) {
             filler.onInsert();
         }
-        Pair<List<String>, List<Object>> pair = meta.getAll(po, description.cols());
-        List<String> columns = pair.k();
-        List<Object> args = pair.v();
+        OldPair<List<String>, List<Object>> oldPair = meta.getAll(po, description.cols());
+        List<String> columns = oldPair.k();
+        List<Object> args = oldPair.v();
         StringBuilder sb = new StringBuilder();
         SqlUtil.insertInto(sb, description.tableName(), columns);
         SqlUtil.values(sb, args.size());

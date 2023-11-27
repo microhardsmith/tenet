@@ -2,7 +2,6 @@ package cn.zorcc.common.http;
 
 /**
  *   Http status codes
- *   Should avoid using other status codes except HttpStatus.OK, other information could be contained in json
  */
 public enum HttpStatus {
     OK("200", "OK"),

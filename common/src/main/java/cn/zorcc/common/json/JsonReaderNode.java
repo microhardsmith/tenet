@@ -4,8 +4,6 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.Meta;
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
-import cn.zorcc.common.enums.ExceptionType;
-import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.exception.JsonParseException;
 import cn.zorcc.common.util.ReflectUtil;
 
@@ -16,37 +14,18 @@ import java.util.*;
 
 public abstract class JsonReaderNode {
     private JsonReaderNode prev;
-    private JsonReaderNode next;
     private boolean notFirst = false;
-
-    protected boolean checkFirstByte(ReadBuffer readBuffer, byte b) {
-        if(notFirst) {
-            byte fb = readNextByte(readBuffer);
-            if(fb == b) {
-                return true;
-            }else if(fb != Constants.COMMA) {
-                throw new JsonParseException(readBuffer);
-            }
-        }else {
-            notFirst = true;
-        }
-        return false;
-    }
 
     /**
      *   Unlink current JsonReaderNode with the prev node and return it
      */
     protected JsonReaderNode toPrev() {
-        if(next != null) {
-            throw new FrameworkException(ExceptionType.JSON, Constants.UNREACHED);
-        }
-        final JsonReaderNode p = prev;
+        final JsonReaderNode p = this.prev;
         if(p == null) {
             return null;
         }
         p.setJsonObject(getJsonObject());
         this.prev = null;
-        p.next = null;
         return p;
     }
 
@@ -54,10 +33,6 @@ public abstract class JsonReaderNode {
      *   Link a new JsonReaderNode for the next and return it
      */
     protected JsonReaderNode toNext(JsonReaderNode n) {
-        if(next != null) {
-            throw new FrameworkException(ExceptionType.JSON, Constants.UNREACHED);
-        }
-        next = n;
         n.prev = this;
         return n;
     }
@@ -78,19 +53,29 @@ public abstract class JsonReaderNode {
     /**
      *   Check next separator, return true if it's a endByte
      */
-    public static boolean checkSeparator(ReadBuffer readBuffer, byte endByte) {
+    protected boolean checkSeparator(ReadBuffer readBuffer, byte endByte) {
         byte sep = readNextByte(readBuffer);
-        if(sep == endByte) {
-            return true;
-        }else if(sep == Constants.COMMA) {
-            return false;
+        if(notFirst) {
+            if(sep == endByte) {
+                return true;
+            }else if(sep == Constants.COMMA) {
+                return false;
+            }else {
+                throw new JsonParseException(readBuffer);
+            }
         }else {
-            throw new JsonParseException(readBuffer);
+            notFirst = true;
+            if(sep == endByte) {
+                return true;
+            }else {
+                readBuffer.setReadIndex(readBuffer.readIndex() - 1);
+                return false;
+            }
         }
     }
 
     /**
-     *   Determine whether or not should we parse a meaningful byte
+     *   Determine whether should we parse a meaningful byte
      */
     public static boolean shouldParse(byte b) {
         return b != Constants.SPACE && (b < Constants.HT || b > Constants.CR);
@@ -125,9 +110,9 @@ public abstract class JsonReaderNode {
     }
 
     /**
-     *   Read and ignore empty bytes until counter expected byte, if other bytes occur, throw a exception
+     *   Read and ignore empty bytes until counter expected byte, if other bytes occur, throw an exception
      */
-    public static void readExpected(ReadBuffer readBuffer, byte expected) {
+    protected static void readExpected(ReadBuffer readBuffer, byte expected) {
         while (readBuffer.readIndex() < readBuffer.size()) {
             byte b = readBuffer.readByte();
             if(shouldParse(b)) {
@@ -175,7 +160,7 @@ public abstract class JsonReaderNode {
     }
 
     /**
-     *   Read until next meaningful byte, throw a exception if not found
+     *   Read until next meaningful byte, throw an exception if not found
      */
     public static byte readNextByte(ReadBuffer readBuffer) {
         while (readBuffer.readIndex() < readBuffer.size()) {
@@ -188,7 +173,7 @@ public abstract class JsonReaderNode {
     }
 
     /**
-     *   Read until next byte matches expected, return the matched one, throw a exception if not found
+     *   Read until next byte matches expected, return the matched one, throw an exception if not found
      */
     public static byte readUntilMatch(ReadBuffer readBuffer, WriteBuffer writeBuffer, byte... expected) {
         while (readBuffer.readIndex() < readBuffer.size()) {
@@ -205,7 +190,7 @@ public abstract class JsonReaderNode {
 
 
     /**
-     *   If first byte is 't', then the value could be true
+     *   If first byte being t, then the value could be true
      */
     public static void readFollowingTrueValue(ReadBuffer readBuffer) {
         if (readBuffer.available() < 3) {
@@ -220,7 +205,7 @@ public abstract class JsonReaderNode {
     }
 
     /**
-     *   If first byte is 'f', then the value could be false
+     *   If first byte being f, then the value could be false
      */
     public static void readFollowingFalseValue(ReadBuffer readBuffer) {
         if (readBuffer.available() < 4) {
@@ -236,7 +221,7 @@ public abstract class JsonReaderNode {
     }
 
     /**
-     *   If first byte is 'n', then the value could be null
+     *   If first byte is ['n'], then the value could be null
      */
     public static void readFollowingNullValue(ReadBuffer readBuffer) {
         if (readBuffer.available() < 3) {

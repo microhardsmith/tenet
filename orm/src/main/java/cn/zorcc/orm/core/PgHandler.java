@@ -1,13 +1,9 @@
 package cn.zorcc.orm.core;
 
-import cn.zorcc.common.Constants;
-import cn.zorcc.common.enums.ExceptionType;
-import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.Channel;
-import cn.zorcc.common.network.Handler;
-import cn.zorcc.orm.frontend.PgStartUpMsg;
-import cn.zorcc.orm.frontend.PgTerminateMsg;
+import cn.zorcc.common.network.TaggedResult;
+import cn.zorcc.common.network.api.Handler;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedTransferQueue;
@@ -24,20 +20,17 @@ public class PgHandler implements Handler {
 
     @Override
     public void onConnected(Channel channel) {
-        pgManager.registerConn(new PgConn(pgManager, channel, available, msgQueue));
-        channel.sendMsg(new PgStartUpMsg(pgManager.pgConfig()));
+
     }
 
     @Override
-    public void onRecv(Channel channel, Object data) {
-        if (!msgQueue.offer(data)) {
-            throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
-        }
+    public TaggedResult onRecv(Channel channel, Object data) {
+        return null;
     }
 
     @Override
     public void onShutdown(Channel channel) {
-        channel.sendMsg(PgTerminateMsg.INSTANCE);
+
     }
 
     @Override

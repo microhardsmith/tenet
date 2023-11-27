@@ -1,10 +1,10 @@
 package cn.zorcc.orm.core;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.WriteBuffer;
-import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.network.Encoder;
+import cn.zorcc.common.network.api.Encoder;
 import cn.zorcc.orm.PgConfig;
 import cn.zorcc.orm.frontend.*;
 
@@ -13,7 +13,7 @@ import java.nio.charset.StandardCharsets;
 public class PgEncoder implements Encoder {
 
     @Override
-    public WriteBuffer encode(WriteBuffer writeBuffer, Object o) {
+    public void encode(WriteBuffer writeBuffer, Object o) {
         switch (o) {
             case PgStartUpMsg(PgConfig pgConfig) -> encodePgStartUpMsg(writeBuffer, pgConfig);
             case PgAuthSaslInitialResponseMsg(String mechanism, String clientFirstMsg) -> encodeSaslInitialResponseMsg(writeBuffer, mechanism, clientFirstMsg);
@@ -28,7 +28,6 @@ public class PgEncoder implements Encoder {
             case PgTerminateMsg() -> encodePgTerminateMsg(writeBuffer);
             default -> throw new FrameworkException(ExceptionType.SQL, Constants.UNREACHED);
         }
-        return writeBuffer;
     }
 
     private void encodeDescribeMsg(WriteBuffer writeBuffer, PgDescribeMsg pgDescribeMsg) {

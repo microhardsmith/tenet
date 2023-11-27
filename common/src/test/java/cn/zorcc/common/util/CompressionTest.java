@@ -1,6 +1,6 @@
 package cn.zorcc.common.util;
 
-import cn.zorcc.common.binding.DeflateBinding;
+import cn.zorcc.common.bindings.DeflateBinding;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 

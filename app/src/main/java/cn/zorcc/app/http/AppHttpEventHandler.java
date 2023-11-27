@@ -1,9 +1,8 @@
 package cn.zorcc.app.http;
 
 import cn.zorcc.app.http.anno.*;
-import cn.zorcc.common.Constants;
 import cn.zorcc.common.Context;
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.exception.ServiceException;
 import cn.zorcc.common.log.Logger;

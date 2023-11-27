@@ -1,20 +1,18 @@
 package cn.zorcc.common.network;
 
-import cn.zorcc.common.Constants;
-import cn.zorcc.common.Context;
-import cn.zorcc.common.ReadBuffer;
-import cn.zorcc.common.WriteBuffer;
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.*;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.log.LoggerConsumer;
-import cn.zorcc.common.structure.IpType;
-import cn.zorcc.common.structure.Loc;
+import cn.zorcc.common.network.api.Decoder;
+import cn.zorcc.common.network.api.Encoder;
+import cn.zorcc.common.network.api.Handler;
 import cn.zorcc.common.structure.Wheel;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class EchoTest {
@@ -22,15 +20,16 @@ public class EchoTest {
     private static final int port = 8002;
     private static final Loc serverLoc = new Loc(IpType.IPV6, port);
     private static final Loc clientIpv4Loc = new Loc(IpType.IPV4, "127.0.0.1", port);
+    private static final Loc clientIpv6Loc = new Loc(IpType.IPV6, "::1", port);
 
     @Test
-    public void testEchoClient() throws InterruptedException {
+    public void testIpv6EchoClient() throws InterruptedException {
         Context.load(Wheel.wheel(), Wheel.class);
         Context.load(new LoggerConsumer(), LoggerConsumer.class);
         Net netClient = createEchoNetClient();
         Context.load(netClient, Net.class);
         Context.init();
-        netClient.connect(serverLoc, new EchoEncoder(), new EchoDecoder(), new EchoClientHandler(), new TcpConnector());
+        netClient.connect(clientIpv6Loc, new EchoEncoder(), new EchoDecoder(), new EchoClientHandler(), Net.tcpProvider());
         Thread.sleep(Long.MAX_VALUE);
     }
 
@@ -41,7 +40,7 @@ public class EchoTest {
         Net netClient = createEchoNetClient();
         Context.load(netClient, Net.class);
         Context.init();
-        netClient.connect(clientIpv4Loc, new EchoEncoder(), new EchoDecoder(), new EchoClientHandler(), new TcpConnector());
+        netClient.connect(clientIpv4Loc, new EchoEncoder(), new EchoDecoder(), new EchoClientHandler(), Net.tcpProvider());
         Thread.sleep(Long.MAX_VALUE);
     }
 
@@ -56,11 +55,12 @@ public class EchoTest {
     }
 
     private static Net createEchoNetClient() {
-        return new Net(1);
+        return new Net();
     }
 
     private static class EchoClientHandler implements Handler {
         private final AtomicInteger counter = new AtomicInteger(0);
+
         @Override
         public void onConnected(Channel channel) {
             log.info("Client channel connected");
@@ -68,10 +68,10 @@ public class EchoTest {
         }
 
         @Override
-        public int onRecv(Channel channel, Object data) {
+        public TaggedResult onRecv(Channel channel, Object data) {
             if(data instanceof String str) {
                 log.info(STR."Client receiving msg : \{str}");
-                return 0;
+                return null;
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
@@ -89,27 +89,29 @@ public class EchoTest {
     }
 
     private static Net createEchoNetServer() {
-        MasterConfig masterConfig = new MasterConfig();
-        masterConfig.setEncoderSupplier(EchoEncoder::new);
-        masterConfig.setDecoderSupplier(EchoDecoder::new);
-        masterConfig.setHandlerSupplier(EchoServerHandler::new);
-        masterConfig.setProvider(Net.tcpProvider());
-        masterConfig.setLoc(serverLoc);
-        return new Net(masterConfig, 1);
+        ListenerConfig listenerConfig = new ListenerConfig();
+        listenerConfig.setEncoderSupplier(EchoEncoder::new);
+        listenerConfig.setDecoderSupplier(EchoDecoder::new);
+        listenerConfig.setHandlerSupplier(EchoServerHandler::new);
+        listenerConfig.setProvider(Net.tcpProvider());
+        listenerConfig.setLoc(serverLoc);
+        Net net = new Net();
+        net.addListener(listenerConfig);
+        return net;
     }
 
     private static class EchoServerHandler implements Handler {
         @Override
         public void onConnected(Channel channel) {
-            log.info(STR."Receiving client connected from : \{channel.loc()}");
+            log.info(STR."Detecting channel connected from : \{channel.loc()}");
         }
 
         @Override
-        public int onRecv(Channel channel, Object data) {
+        public TaggedResult onRecv(Channel channel, Object data) {
             if(data instanceof String str) {
                 log.info(STR."Msg received : [\{str}]");
                 channel.sendMsg(str);
-                return 0;
+                return null;
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
@@ -128,27 +130,29 @@ public class EchoTest {
 
     private static class EchoDecoder implements Decoder {
         @Override
-        public Object decode(ReadBuffer readBuffer) {
-            long size = readBuffer.size();
-            if(size < 4) {
-                return null;
+        public void decode(ReadBuffer readBuffer, List<Object> entityList) {
+            for( ; ; ) {
+                long currentIndex = readBuffer.readIndex();
+                if(readBuffer.available() < 4) {
+                    return ;
+                }
+                int msgLength = readBuffer.readInt();
+                if(readBuffer.available() < msgLength) {
+                    readBuffer.setReadIndex(currentIndex);
+                    return ;
+                }
+                entityList.add(new String(readBuffer.readBytes(msgLength), StandardCharsets.UTF_8));
             }
-            int msgLength = readBuffer.readInt();
-            if(size < msgLength + 4) {
-                return null;
-            }
-            return new String(readBuffer.readBytes(msgLength), StandardCharsets.UTF_8);
         }
     }
 
     private static class EchoEncoder implements Encoder {
         @Override
-        public WriteBuffer encode(WriteBuffer writeBuffer, Object o) {
+        public void encode(WriteBuffer writeBuffer, Object o) {
             if(o instanceof String str) {
                 byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
                 writeBuffer.writeInt(bytes.length);
                 writeBuffer.writeBytes(bytes);
-                return writeBuffer;
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, "Require a string");
             }

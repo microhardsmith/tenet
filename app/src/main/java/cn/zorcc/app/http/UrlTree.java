@@ -1,6 +1,6 @@
 package cn.zorcc.app.http;
 
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 
 import java.util.ArrayList;

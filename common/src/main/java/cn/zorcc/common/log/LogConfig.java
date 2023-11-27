@@ -1,18 +1,71 @@
 package cn.zorcc.common.log;
 
+import cn.zorcc.common.Constants;
+
 public final class LogConfig {
-    private long flushInterval = 200L;
+    /**
+     *   Global minimal log level
+     */
+    private String level = "DEBUG";
+    /**
+     *   Default global flush interval in milliseconds
+     */
+    private int flushInterval = 200;
+    /**
+     *   Whether using TimeResolver SPI or not, if not found, fall back to use timeFormat
+     */
+    private boolean usingTimeResolver = true;
+    /**
+     *   TimeFormat string, note that TimeResolver with hand-crafted mechanism should be preferred with regard to performance
+     */
+    private String timeFormat = Constants.DEFAULT_TIME_FORMAT;
+    /**
+     *   Complete log format
+     */
     private String logFormat = "{time} {level} [{threadName}] {className} - {msg}";
+    /**
+     *   Whether using console log output
+     */
     private ConsoleLogConfig console = new ConsoleLogConfig();
+    /**
+     *   Whether using file log output
+     */
     private FileLogConfig file;
+    /**
+     *   Whether using sqlite log output
+     */
     private SqliteLogConfig sqlite;
 
-    public long getFlushInterval() {
+    public String getLevel() {
+        return level;
+    }
+
+    public void setLevel(String level) {
+        this.level = level;
+    }
+
+    public int getFlushInterval() {
         return flushInterval;
     }
 
-    public void setFlushInterval(long flushInterval) {
+    public void setFlushInterval(int flushInterval) {
         this.flushInterval = flushInterval;
+    }
+
+    public boolean isUsingTimeResolver() {
+        return usingTimeResolver;
+    }
+
+    public void setUsingTimeResolver(boolean usingTimeResolver) {
+        this.usingTimeResolver = usingTimeResolver;
+    }
+
+    public String getTimeFormat() {
+        return timeFormat;
+    }
+
+    public void setTimeFormat(String timeFormat) {
+        this.timeFormat = timeFormat;
     }
 
     public String getLogFormat() {

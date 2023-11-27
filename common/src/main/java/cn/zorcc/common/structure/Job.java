@@ -1,15 +1,16 @@
 package cn.zorcc.common.structure;
 
 public interface Job {
+
     /**
-     *   return current job execution count
+     *   Return current job execution count, this function is only useful for periodic jobs
      */
     long count();
 
     /**
-     *   cancel current job execution, return if successfully canceled
-     *   Note that cancel itself is a atomic operation, the canceller thread could never be the job execution thread
-     *   so different threads are actually fight for the opportunity of either running or canceling, but only one would succeed
+     *   Cancel current job execution, return if successfully canceled
+     *   Note that cancel itself is an atomic operation, the canceller thread shouldn't be the execution thread
+     *   Different threads are actually compete for the opportunity of either running or canceling, with only one would succeed
      */
     boolean cancel();
 }

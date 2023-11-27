@@ -7,7 +7,7 @@ import java.lang.foreign.MemorySegment;
 /**
  *   Http response abstraction
  */
-public class HttpResponse {
+public final class HttpResponse {
     /**
      *   Http version, default would be HTTP1.1
      */

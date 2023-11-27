@@ -1,14 +1,21 @@
 package cn.zorcc.common.network;
 
 import cn.zorcc.common.Carrier;
+import cn.zorcc.common.Constants;
+import cn.zorcc.common.ExceptionType;
+import cn.zorcc.common.exception.FrameworkException;
 
-/**
- *   Network tagged msg
- *   Int tag should work for 99.99% cases, if you think there is still a tag overflow potential, try using other technics to solve it
-*/
 public record TaggedMsg(
         int tag,
         Carrier carrier
 ) {
+    public TaggedMsg {
+        if(carrier == null) {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        }
+    }
 
+    public TaggedMsg(int tag) {
+        this(tag, Carrier.create());
+    }
 }

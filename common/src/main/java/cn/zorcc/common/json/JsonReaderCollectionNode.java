@@ -28,7 +28,9 @@ public final class JsonReaderCollectionNode extends JsonReaderNode {
 
     @Override
     public JsonReaderNode tryDeserialize() {
-        checkFirstByte(readBuffer, Constants.RSB);
+        if(checkSeparator(readBuffer, Constants.RSB)) {
+            return toPrev();
+        }
         for ( ; ; ) {
             byte b = readNextByte(readBuffer);
             switch (b) {

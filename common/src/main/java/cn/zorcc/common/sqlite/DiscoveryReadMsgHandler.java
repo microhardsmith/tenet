@@ -1,8 +1,8 @@
 package cn.zorcc.common.sqlite;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.Peer;
-import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 
 import java.lang.foreign.Arena;

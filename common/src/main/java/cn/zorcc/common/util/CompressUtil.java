@@ -1,9 +1,9 @@
 package cn.zorcc.common.util;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.WriteBuffer;
-import cn.zorcc.common.binding.DeflateBinding;
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.bindings.DeflateBinding;
 import cn.zorcc.common.exception.FrameworkException;
 
 import java.io.ByteArrayInputStream;

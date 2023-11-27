@@ -1,9 +1,9 @@
 package cn.zorcc.common.log;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.WriteBuffer;
-import cn.zorcc.common.binding.TenetBinding;
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.bindings.TenetBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.FileUtil;
 import cn.zorcc.common.util.NativeUtil;
@@ -38,15 +38,22 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
     public FileLogEventHandler(LogConfig logConfig) {
         try{
             FileLogConfig config = logConfig.getFile();
-            handlers = Logger.createLogHandlers(logConfig.getLogFormat(), s -> switch (s) {
+            List<LogHandler> logHandlers = Logger.createLogHandlers(logConfig.getLogFormat(), s -> switch (s) {
                 case "time" -> (writeBuffer, logEvent) -> writeBuffer.writeSegment(logEvent.time());
                 case "level" -> (writeBuffer, logEvent) -> writeBuffer.writeSegment(logEvent.level());
                 case "className" -> (writeBuffer, logEvent) -> writeBuffer.writeSegment(logEvent.className());
                 case "threadName" -> (writeBuffer, logEvent) -> writeBuffer.writeSegment(logEvent.threadName());
                 case "msg" -> (writeBuffer, logEvent) -> writeBuffer.writeSegment(logEvent.msg());
-                default -> throw new FrameworkException(ExceptionType.LOG, STR."Unresolved log format : \{s}");
+                default -> throw new FrameworkException(ExceptionType.LOG, STR. "Unresolved log format : \{ s }" );
             });
-            dir = config.getDir() == null || config.getDir().isEmpty() ? System.getProperty("user.dir") : config.getDir();
+            logHandlers.add((writeBuffer, logEvent) -> {
+                MemorySegment throwable = logEvent.throwable();
+                if(throwable != null) {
+                    writeBuffer.writeSegment(throwable);
+                }
+            });
+            handlers = logHandlers;
+            dir = FileUtil.normalizePath(config.getDir() == null || config.getDir().isEmpty() ? System.getProperty("user.dir") : config.getDir());
             Path dirPath = Path.of(dir);
             if(!Files.exists(dirPath)) {
                 Files.createDirectory(dirPath);
@@ -68,7 +75,7 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
         try(Arena arena = Arena.ofConfined()) {
             Instant instant = Constants.SYSTEM_CLOCK.instant();
             LocalDateTime now = LocalDateTime.ofEpochSecond(instant.getEpochSecond(), instant.getNano(), Constants.LOCAL_ZONE_OFFSET);
-                        String absolutePath = dir +
+            String absolutePath = dir +
                     Constants.SEPARATOR +
                     DateTimeFormatter.ofPattern(Constants.LOG_FILE_NAME_PATTERN).format(now) +
                     Constants.LOG_FILE_TYPE;

@@ -1,6 +1,5 @@
 package cn.zorcc.common;
 
-import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
 
@@ -11,7 +10,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.OffsetTime;
 import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 
 /**
  *   Constants pool
@@ -34,13 +32,12 @@ public final class Constants {
     public static final String APPLY = "apply";
     public static final String ACCEPT = "accept";
     public static final String SINGLETON_MSG = "Violating singleton";
-    public static final String CONFIG_FILE = "configFile";
-    public static final int QUEUE_SIZE = 256;
-
+    public static final int INITIAL = 0;
+    public static final int RUNNING = 1;
+    public static final int CLOSING = 2;
+    public static final int STOPPED = 3;
+    public static final String DEFAULT_TIME_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS";
     public static final Clock SYSTEM_CLOCK = Clock.systemDefaultZone();
-    public static final String TIME_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS";
-    public static final String TIME_RESOLVER = "cn.zorcc.common.log.DefaultTimeResolver";
-    public static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern(TIME_FORMAT);
     public static final ZoneOffset LOCAL_ZONE_OFFSET = OffsetTime.now().getOffset();
 
     /**
@@ -275,10 +272,6 @@ public final class Constants {
     public static final String FILE_SEND_TIMEOUT = "file_send_timeout";
     // 文件接收超时
     public static final String FILE_RECEIVE_TIMEOUT = "file_receive_timeout";
-    /**
-     * raft cache storage
-     */
-
 
     /**
      * sql
@@ -290,12 +283,6 @@ public final class Constants {
     public static final String WHERE = "#where{}";
     public static final int WHERE_LENGTH = 8;
     public static final String DYNAMIC_SQL_ERR = "Err occurred in dynamic sql";
-
-    /**
-     *   errno
-     */
-    public static final int EINTR = 4;
-    public static final int WSAEINTR = 10004;
 
     /**
      *  epoll
@@ -319,7 +306,20 @@ public final class Constants {
     public static final short EV_DELETE = 1 << 1;
 
     /**
-     *   ssl
+     *   Net
+     */
+    public static final int NET_IGNORED = 1;
+    public static final int NET_UPDATE = 1 << 2;
+    public static final int NET_W = 1 << 4; // register write only
+    public static final int NET_PW = 1 << 6; // register write if possible
+    public static final int NET_R = 1 << 8; // register read only
+    public static final int NET_PR = 1 << 10; // register read if possible
+    public static final int NET_RW = NET_R | NET_W; // register read and write
+    public static final int NET_PC = 1 << 12;
+    public static final int NET_WC = 1 << 16;
+
+    /**
+     *   Ssl library
      */
     public static final int SSL_FILETYPE_PEM = 1;
     public static final int SSL_ERROR_WANT_READ = 2;
@@ -328,7 +328,9 @@ public final class Constants {
     public static final long SSL_MODE_ENABLE_PARTIAL_WRITE = 1L;
     public static final long SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER = 2L;
     public static final long SSL_MODE_AUTO_RETRY = 4L;
+    public static final int SSL_VERIFY_NONE = 0;
     public static final int SSL_VERIFY_PEER = 1;
+    public static final int SSL_VERIFY_FAIL_IF_NO_PEER_CERT = 2;
 
 
     /**
@@ -360,6 +362,33 @@ public final class Constants {
     public static final int SQLITE_PREPARE_NORMALIZE = 2;
     public static final int SQLITE_PREPARE_NO_VTAB = 4;
     public static final byte SQLITE_UTF8 = 1;
+
+    /**
+     *   Postgresql
+     */
+    public static final byte PG_SSL_OK = 'S';
+    public static final byte PG_SSL_DISABLE = 'N';
+    public static final String PG_SSL_PREFER = "prefer";
+    public static final String PG_SSL_VERIFY_CA = "verify-ca";
+    public static final String PG_SSL_VERIFY_FULL = "verify-full";
+    public static final byte PG_AUTH = 'R';
+    public static final byte PG_PASSWORD = 'p';
+    public static final byte PG_ERROR = 'E';
+    public static final byte PG_PARAMETER_STATUS = 'S';
+    public static final byte PG_BACKEND_KEY_DATA = 'K';
+    public static final byte PG_READY = 'Z';
+    public static final byte PG_TRANSACTION_IDLE = 'I';
+    public static final byte PG_TRANSACTION_ON = 'T';
+    public static final byte PG_TRANSACTION_ERROR = 'E';
+    public static final byte PG_SIMPLE_QUERY = 'Q';
+    public static final byte PG_COMMAND_COMPLETION = 'C';
+    public static final int PG_AUTH_OK = 0;
+    public static final int PG_AUTH_CLEAR_TEXT_PASSWORD = 3;
+    public static final int PG_AUTH_MD5_PASSWORD = 5;
+    public static final int PG_AUTH_SASL_PASSWORD = 10;
+    public static final int PG_AUTH_SASL_CONTINUE = 11;
+    public static final int PG_AUTH_SASL_FINAL = 12;
+
 
     private Constants() {
         throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);

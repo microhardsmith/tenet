@@ -2,9 +2,8 @@ package cn.zorcc.common.sqlite;
 
 import cn.zorcc.common.AbstractLifeCycle;
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.util.ThreadUtil;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -28,7 +27,7 @@ public final class SqliteEngine extends AbstractLifeCycle {
     }
 
     private Thread createReaderThread(SqliteConfig config, int sequence) {
-        return ThreadUtil.platform("sqlite-reader-" + sequence, () -> {
+        return Thread.ofPlatform().name("sqlite-reader-" + sequence).unstarted(() -> {
             try(SqliteConn conn = new SqliteConn(config.getPath())) {
                 List<Consumer<SqliteMsg>> consumers = new ArrayList<>();
                 if(config.isEnableDiscovery()) {
@@ -42,7 +41,7 @@ public final class SqliteEngine extends AbstractLifeCycle {
     }
 
     private Thread createWriterThread(SqliteConfig config) {
-        return ThreadUtil.platform("sqlite-writer", () -> {
+        return Thread.ofPlatform().name("sqlite-writer").unstarted(() -> {
             try(SqliteConn conn = new SqliteConn(config.getPath())) {
                 List<Consumer<SqliteMsg>> consumers = new ArrayList<>();
                 if(config.isEnableDiscovery()) {

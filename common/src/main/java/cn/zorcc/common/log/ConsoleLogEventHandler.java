@@ -1,9 +1,9 @@
 package cn.zorcc.common.log;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.WriteBuffer;
-import cn.zorcc.common.binding.TenetBinding;
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.bindings.TenetBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.FileUtil;
 import cn.zorcc.common.util.NativeUtil;
@@ -14,22 +14,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
-/**
- *   Print log to the console, using C's puts and fflush mechanism
- *   Using fputs and fflush from C to replace Java's PrintStream regarding to benchmark, could be several times faster that normal System.out.println():
- *      PrintTest.testNative       avgt   25   759.945 ±  28.064  ns/op
- *      PrintTest.testSystemOut    avgt   25  2758.746 ± 108.389  ns/op
- */
 public final class ConsoleLogEventHandler implements Consumer<LogEvent> {
-    private static final long BUFFER_SIZE = 16 * Constants.KB;
+    private static final int BUFFER_SIZE = 16 * Constants.KB;
     private final List<LogHandler> handlers;
     private final List<LogEvent> eventList = new ArrayList<>();
     private final int flushThreshold;
+    private final int outBufferSize;
+    private final int errBufferSize;
     private final MemorySegment stdout = TenetBinding.stdout();
     private final MemorySegment stderr = TenetBinding.stderr();
 
     public ConsoleLogEventHandler(LogConfig logConfig) {
         ConsoleLogConfig config = logConfig.getConsole();
+        outBufferSize = config.getOutBuffer();
+        errBufferSize = config.getErrBuffer();
         handlers = Logger.createLogHandlers(logConfig.getLogFormat(), s -> switch (s) {
             case "time" -> timeHandler(config);
             case "level" -> levelHandler(config);
@@ -64,21 +62,58 @@ public final class ConsoleLogEventHandler implements Consumer<LogEvent> {
 
     private void flush() {
         if(!eventList.isEmpty()) {
-            try(WriteBuffer outBuffer = WriteBuffer.newDefaultWriteBuffer(Arena.ofConfined(), BUFFER_SIZE);
-                WriteBuffer errBuffer = WriteBuffer.newDefaultWriteBuffer(Arena.ofConfined(), BUFFER_SIZE)) {
-                for (LogEvent event : eventList) {
-                    handlers.forEach(logHandler -> logHandler.process(outBuffer, event));
-                    if(event.throwable() != null) {
-                        errBuffer.writeSegment(event.throwable());
-                    }
-                }
-                FileUtil.fwrite(outBuffer.toSegment(), stdout);
-                if(errBuffer.writeIndex() > 0) {
-                    FileUtil.fwrite(errBuffer.toSegment(), stderr);
-                }
-            }finally {
-                eventList.clear();
+            if(NativeUtil.isRunningFromJar()) {
+                flushToStdoutAndStderr();
+            }else {
+                flushToStdout();
             }
+        }
+    }
+
+    /**
+     *   When using IDE like Intellij Idea, it has a long unfixed bug about using both stdout and stderr for more than ten years
+     *   The output to stdout and stderr will be mixed together
+     *   So when running in an IDE, let's just flush everything to stdout to keep things working
+     */
+    private void flushToStdout() {
+        try(WriteBuffer outBuffer = WriteBuffer.newDefaultWriteBuffer(Arena.ofConfined(), outBufferSize + errBufferSize)) {
+            for (LogEvent event : eventList) {
+                handlers.forEach(logHandler -> logHandler.process(outBuffer ,event));
+                if(event.throwable() != null) {
+                    outBuffer.writeSegment(Constants.ANSI_PREFIX);
+                    outBuffer.writeSegment(Constants.RED_BYTES);
+                    outBuffer.writeSegment(event.throwable());
+                    outBuffer.writeSegment(Constants.ANSI_SUFFIX);
+                }
+            }
+            if(outBuffer.writeIndex() > 0) {
+                FileUtil.fwrite(outBuffer.toSegment(), stdout);
+            }
+        }finally {
+            eventList.clear();
+        }
+    }
+
+    /**
+     *   This is the default console-logging behaviour
+     */
+    private void flushToStdoutAndStderr() {
+        try(WriteBuffer outBuffer = WriteBuffer.newDefaultWriteBuffer(Arena.ofConfined(), outBufferSize);
+            WriteBuffer errBuffer = WriteBuffer.newDefaultWriteBuffer(Arena.ofConfined(), errBufferSize)) {
+            for (LogEvent event : eventList) {
+                handlers.forEach(logHandler -> logHandler.process(outBuffer, event));
+                if(event.throwable() != null) {
+                    errBuffer.writeSegment(event.throwable());
+                }
+            }
+            if(outBuffer.writeIndex() > 0) {
+                FileUtil.fwrite(outBuffer.toSegment(), stdout);
+            }
+            if(errBuffer.writeIndex() > 0) {
+                FileUtil.fwrite(errBuffer.toSegment(), stderr);
+            }
+        }finally {
+            eventList.clear();
         }
     }
 

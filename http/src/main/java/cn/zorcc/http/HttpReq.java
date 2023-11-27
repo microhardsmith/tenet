@@ -1,6 +1,6 @@
 package cn.zorcc.http;
 
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;

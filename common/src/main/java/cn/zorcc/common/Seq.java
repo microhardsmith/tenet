@@ -22,8 +22,8 @@ public final class Seq {
         throw new UnsupportedOperationException();
     }
 
-    public static int len() {
-        return SEQ_BYTES;
+    public static int length() {
+        return TOTAL_BYTES;
     }
 
     public static MemorySegment create(int currentAppId, int currentNodeId, int targetAppId, int targetNodeId) {

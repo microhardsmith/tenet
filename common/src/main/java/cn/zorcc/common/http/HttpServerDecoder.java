@@ -1,15 +1,16 @@
 package cn.zorcc.common.http;
 
 import cn.zorcc.common.Constants;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
-import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.network.Decoder;
+import cn.zorcc.common.network.api.Decoder;
 import cn.zorcc.common.util.CompressUtil;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 public final class HttpServerDecoder implements Decoder {
     private enum DecodingStatus {
@@ -28,19 +29,24 @@ public final class HttpServerDecoder implements Decoder {
         FINISHED,
         INCOMPLETE
     }
+
     private DecodingStatus decodingStatus = DecodingStatus.INITIAL;
-    private long len;
+    private int len;
     private WriteBuffer tempBuffer;
     private HttpRequest current;
     @Override
-    public Object decode(ReadBuffer readBuffer) {
+    public void decode(ReadBuffer readBuffer, List<Object> entityList) {
         for( ; ; ) {
             switch (tryDecode(readBuffer)) {
                 case FINISHED -> {
-                    return current;
+                    entityList.add(current);
+                    if(readBuffer.available() > 0) {
+                        throw new FrameworkException(ExceptionType.HTTP, "Http pipeline was not supported");
+                    }
+                    return ;
                 }
                 case INCOMPLETE -> {
-                    return null;
+                    return ;
                 }
             }
         }
@@ -189,8 +195,8 @@ public final class HttpServerDecoder implements Decoder {
         return ResultStatus.CONTINUE;
     }
 
-    private static long getTransferredLength(byte[] bytes) {
-        long ret = 0;
+    private static int getTransferredLength(byte[] bytes) {
+        int ret = 0;
         for (byte b : bytes) {
             if(b >= Constants.B_ZERO && b <= Constants.B_NINE) {
                 ret = (ret << 4) + b - Constants.B_ZERO;

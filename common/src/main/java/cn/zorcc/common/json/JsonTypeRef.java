@@ -1,7 +1,7 @@
 package cn.zorcc.common.json;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.exception.JsonParseException;
 
@@ -11,6 +11,7 @@ import java.lang.reflect.Type;
 /**
  *   Helper class to get generic type from parameters
  */
+@SuppressWarnings("unused")
 public abstract class JsonTypeRef<T> {
     private final Type type;
 

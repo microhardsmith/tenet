@@ -1,11 +1,11 @@
 package cn.zorcc.orm.core;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.Channel;
-import cn.zorcc.common.util.ThreadUtil;
+import cn.zorcc.common.postgre.PgStatus;
 import cn.zorcc.orm.PgConfig;
 import cn.zorcc.orm.backend.*;
 import cn.zorcc.orm.frontend.PgAuthSaslInitialResponseMsg;
@@ -43,7 +43,6 @@ public final class PgConn {
     private final Channel channel;
     private final AtomicBoolean available;
     private final BlockingQueue<Object> msgQueue;
-    private final Thread consumerThread;
     private final PgVariable variable = new PgVariable();
 
     public PgConn(PgManager pgManager, Channel channel, AtomicBoolean available, BlockingQueue<Object> msgQueue) {
@@ -52,17 +51,6 @@ public final class PgConn {
         this.channel = channel;
         this.available = available;
         this.msgQueue = msgQueue;
-        this.consumerThread = ThreadUtil.virtual("pgConn-" + sequence, () -> {
-            Thread currentThread = Thread.currentThread();
-            while (!currentThread.isInterrupted()) {
-                try {
-                    onMsg(msgQueue.take());
-                } catch (InterruptedException e) {
-                    currentThread.interrupt();
-                }
-            }
-        });
-        consumerThread.start();
     }
 
     public boolean available() {

@@ -1,7 +1,7 @@
 package cn.zorcc.common.util;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 
 import java.util.List;

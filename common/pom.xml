@@ -15,6 +15,13 @@
             <artifactId>jctools-core</artifactId>
             <version>${jctools.version}</version>
         </dependency>
+
+        <!-- postgresql SASL authentication-->
+        <dependency>
+            <groupId>com.ongres.scram</groupId>
+            <artifactId>client</artifactId>
+            <version>${scram.version}</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -32,7 +39,7 @@
                         <configuration>
                             <archive>
                                 <manifest>
-                                    <mainClass/> <!-- put a main class here to distribute a executable jar -->
+                                    <mainClass>cn.zorcc.common.LaunchTest</mainClass> <!-- put a main class here to distribute a executable jar -->
                                 </manifest>
                             </archive>
                             <descriptorRefs>

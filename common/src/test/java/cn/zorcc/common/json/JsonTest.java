@@ -4,6 +4,7 @@ import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.beans.Book;
 import cn.zorcc.common.beans.City;
+import cn.zorcc.common.log.LogConfig;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -23,10 +24,10 @@ public class JsonTest {
         c1.setCategory('A');
         c1.setElevation(10);
         try(WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer()) {
-            JsonParser.serializeAsObject(writeBuffer, c1);
+            JsonParser.writeObject(writeBuffer, c1);
             String serializeResult = writeBuffer.toString();
             System.out.println(serializeResult);
-            City c2 = JsonParser.deserializeAsObject(new ReadBuffer(MemorySegment.ofArray(serializeResult.getBytes(StandardCharsets.UTF_8))), City.class);
+            City c2 = JsonParser.readObject(new ReadBuffer(MemorySegment.ofArray(serializeResult.getBytes(StandardCharsets.UTF_8))), City.class);
             Assertions.assertEquals(c1, c2);
         }
     }
@@ -38,11 +39,23 @@ public class JsonTest {
         b1.setNames(List.of("hello","world","goodbye"));
         b1.setMap(Map.of("a", List.of(1,2,3), "b", List.of(4,5,6)));
         try(WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer()) {
-            JsonParser.serializeAsObject(writeBuffer, b1);
+            JsonParser.writeObject(writeBuffer, b1);
             String serializeResult = writeBuffer.toString();
             System.out.println(serializeResult);
-            Book b2 = JsonParser.deserializeAsObject(new ReadBuffer(MemorySegment.ofArray(serializeResult.getBytes(StandardCharsets.UTF_8))), Book.class);
+            Book b2 = JsonParser.readObject(new ReadBuffer(MemorySegment.ofArray(serializeResult.getBytes(StandardCharsets.UTF_8))), Book.class);
             Assertions.assertEquals(b1, b2);
         }
+    }
+
+    @Test
+    public void testEmpty() {
+        String s = """
+                {
+                    "file" : {}
+                }
+                """;
+        ReadBuffer readBuffer = new ReadBuffer(MemorySegment.ofArray(s.getBytes(StandardCharsets.UTF_8)));
+        LogConfig logConfig = JsonParser.readObject(readBuffer, LogConfig.class);
+        System.out.println(logConfig.getFile().getDir());
     }
 }

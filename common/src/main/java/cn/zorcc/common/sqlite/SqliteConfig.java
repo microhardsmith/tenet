@@ -10,19 +10,19 @@ public final class SqliteConfig {
      */
     private int readers;
     /**
-     *   Whether or not using WAL mechanism
+     *   Whether using WAL mechanism
      */
     private boolean usingWAL;
     /**
-     *  Whether or not enabling remote discovery
+     *  Whether enabling remote discovery
      */
     private boolean enableDiscovery;
     /**
-     *  Whether or not enabling remote configuration
+     *  Whether enabling remote configuration
      */
     private boolean enableConfiguration;
     /**
-     *  Whether or not enabling remote distributed lock
+     *  Whether enabling remote distributed lock
      */
     private boolean enableDistributedLock;
 

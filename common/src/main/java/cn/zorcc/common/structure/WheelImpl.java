@@ -3,9 +3,8 @@ package cn.zorcc.common.structure;
 import cn.zorcc.common.AbstractLifeCycle;
 import cn.zorcc.common.Clock;
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.util.ThreadUtil;
 import org.jctools.queues.atomic.MpscUnboundedAtomicArrayQueue;
 
 import java.time.Duration;
@@ -45,7 +44,7 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
         this.tickNano = Duration.ofMillis(tick).toNanos();
         this.bound = slots * tick;
         this.cMask = mask >> 1;
-        this.queue = new MpscUnboundedAtomicArrayQueue<>(slots);
+        this.queue = new MpscUnboundedAtomicArrayQueue<>(Constants.KB);
         this.wheel = new JobImpl[slots];
         final Runnable empty = () -> {};
         for(int i = 0; i < slots; i++) {
@@ -53,7 +52,7 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
         }
         // if we use virtual thread, then parkNanos() will internally use a ScheduledThreadPoolExecutor for unpark the current vthread
         // still there is a platform thread constantly waiting for lock and go to sleep and so on. So use platform thread would be more simplified
-        this.wheelThread = ThreadUtil.platform("Wheel", this::run);
+        this.wheelThread = Thread.ofPlatform().name("Wheel").unstarted(this::run);
     }
 
     public static final Wheel instance = new WheelImpl(Wheel.slots, Wheel.tick);
@@ -163,7 +162,7 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
                 JobImpl next = remove(current);
                 // the executor thread and the canceller thread will fight for ownership, but only one would succeed
                 if(current.owner.compareAndSet(false, true)) {
-                    ThreadUtil.virtual("wheel-job-" + counter.getAndIncrement(), current.mission).start();
+                    Thread.ofVirtual().name("wheel-job-" + counter.getAndIncrement()).start(current.mission);
                     final long period = current.period;
                     if(period == ONCE) {
                         // help GC
@@ -186,7 +185,7 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
                 current = next;
             }
             
-            // park until next slot
+            // park until next slot, it's safe even the value is negative
             LockSupport.parkNanos(scale.nano - Clock.nano());
         }
     }

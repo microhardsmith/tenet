@@ -1,6 +1,6 @@
 package cn.zorcc.orm.backend;
 
-import cn.zorcc.common.Pair;
+import cn.zorcc.common.OldPair;
 
 import java.util.List;
 
@@ -9,6 +9,6 @@ import java.util.List;
  */
 public record PgStatusResponseMsg(
     boolean isErr,
-    List<Pair<Byte, String>> items
+    List<OldPair<Byte, String>> items
 ) {
 }

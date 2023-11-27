@@ -3,12 +3,13 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.AbstractLifeCycle;
 import cn.zorcc.common.Clock;
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.structure.Loc;
+import cn.zorcc.common.network.api.*;
+import cn.zorcc.common.network.lib.OsNetworkLibrary;
+import cn.zorcc.common.structure.Mutex;
 import cn.zorcc.common.structure.Wheel;
-import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -19,32 +20,31 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Stream;
+import java.util.stream.IntStream;
 
-/**
- *   Net is the core of the whole Network application, Net consists of a Master and several Workers
- *   For a network channel, the most essential three components are : codec, handler and protocol
- *   Codec determines how the ReadBuffer should be decoded as a java object, and how to parse a java object into a writeBuffer for transferring
- *   Handler determines how we deal with the incoming data
- *   Protocol determines the low level operations
- */
 public final class Net extends AbstractLifeCycle {
     private static final Logger log = new Logger(Net.class);
-    private static final Duration DEFAULT_CONNECTION_DURATION = Duration.ofSeconds(5);
-    private static final Duration DEFAULT_GRACEFUL_SHUTDOWN_DURATION = Duration.ofSeconds(15);
-    private static final int DEFAULT_WORKER_COUNT = NativeUtil.getCpuCores();
-    private static final SocketOptions DEFAULT_SOCKET_OPTIONS = new SocketOptions();
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
+    private static final AtomicInteger counter = new AtomicInteger(0);
     private static final Provider tcpProvider = new TcpProvider();
     private static final Provider sslProvider = SslProvider.newClientProvider();
-    private final List<Master> masters = new ArrayList<>();
-    private final List<Worker> workers = new ArrayList<>();
-    private final Lock lock = new ReentrantLock();
-    private final Set<Provider> customProviders = new HashSet<>();
-    private final AtomicInteger connectCounter = new AtomicInteger(0);
+    private static final PollerConfig defaultPollerConfig = new PollerConfig();
+    private static final WriterConfig defaultWriterConfig = new WriterConfig();
+    private static final SocketConfig defaultSocketConfig = new SocketConfig();
+    /**
+     *   Default client connect timeout, could be modified according to your scenario
+     */
+    private static final Duration defaultConnectTimeout = Duration.ofSeconds(5);
+    /**
+     *   Default graceful shutdown timeout, could be modified according to your scenario
+     */
+    private static final Duration defaultGracefulShutdownTimeout = Duration.ofSeconds(30);
+    private final State state = new State();
+    private final List<Listener> listeners = new ArrayList<>();
+    private final Set<Provider> providers = new HashSet<>();
+    private final List<Poller> pollers;
+    private final List<Writer> writers;
 
     public static Provider tcpProvider() {
         return tcpProvider;
@@ -54,99 +54,76 @@ public final class Net extends AbstractLifeCycle {
         return sslProvider;
     }
 
-    public static Connector newTcpConnector() {
-        return tcpProvider.newConnector();
-    }
-
-    public static Connector newSslConnector() {
-        return sslProvider.newConnector();
-    }
-
     public Net() {
-        this(List.of(), DEFAULT_WORKER_COUNT);
+        this(defaultPollerConfig, defaultWriterConfig);
     }
 
-    public Net(int workerCount) {
-        this(List.of(), workerCount);
+    public Net(PollerConfig pollerConfig) {
+        this(pollerConfig, defaultWriterConfig);
     }
 
-    public Net(MasterConfig masterConfigs) {
-        this(List.of(masterConfigs));
+    public Net(WriterConfig writerConfig) {
+        this(defaultPollerConfig, writerConfig);
     }
 
-    public Net(MasterConfig masterConfig, List<WorkerConfig> workerConfigs) {
-        this(List.of(masterConfig), workerConfigs);
-    }
-
-    public Net(MasterConfig masterConfig, int workerCount) {
-        this(List.of(masterConfig), workerCount);
-    }
-
-    public Net(List<MasterConfig> masterConfigs) {
-        this(masterConfigs, DEFAULT_WORKER_COUNT);
-    }
-
-    public Net(List<MasterConfig> masterConfigs, int workerCount) {
-        this(masterConfigs, Stream.generate(WorkerConfig::new).limit(workerCount).toList());
-    }
-
-    public Net(List<MasterConfig> masterConfigs, List<WorkerConfig> workerConfigs) {
+    public Net(PollerConfig pollerConfig, WriterConfig writerConfig) {
         if(!instanceFlag.compareAndSet(false, true)) {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.SINGLETON_MSG);
         }
-        if(workerConfigs == null || workerConfigs.isEmpty()) {
-            throw new FrameworkException(ExceptionType.NETWORK, "Workers cannot be empty list");
+        int pollerCount = pollerConfig.getPollerCount();
+        if(pollerCount <= 0) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Poller instances cannot be zero");
         }
-        for (WorkerConfig workerConfig : workerConfigs) {
-            Worker worker = new Worker(workerConfig, workers.size());
-            workers.add(worker);
+        int writerCount = writerConfig.getWriterCount();
+        if(writerCount <= 0) {
+            throw new FrameworkException(ExceptionType.NETWORK, "Writer instances cannot be zero");
         }
-        if(masterConfigs != null && !masterConfigs.isEmpty()) {
-            for (MasterConfig masterConfig : masterConfigs) {
-                Master master = new Master(masterConfig, workers, masters.size());
-                masters.add(master);
+        this.pollers = IntStream.range(0, pollerCount).mapToObj(_ -> new Poller(pollerConfig)).toList();
+        this.writers = IntStream.range(0, writerCount).mapToObj(_ -> new Writer(writerConfig)).toList();
+        addProvider(tcpProvider());
+        addProvider(sslProvider());
+    }
+
+    public void addListener(ListenerConfig listenerConfig) {
+        try(Mutex _ = state.withMutex()) {
+            int current = state.get();
+            if(current > Constants.RUNNING) {
+                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+            }
+            Listener listener = new Listener(listenerConfig, pollers, writers);
+            listeners.add(listener);
+            if(current == Constants.RUNNING) {
+                listener.thread().start();
             }
         }
-        registerProvider(tcpProvider);
-        registerProvider(sslProvider);
     }
 
-    public void registerProvider(Provider provider) {
-        lock.lock();
-        try{
-            customProviders.add(provider);
-        }finally {
-            lock.unlock();
+    public void addProvider(Provider provider) {
+        try(Mutex _ = state.withMutex()) {
+            if(state.get() > Constants.RUNNING) {
+                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+            }
+            providers.add(provider);
         }
     }
 
-    /**
-     *   Perform round-robin worker selection for worker
-     *   The atomicInteger will overflow when reaching Integer.MAX_VALUE, which is totally safe here
-     */
-    public static Worker chooseWorker(List<Worker> workers, AtomicInteger counter) {
-        final int index = Math.abs(counter.getAndIncrement() % workers.size());
-        return workers.get(index);
-    }
-
-    /**
-     *   Launch a client connect operation for remote server
-     *   This method could be invoked from any thread (Platform thread would be better since native calls are involved)
-     */
-    public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Connector connector, Duration duration, SocketOptions socketOptions) {
+    public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Provider provider, Duration duration, SocketConfig socketConfig) {
         Socket socket = osNetworkLibrary.createSocket(loc);
-        osNetworkLibrary.configureClientSocket(socket, socketOptions);
-        Worker worker = chooseWorker(workers, connectCounter);
-        Channel channel = new Channel(socket, encoder, decoder, handler, worker, loc, new AtomicInteger(OsNetworkLibrary.REGISTER_NONE));
+        osNetworkLibrary.configureClientSocket(socket, socketConfig);
+        int seq = counter.getAndIncrement();
+        Poller poller = pollers.get(seq % pollers.size());
+        Writer writer = writers.get(seq % writers.size());
+        Channel channel = new Channel(socket, encoder, decoder, handler, poller, writer, loc);
+        Sentry sentry = provider.create(channel);
         try(Arena arena = Arena.ofConfined()) {
             MemorySegment sockAddr = osNetworkLibrary.createSockAddr(loc, arena);
             if(osNetworkLibrary.connect(socket, sockAddr) == 0) {
-                mount(connector, channel);
+                poller.submit(new PollerTask(PollerTaskType.BIND, channel, sentry));
             }else {
                 int errno = osNetworkLibrary.errno();
                 if (errno == osNetworkLibrary.connectBlockCode()) {
-                    mount(connector, channel);
-                    Wheel.wheel().addJob(() -> worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.CLOSE_CHANNEL, null, channel, null, null)), duration);
+                    poller.submit(new PollerTask(PollerTaskType.BIND, channel, sentry));
+                    Wheel.wheel().addJob(() -> poller.submit(new PollerTask(PollerTaskType.UNBIND, channel, duration)), duration);
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to connect, errno : \{errno}");
                 }
@@ -154,65 +131,57 @@ public final class Net extends AbstractLifeCycle {
         }
     }
 
-    public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Connector connector, SocketOptions socketOptions) {
-        connect(loc, encoder, decoder, handler, connector, DEFAULT_CONNECTION_DURATION, socketOptions);
+    public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Provider provider, SocketConfig socketConfig) {
+        connect(loc, encoder, decoder, handler, provider, defaultConnectTimeout, socketConfig);
     }
 
-    public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Connector connector, Duration duration) {
-        connect(loc, encoder, decoder, handler, connector, duration, DEFAULT_SOCKET_OPTIONS);
+    public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Provider provider, Duration duration) {
+        connect(loc, encoder, decoder, handler, provider, duration, defaultSocketConfig);
     }
 
-    public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Connector connector) {
-        connect(loc, encoder, decoder, handler, connector, DEFAULT_CONNECTION_DURATION, DEFAULT_SOCKET_OPTIONS);
+    public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Provider provider) {
+        connect(loc, encoder, decoder, handler, provider, defaultConnectTimeout, defaultSocketConfig);
     }
 
-
-    /**
-     *   Mount target connector and channel to its worker thread for registry
-     */
-    public static void mount(Connector connector, Channel channel) {
-        channel.worker().submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.ADD_CHANNEL, connector, channel, null, null));
-        if (channel.state().compareAndSet(OsNetworkLibrary.REGISTER_NONE, OsNetworkLibrary.REGISTER_WRITE)) {
-            osNetworkLibrary.ctl(channel.worker().mux(), channel.socket(), OsNetworkLibrary.REGISTER_NONE, OsNetworkLibrary.REGISTER_WRITE);
-        }else {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+    @Override
+    protected void doInit() {
+        try(Mutex _ = state.withMutex()) {
+            int current = state.get();
+            if(current != Constants.INITIAL) {
+                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+            }
+            state.set(Constants.RUNNING);
+            pollers.forEach(poller -> poller.thread().start());
+            writers.forEach(writer -> writer.thread().start());
+            listeners.forEach(listener -> listener.thread().start());
         }
     }
 
     @Override
-    public void doInit() {
-        for (Worker worker : workers) {
-            worker.reader().start();
-            worker.writer().start();
-        }
-        for (Master master : masters) {
-            master.thread().start();
-        }
-    }
-
-    @Override
-    public void doExit() throws InterruptedException {
-        lock.lock();
-        try{
+    protected void doExit() throws InterruptedException {
+        try(Mutex _ = state.withMutex()) {
             long nano = Clock.nano();
-            for (Master master : masters) {
-                master.thread().interrupt();
+            int current = state.get();
+            if(current != Constants.RUNNING) {
+                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
-            for (Master master : masters) {
-                master.thread().join();
+            state.set(Constants.CLOSING);
+            listeners.forEach(listener -> listener.thread().interrupt());
+            for (Listener listener : listeners) {
+                listener.thread().join();
             }
-            for (Worker worker : workers) {
-                worker.submitReaderTask(new ReaderTask(ReaderTask.ReaderTaskType.GRACEFUL_SHUTDOWN, null, DEFAULT_GRACEFUL_SHUTDOWN_DURATION, null));
+            pollers.forEach(poller -> poller.submit(new PollerTask(PollerTaskType.EXIT, null, defaultGracefulShutdownTimeout)));
+            writers.forEach(writer -> writer.submit(new WriterTask(WriterTaskType.EXIT, null, null, null)));
+            for (Poller poller : pollers) {
+                poller.thread().join();
             }
-            for(Worker worker : workers) {
-                worker.reader().join();
-                worker.writer().join();
+            for (Writer writer : writers) {
+                writer.thread().join();
             }
-            customProviders.forEach(Provider::close);
+            providers.forEach(Provider::close);
             osNetworkLibrary.exit();
+            state.set(Constants.STOPPED);
             log.debug(STR."Exiting Net gracefully, cost : \{Duration.ofNanos(Clock.elapsed(nano)).toMillis()} ms");
-        }finally {
-            lock.unlock();
         }
     }
 }

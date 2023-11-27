@@ -5,7 +5,7 @@ import java.lang.foreign.MemorySegment;
 /**
  *  Http request abstraction
  */
-public class HttpRequest {
+public final class HttpRequest {
     /**
      *  Http request method
      */

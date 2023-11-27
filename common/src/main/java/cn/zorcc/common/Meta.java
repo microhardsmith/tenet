@@ -1,8 +1,5 @@
 package cn.zorcc.common;
 
-import cn.zorcc.common.anno.Format;
-import cn.zorcc.common.anno.Ordinal;
-import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.ReflectUtil;
 
@@ -102,7 +99,7 @@ public final class Meta<T> {
      *   Obtain all the field names with their values from target
      *   the returned fields could be different from parameter fields if the target has no such field
      */
-    public Pair<List<String>, List<Object>> getAll(Object target, List<String> fields) {
+    public OldPair<List<String>, List<Object>> getAll(Object target, List<String> fields) {
         List<String> columns = new ArrayList<>();
         List<Object> result = new ArrayList<>();
         for (String field : fields) {
@@ -115,6 +112,6 @@ public final class Meta<T> {
                 }
             }
         }
-        return Pair.of(columns, result);
+        return OldPair.of(columns, result);
     }
 }

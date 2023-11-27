@@ -19,7 +19,7 @@ public final class JsonReaderRecordNode extends JsonReaderNode {
 
     @Override
     protected JsonReaderNode tryDeserialize() {
-        if(checkFirstByte(readBuffer, Constants.RCB)) {
+        if(checkSeparator(readBuffer, Constants.RCB)) {
             return toPrev();
         }
         for( ; ; ) {

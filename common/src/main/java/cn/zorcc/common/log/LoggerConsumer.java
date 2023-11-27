@@ -2,11 +2,9 @@ package cn.zorcc.common.log;
 
 import cn.zorcc.common.AbstractLifeCycle;
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.structure.Wheel;
-import cn.zorcc.common.util.ConfigUtil;
-import cn.zorcc.common.util.ThreadUtil;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -22,20 +20,17 @@ import java.util.function.Consumer;
 public final class LoggerConsumer extends AbstractLifeCycle {
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
     private final Thread consumerThread;
-    public LoggerConsumer(LogConfig logConfig) {
+    public LoggerConsumer() {
         if(instanceFlag.compareAndSet(false, true)) {
+            LogConfig logConfig = Logger.getLogConfig();
             this.consumerThread = createConsumerThread(logConfig);
         }else {
             throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED);
         }
     }
 
-    public LoggerConsumer() {
-        this(ConfigUtil.loadJsonConfig(Constants.DEFAULT_LOG_CONFIG_NAME, LogConfig.class));
-    }
-
     private static Thread createConsumerThread(LogConfig logConfig) {
-        return ThreadUtil.platform("tenet-log", () -> {
+        return Thread.ofPlatform().name("tenet-log").unstarted(() -> {
             List<Consumer<LogEvent>> handlers = createEventHandlerList(logConfig);
             TransferQueue<LogEvent> queue = Logger.queue();
             Wheel.wheel().addPeriodicJob(() -> {

@@ -1,7 +1,8 @@
 package cn.zorcc.common.util;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.ExceptionType;
+import cn.zorcc.common.OsType;
 import cn.zorcc.common.exception.FrameworkException;
 
 import java.io.File;
@@ -28,7 +29,7 @@ public final class FileUtil {
         try{
             return (int) setvbufMethodHandle.invokeExact(stream, buffer, mode, size);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED, throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -36,7 +37,7 @@ public final class FileUtil {
         try{
             return (MemorySegment) fopenMethodHandle.invokeExact(path, mode);
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED, throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -44,10 +45,10 @@ public final class FileUtil {
         try{
             long r = (long) fwriteMethodHandle.invokeExact(buffer, ValueLayout.JAVA_BYTE.byteSize(), buffer.byteSize(), stream);
             if(r < 0) {
-                throw new FrameworkException(ExceptionType.LOG, "Unable to call fputs()");
+                throw new FrameworkException(ExceptionType.NATIVE, "Unable to call fwrite()");
             }
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED, throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -55,10 +56,10 @@ public final class FileUtil {
         try{
             int r = (int) fflushMethodHandle.invokeExact(stream);
             if(r < 0) {
-                throw new FrameworkException(ExceptionType.LOG, "Unable to call fflush()");
+                throw new FrameworkException(ExceptionType.NATIVE, "Unable to call fflush()");
             }
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED, throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
 
@@ -66,10 +67,18 @@ public final class FileUtil {
         try{
             int r = (int) fcloseMethodHandle.invokeExact(stream);
             if(r < 0) {
-                throw new FrameworkException(ExceptionType.LOG, "Unable to call fclose()");
+                throw new FrameworkException(ExceptionType.NATIVE, "Unable to call fclose()");
             }
         }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED, throwable);
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static String normalizePath(String path) {
+        if(NativeUtil.ostype() == OsType.Windows) {
+            return path.replace("\\", "/");
+        }else {
+            return path;
         }
     }
 

@@ -3,7 +3,7 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.util.NativeUtil;
 
 /**
- *  Socket abstraction, using long in windows, using int in Linux and MacOS
+ *  Socket abstraction, using long in windows, using int in Linux and macOS
  */
 public record Socket(
         int intValue,

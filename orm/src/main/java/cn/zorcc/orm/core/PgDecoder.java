@@ -1,11 +1,13 @@
 package cn.zorcc.orm.core;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.Pair;
+import cn.zorcc.common.ExceptionType;
+import cn.zorcc.common.OldPair;
 import cn.zorcc.common.ReadBuffer;
-import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.network.Decoder;
+import cn.zorcc.common.network.api.Decoder;
+import cn.zorcc.common.postgre.PgRowDescription;
+import cn.zorcc.common.postgre.PgStatus;
 import cn.zorcc.orm.backend.*;
 
 import java.util.ArrayList;
@@ -13,59 +15,60 @@ import java.util.List;
 
 public class PgDecoder implements Decoder {
     @Override
-    public Object decode(ReadBuffer readBuffer) {
+    public void decode(ReadBuffer readBuffer, List<Object> entityList) {
         long size = readBuffer.size();
         if(size < 5) {
-            return null;
+            return ;
         }
+        long currentIndex = readBuffer.readIndex();
         byte msgType = readBuffer.readByte();
         int msgLength = readBuffer.readInt();
         if(size < msgLength + 1) {
-            readBuffer.setReadIndex(0);
-            return null;
+            readBuffer.setReadIndex(currentIndex);
+            return ;
         }
         switch (msgType) {
             case PgConstants.AUTH -> {
-                return decodeAuthMsg(readBuffer, msgLength);
+                decodeAuthMsg(readBuffer, msgLength);
             }
             case PgConstants.PARAMETER_STATUE -> {
-                return decodeParameterStatus(readBuffer,msgLength);
+                decodeParameterStatus(readBuffer,msgLength);
             }
             case PgConstants.BACKEND_KEY_DATA -> {
-                return decodeBackendKeyData(readBuffer, msgLength);
+                decodeBackendKeyData(readBuffer, msgLength);
             }
             case PgConstants.READY -> {
-                return decodeReadyMsg(readBuffer, msgLength);
+                decodeReadyMsg(readBuffer, msgLength);
             }
             case PgConstants.PARSE_COMPLETE -> {
-                return decodeParseCompleteMsg(msgLength);
+                decodeParseCompleteMsg(msgLength);
             }
             case PgConstants.BIND_COMPLETE -> {
-                return decodeBindCompleteMsg(msgLength);
+                decodeBindCompleteMsg(msgLength);
             }
             case PgConstants.COMMAND_COMPLETE -> {
-                return decodeCommandCompleteMsg(readBuffer, msgLength);
+                decodeCommandCompleteMsg(readBuffer, msgLength);
             }
             case PgConstants.ROW_DESCRIPTION -> {
-                return decodeRowDescriptionMsg(readBuffer, msgLength);
+                decodeRowDescriptionMsg(readBuffer, msgLength);
             }
             case PgConstants.DATA_ROW -> {
-                return decodeDataRowMsg(readBuffer, msgLength);
+                decodeDataRowMsg(readBuffer, msgLength);
             }
             case PgConstants.NO_DATA -> {
-                return decodeNoDataMsg(msgLength);
+                decodeNoDataMsg(msgLength);
             }
             case PgConstants.EMPTY_QUERY_RESPONSE -> {
-                return decodeEmptyQueryResponse(msgLength);
+                decodeEmptyQueryResponse(msgLength);
             }
             case PgConstants.NOTICE_RESPONSE -> {
-                return decodeStatusResponseMsg(readBuffer, msgLength, false);
+                decodeStatusResponseMsg(readBuffer, msgLength, false);
             }
             case PgConstants.ERROR_RESPONSE -> {
-                return decodeStatusResponseMsg(readBuffer, msgLength, true);
+                decodeStatusResponseMsg(readBuffer, msgLength, true);
             }
             case PgConstants.CLOSE_COMPLETE -> {
-                return decodeCloseCompleteMsg(msgLength);
+                decodeCloseCompleteMsg(msgLength);
             }
             default -> throw new FrameworkException(ExceptionType.SQL, "Unrecognized postgresql message type");
         }
@@ -84,13 +87,13 @@ public class PgDecoder implements Decoder {
 
     private Object decodeStatusResponseMsg(ReadBuffer readBuffer, int msgLength, boolean isErr) {
         long startIndex = readBuffer.readIndex();
-        List<Pair<Byte, String>> items = new ArrayList<>();
+        List<OldPair<Byte, String>> items = new ArrayList<>();
         for( ; ; ) {
             byte b = readBuffer.readByte();
             if(b == Constants.NUT) {
                 break;
             }else {
-                items.add(Pair.of(b, readBuffer.readCStr()));
+                items.add(OldPair.of(b, readBuffer.readCStr()));
             }
         }
         checkLength(msgLength, (int) (readBuffer.readIndex() - startIndex + 4));

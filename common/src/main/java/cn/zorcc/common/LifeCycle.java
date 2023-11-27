@@ -1,6 +1,5 @@
 package cn.zorcc.common;
 
-import cn.zorcc.common.enums.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 
 /**

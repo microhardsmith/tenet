@@ -1,7 +1,7 @@
 package cn.zorcc.common.structure;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 
 import java.util.ArrayList;
@@ -10,6 +10,7 @@ import java.util.List;
 public final class IntMap<T> {
     private final IntMapNode<T>[] nodes;
     private final int mask;
+    private int count = 0;
 
     @SuppressWarnings("unchecked")
     public IntMap(int size) {
@@ -21,27 +22,19 @@ public final class IntMap<T> {
     }
 
     /**
-     *   Get target node from the map, return null if it doesn't exist
+     *   Get target value from the map, return null if it doesn't exist
      */
-    public IntMapNode<T> getNode(int val) {
+    public T get(int val) {
         int slot = val & mask;
         IntMapNode<T> current = nodes[slot];
         while (current != null) {
             if(current.getVal() == val) {
-                return current;
+                return current.getValue();
             }else {
                 current = current.getNext();
             }
         }
         return null;
-    }
-
-    /**
-     *   Get target value from the map, return null if it doesn't exist
-     */
-    public T get(int val) {
-        IntMapNode<T> node = getNode(val);
-        return node == null ? null : node.getValue();
     }
 
     /**
@@ -58,17 +51,18 @@ public final class IntMap<T> {
             current.setPrev(n);
         }
         nodes[slot] = n;
+        count++;
     }
 
     /**
      *   Replace an existing key-value pair, the old key-value pair must already exist, or an Exception would be thrown
      */
-    public void replace(int val, T value) {
+    public void replace(int val, T oldValue, T newValue) {
         int slot = val & mask;
         IntMapNode<T> current = nodes[slot];
         while (current != null) {
-            if(current.getVal() == val) {
-                current.setValue(value);
+            if(current.getVal() == val && current.getValue() == oldValue) {
+                current.setValue(newValue);
                 return ;
             }else {
                 current = current.getNext();
@@ -78,39 +72,12 @@ public final class IntMap<T> {
     }
 
     /**
-     *   Remove target node from current map, the node must already exist in the map
-     */
-    public void removeNode(int val, IntMapNode<T> node) {
-        int slot = val & mask;
-        IntMapNode<T> prev = node.getPrev();
-        IntMapNode<T> next = node.getNext();
-        if(prev == null) {
-            if(node == nodes[slot]) {
-                nodes[slot] = next;
-                next.setPrev(null);
-            }else {
-                throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
-            }
-        }else {
-            prev.setNext(next);
-            if(next != null) {
-                next.setPrev(prev);
-            }
-            node.setPrev(null);
-            node.setNext(null);
-        }
-    }
-
-    /**
      *   Remove target value from current map, return if removed successfully
      */
     public boolean remove(int val, T value) {
         int slot = val & mask;
         IntMapNode<T> current = nodes[slot];
-        for( ; ; ) {
-            if(current == null) {
-                return false;
-            }
+        while (current != null){
             if(current.getVal() != val) {
                 current = current.getNext();
             }else if(current.getValue() != value) {
@@ -118,30 +85,35 @@ public final class IntMap<T> {
             }else {
                 IntMapNode<T> prev = current.getPrev();
                 IntMapNode<T> next = current.getNext();
-                prev.setNext(next);
+                if(prev != null) {
+                    prev.setNext(next);
+                }else {
+                    nodes[slot] = next;
+                }
                 if(next != null) {
                     next.setPrev(prev);
                 }
                 current.setPrev(null);
                 current.setNext(null);
+                count--;
                 return true;
             }
         }
+        return false;
     }
 
-    public void remove(int val) {
-        int slot = val & mask;
-        IntMapNode<T> current = nodes[slot];
-        for( ; ; ) {
-            if(current == null) {
-                throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
-            }else if(current.getVal() == val) {
-                removeNode(val, current);
-                return ;
-            }else {
-                current = current.getNext();
-            }
-        }
+    /**
+     *   Return the element count of current IntMap
+     */
+    public int count() {
+        return count;
+    }
+
+    /**
+     *   Check if current IntMap is empty
+     */
+    public boolean isEmpty() {
+        return count == 0;
     }
 
     /**

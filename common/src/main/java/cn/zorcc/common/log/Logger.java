@@ -1,10 +1,10 @@
 package cn.zorcc.common.log;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.enums.ExceptionType;
+import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.util.StringUtil;
-import cn.zorcc.common.util.ThreadUtil;
+import cn.zorcc.common.util.ConfigUtil;
+import cn.zorcc.common.util.NativeUtil;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -13,12 +13,11 @@ import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.ServiceLoader;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TransferQueue;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -32,20 +31,40 @@ public final class Logger {
             LogLevel.WARN, Constants.WARN_BYTES,
             LogLevel.ERROR, Constants.ERROR_BYTES
     );
+    /**
+     *   Default logging level would be INFO
+     */
+    private static final LogConfig logConfig;
     private static final int level;
     private static final TimeResolver timeResolver;
     private static final TransferQueue<LogEvent> queue = new LinkedTransferQueue<>();
     private final MemorySegment className;
 
     static {
-        timeResolver = ServiceLoader.load(TimeResolver.class).findFirst().orElseGet(DefaultTimeResolver::new);
-        level = switch (System.getProperty("log.level")) {
+        String configFile = Optional.ofNullable(System.getProperty("log.file")).orElse(Constants.DEFAULT_LOG_CONFIG_NAME);
+        logConfig = ConfigUtil.loadJsonConfig(configFile, LogConfig.class);
+        timeResolver = createTimeResolver();
+        level = switch (logConfig.getLevel()) {
             case "TRACE"       -> Constants.TRACE;
             case "WARN"        -> Constants.WARN;
             case "ERROR"       -> Constants.ERROR;
             case "DEBUG"       -> Constants.DEBUG;
             case null, default -> Constants.INFO;
         };
+    }
+
+    public static LogConfig getLogConfig() {
+        return logConfig;
+    }
+
+    private static TimeResolver createTimeResolver() {
+        if(logConfig.isUsingTimeResolver()) {
+            return ServiceLoader.load(TimeResolver.class).findFirst().orElseGet(DefaultTimeResolver::new);
+        }else {
+            String timeFormat = logConfig.getTimeFormat();
+            DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern(timeFormat);
+            return time -> MemorySegment.ofArray(dateTimeFormatter.format(time).getBytes(StandardCharsets.UTF_8));
+        }
     }
 
     public Logger(Class<?> clazz) {
@@ -62,12 +81,22 @@ public final class Logger {
         long timestamp = instant.toEpochMilli();
         MemorySegment time = timeResolver.format(now);
         MemorySegment lv = levelMap.get(level);
-        MemorySegment threadName = MemorySegment.ofArray(ThreadUtil.threadName().getBytes(StandardCharsets.UTF_8));
+        MemorySegment threadName = MemorySegment.ofArray(getCurrentThreadName().getBytes(StandardCharsets.UTF_8));
         MemorySegment th = throwableToSegment(throwable);
         MemorySegment msg = MemorySegment.ofArray(str.getBytes(StandardCharsets.UTF_8));
         LogEvent logEvent = new LogEvent(LogEventType.Msg, timestamp, time, lv, threadName, className, th, msg);
         if (!queue.offer(logEvent)) {
             throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED);
+        }
+    }
+
+    private static String getCurrentThreadName() {
+        Thread currentThread = Thread.currentThread();
+        String threadName = currentThread.getName();
+        if(threadName.isEmpty()) {
+            return (currentThread.isVirtual() ? Constants.VIRTUAL_THREAD : Constants.PLATFORM_THREAD) + currentThread.threadId();
+        }else {
+            return threadName;
         }
     }
 
@@ -143,18 +172,33 @@ public final class Logger {
     }
 
     private static long search(MemorySegment format, long startIndex, List<LogHandler> handlers, Function<String, LogHandler> transformer) {
-        long nextIndex = StringUtil.searchBytes(format, Constants.LCB, startIndex, segment -> handlers.add((writeBuffer, event) -> writeBuffer.writeSegment(segment)));
+        long nextIndex = searchBytes(format, Constants.LCB, startIndex, segment -> handlers.add((writeBuffer, _) -> writeBuffer.writeSegment(segment)));
         if(nextIndex < 0) {
             if(startIndex < format.byteSize()) {
-                handlers.add((writeBuffer, event) -> writeBuffer.writeSegment(format.asSlice(startIndex, format.byteSize() - startIndex)));
+                handlers.add((writeBuffer, _) -> writeBuffer.writeSegment(format.asSlice(startIndex, format.byteSize() - startIndex)));
             }
-            handlers.add((writeBuffer, event) -> writeBuffer.writeByte(Constants.LF));
+            handlers.add((writeBuffer, _) -> writeBuffer.writeByte(Constants.LF));
             return nextIndex;
         }
-        nextIndex = StringUtil.searchBytes(format, Constants.RCB, nextIndex, segment -> handlers.add(transformer.apply(new String(segment.toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8))));
+        nextIndex = searchBytes(format, Constants.RCB, nextIndex, segment -> handlers.add(transformer.apply(new String(segment.toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8))));
         if(nextIndex < 0) {
-            handlers.add((writeBuffer, event) -> writeBuffer.writeByte(Constants.LF));
+            handlers.add((writeBuffer, _) -> writeBuffer.writeByte(Constants.LF));
         }
         return nextIndex;
+    }
+
+    /**
+     *   Find next expected byte in the data from startIndex, return the target index + 1 of the expected byte
+     */
+    private static long searchBytes(MemorySegment data, byte expected, long startIndex, Consumer<MemorySegment> consumer) {
+        for(long index = startIndex; index < data.byteSize(); index++) {
+            if(NativeUtil.getByte(data, index) == expected) {
+                if(index > startIndex) {
+                    consumer.accept(data.asSlice(startIndex, index - startIndex));
+                }
+                return index + 1 == data.byteSize() ? Long.MIN_VALUE : index + 1;
+            }
+        }
+        return Long.MIN_VALUE;
     }
 }

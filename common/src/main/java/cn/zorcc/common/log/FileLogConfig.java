@@ -3,10 +3,25 @@ package cn.zorcc.common.log;
 import cn.zorcc.common.Constants;
 
 public final class FileLogConfig {
+    /**
+     *   Default size for containing buffer for file output
+     */
     private long buffer = 64 * Constants.KB;
+    /**
+     *   Dir path to store the log file
+     */
     private String dir = Constants.EMPTY_STRING;
+    /**
+     *   Max flush threshold
+     */
     private int flushThreshold = 128;
+    /**
+     *   Max file size before switching database file
+     */
     private long maxFileSize = 256 * Constants.MB;
+    /**
+     *   Max existing time before switching recording file
+     */
     private long maxRecordingTime = Constants.DAY;
 
     public long getBuffer() {
