@@ -1,4 +1,4 @@
-package cn.zorcc.common.network;
+package cn.zorcc.common;
 
 import cn.zorcc.common.structure.Mutex;
 
@@ -7,7 +7,15 @@ import cn.zorcc.common.structure.Mutex;
  */
 public final class State {
     private final Mutex mutex = new Mutex();
-    private int state = 0;
+    private int state;
+
+    public State() {
+        this(Constants.INITIAL);
+    }
+
+    public State(int initialState) {
+        this.state = initialState;
+    }
 
     public Mutex withMutex() {
         return mutex.acquire();

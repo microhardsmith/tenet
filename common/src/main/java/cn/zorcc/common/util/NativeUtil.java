@@ -11,8 +11,10 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -187,8 +189,21 @@ public final class NativeUtil {
      */
     public static MethodHandle methodHandle(SymbolLookup lookup, String methodName, FunctionDescriptor functionDescriptor) {
         MemorySegment methodPointer = lookup.find(methodName)
-                .orElseThrow(() -> new FrameworkException(ExceptionType.NATIVE, "Unable to load target native method : %s".formatted(methodName)));
+                .orElseThrow(() -> new FrameworkException(ExceptionType.NATIVE, STR."Unable to load target native method : \{methodName}"));
         return linker.downcallHandle(methodPointer, functionDescriptor);
+    }
+
+    /**
+     *   Due to macro issue, there could be multiple implementations from the dynamic library, then this function could be used
+     */
+    public static MethodHandle methodHandle(SymbolLookup lookup, List<String> methodNames, FunctionDescriptor functionDescriptor) {
+        for (String methodName : methodNames) {
+            Optional<MemorySegment> methodPointer = lookup.find(methodName);
+            if (methodPointer.isPresent()) {
+                return linker.downcallHandle(methodPointer.get(), functionDescriptor);
+            }
+        }
+        throw new FrameworkException(ExceptionType.NATIVE, STR."Unable to load target native method : \{methodNames}");
     }
 
     /**

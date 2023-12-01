@@ -20,6 +20,7 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
     private static final long ONCE = Long.MIN_VALUE;
     private static final AtomicLong counter = new AtomicLong(0);
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
+    private static final JobImpl exit = new JobImpl(Long.MIN_VALUE, Long.MIN_VALUE, () -> {});
     private final int mask;
     private final long tick;
     private final long tickNano;
@@ -50,8 +51,6 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
         for(int i = 0; i < slots; i++) {
             wheel[i] = new JobImpl(0, 0, empty);
         }
-        // if we use virtual thread, then parkNanos() will internally use a ScheduledThreadPoolExecutor for unpark the current vthread
-        // still there is a platform thread constantly waiting for lock and go to sleep and so on. So use platform thread would be more simplified
         this.wheelThread = Thread.ofPlatform().name("Wheel").unstarted(this::run);
     }
 
@@ -63,8 +62,11 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
     }
 
     @Override
-    public void doExit() {
-        wheelThread.interrupt();
+    public void doExit() throws InterruptedException {
+        if (!queue.offer(exit)) {
+            throw new FrameworkException(ExceptionType.WHEEL, Constants.UNREACHED);
+        }
+        wheelThread.join();
     }
 
     @Override
@@ -111,13 +113,9 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
         return result;
     }
 
-    /**
-     *  运行时间轮
-     */
     private void run() {
         final Scale scale = new Scale();
-        final Thread currentThread = Thread.currentThread();
-        while (!currentThread.isInterrupted()) {
+        for( ; ; ) {
             final long milli = scale.milli;
             final int slot = scale.slot;
             scale.update();
@@ -127,14 +125,17 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
                 final JobImpl job = queue.poll();
                 if(job == null) {
                     break;
-                }
-                // if delay is smaller than current milli, we should run it in current slot, so we select tasks before running wheel
-                final long delayMillis = Math.max(job.execMilli - milli, 0);
-                if(delayMillis >= bound) {
-                    waitSet.add(job);
+                }else if(job == exit) {
+                    return ;
                 }else {
-                    job.pos = (int) ((slot + (delayMillis / tick)) & mask);
-                    insert(job);
+                    // if delay is smaller than current milli, we should run it in current slot, so we select tasks before running wheel
+                    final long delayMillis = Math.max(job.execMilli - milli, 0);
+                    if(delayMillis >= bound) {
+                        waitSet.add(job);
+                    }else {
+                        job.pos = (int) ((slot + (delayMillis / tick)) & mask);
+                        insert(job);
+                    }
                 }
             }
 

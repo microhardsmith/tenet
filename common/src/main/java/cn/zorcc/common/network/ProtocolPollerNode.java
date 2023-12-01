@@ -39,11 +39,6 @@ public final class ProtocolPollerNode implements PollerNode {
     }
 
     @Override
-    public void onMounted() {
-        ctl(Constants.NET_R);
-    }
-
-    @Override
     public void onReadableEvent(MemorySegment reserved, int len) {
         int r;
         try{

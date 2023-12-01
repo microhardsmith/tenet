@@ -10,6 +10,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SymbolLookup;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
+import java.util.List;
 
 /**
  *   Class that interact with underlying SSL library, currently only openssl and libressl are tested
@@ -17,7 +18,6 @@ import java.lang.invoke.MethodHandle;
  *   Other SSL library or other operating system were not tested, you are welcome to test it on your own
  */
 public final class SslBinding {
-    @SuppressWarnings("unused")
     private static final SymbolLookup crypto;
     private static final SymbolLookup ssl;
     /**
@@ -44,6 +44,7 @@ public final class SslBinding {
     private static final MethodHandle sslGetErrMethod;
     private static final MethodHandle sslGetVerifyResult;
     private static final MethodHandle sslGetPeerCertificate;
+    private static final MethodHandle x509Free;
 
     static {
         crypto = NativeUtil.loadLibrary(Constants.CRYPTO);
@@ -66,7 +67,8 @@ public final class SslBinding {
         sslCtxFreeMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         sslGetErrMethod = NativeUtil.methodHandle(ssl, "SSL_get_error", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         sslGetVerifyResult = NativeUtil.methodHandle(ssl, "SSL_get_verify_result", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
-        sslGetPeerCertificate = NativeUtil.methodHandle(ssl, "SSL_get0_peer_certificate", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+        sslGetPeerCertificate = NativeUtil.methodHandle(ssl, List.of("SSL_get_peer_certificate", "SSL_get1_peer_certificate"), FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+        x509Free = NativeUtil.methodHandle(crypto, "X509_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
     }
 
     private SslBinding() {
@@ -219,6 +221,14 @@ public final class SslBinding {
     public static MemorySegment sslGetPeerCertificate(MemorySegment ssl) {
         try{
             return (MemorySegment) sslGetPeerCertificate.invokeExact(ssl);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static void x509Free(MemorySegment x509) {
+        try{
+            x509Free.invokeExact(x509);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }

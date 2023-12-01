@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.function.Consumer;
 
 public final class ConsoleLogEventHandler implements Consumer<LogEvent> {
-    private static final int BUFFER_SIZE = 16 * Constants.KB;
     private final List<LogHandler> handlers;
     private final List<LogEvent> eventList = new ArrayList<>();
     private final int flushThreshold;
@@ -48,25 +47,25 @@ public final class ConsoleLogEventHandler implements Consumer<LogEvent> {
     @Override
     public void accept(LogEvent event) {
         switch (event.eventType()) {
-            case Msg -> onMsg(event);
-            case Flush, Shutdown -> flush();
-        }
-    }
-
-    private void onMsg(LogEvent event) {
-        eventList.add(event);
-        if((flushThreshold > 0 && eventList.size() > flushThreshold) || event.throwable() != null) {
-            flush();
+            case Msg -> {
+                eventList.add(event);
+                if((flushThreshold > 0 && eventList.size() > flushThreshold) || event.throwable() != null) {
+                    flush();
+                }
+            }
+            case Flush, Shutdown -> {
+                if(!eventList.isEmpty()) {
+                    flush();
+                }
+            }
         }
     }
 
     private void flush() {
-        if(!eventList.isEmpty()) {
-            if(NativeUtil.isRunningFromJar()) {
-                flushToStdoutAndStderr();
-            }else {
-                flushToStdout();
-            }
+        if(NativeUtil.isRunningFromJar()) {
+            flushToStdoutAndStderr();
+        }else {
+            flushToStdout();
         }
     }
 

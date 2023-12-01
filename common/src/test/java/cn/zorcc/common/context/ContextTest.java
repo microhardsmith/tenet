@@ -1,12 +1,12 @@
-package cn.zorcc.common;
+package cn.zorcc.common.context;
 
+import cn.zorcc.common.AbstractLifeCycle;
+import cn.zorcc.common.Context;
 import cn.zorcc.common.log.Logger;
+import org.junit.jupiter.api.Test;
 
-/**
- *   For test running from jar purpose only
- */
-public class LaunchTest {
-    private static final Logger log = new Logger(LaunchTest.class);
+public class ContextTest {
+    private static final Logger log = new Logger(ContextTest.class);
     static class LifeCycleTest extends AbstractLifeCycle {
 
         @Override
@@ -19,11 +19,11 @@ public class LaunchTest {
             log.info("Exit called");
         }
     }
-    public static void main(String[] args) {
+
+    @Test
+    public void testContext() throws InterruptedException {
         Context.load(new LifeCycleTest(), LifeCycleTest.class);
         Context.init();
-
+        Thread.sleep(Long.MAX_VALUE);
     }
 }
-
-

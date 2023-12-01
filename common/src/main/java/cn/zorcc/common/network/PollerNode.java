@@ -5,10 +5,6 @@ import java.time.Duration;
 
 public sealed interface PollerNode permits SentryPollerNode, ProtocolPollerNode {
     /**
-     *   This function would be invoked when PollerNode was first mounted on the poller instance
-     */
-    void onMounted();
-    /**
      *   This function would be invoked when channel become readable
      */
     void onReadableEvent(MemorySegment reserved, int len);

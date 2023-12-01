@@ -96,47 +96,45 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
     @Override
     public void accept(LogEvent event) {
         switch (event.eventType()) {
-            case Msg -> onMsg(event);
-            case Flush -> flush(true);
-            case Shutdown -> shutdown();
-        }
-    }
-
-    private void onMsg(LogEvent event) {
-        eventList.add(event);
-        if(flushThreshold > 0 && eventList.size() > flushThreshold) {
-            flush(true);
-        }
-    }
-
-    private void flush(boolean checkLimitation) {
-        if(!eventList.isEmpty()) {
-            try(WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(reserved)) {
-                for (LogEvent event : eventList) {
-                    handlers.forEach(logHandler -> logHandler.process(writeBuffer, event));
+            case Msg -> {
+                eventList.add(event);
+                if(flushThreshold > 0 && eventList.size() > flushThreshold) {
+                    flush();
+                    checkFile();
                 }
-                FileUtil.fwrite(writeBuffer.toSegment(), fileStream);
-                currentWrittenIndex += writeBuffer.writeIndex();
-                if(checkLimitation && (exceedFileSizeLimitation() || exceedRecordingTimeLimitation())) {
-                    openNewLogOutputFile();
+            }
+            case Flush -> {
+                if(!eventList.isEmpty()) {
+                    flush();
+                    checkFile();
                 }
-            }finally {
-                eventList.clear();
+            }
+            case Shutdown -> {
+                if(!eventList.isEmpty()) {
+                    flush();
+                }
+                FileUtil.fclose(fileStream);
+                reservedArena.close();
             }
         }
     }
 
-    private boolean exceedFileSizeLimitation() {
-        return maxFileSize > 0 && currentWrittenIndex > maxFileSize;
+    private void flush() {
+        try(WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(reserved)) {
+            for (LogEvent event : eventList) {
+                handlers.forEach(logHandler -> logHandler.process(writeBuffer, event));
+            }
+            FileUtil.fwrite(writeBuffer.toSegment(), fileStream);
+            currentWrittenIndex += writeBuffer.writeIndex();
+        }finally {
+            eventList.clear();
+        }
     }
 
-    private boolean exceedRecordingTimeLimitation() {
-        return maxRecordingTime > 0 && eventList.getLast().timestamp() - currentCreateTime > maxRecordingTime;
-    }
-
-    private void shutdown() {
-        flush(false);
-        FileUtil.fclose(fileStream);
-        reservedArena.close();
+    private void checkFile() {
+        if((maxFileSize > 0 && currentWrittenIndex > maxFileSize)
+                || (maxRecordingTime > 0 && eventList.getLast().timestamp() - currentCreateTime > maxRecordingTime)) {
+            openNewLogOutputFile();
+        }
     }
 }

@@ -93,20 +93,29 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
     @Override
     public void accept(LogEvent event) {
         switch (event.eventType()) {
-            case Msg -> onMsg(event);
-            case Flush -> flush(true);
-            case Shutdown -> shutdown();
+            case Msg -> {
+                eventList.add(event);
+                if(flushThreshold > 0 && eventList.size() > flushThreshold) {
+                    flush();
+                    checkDatabase();
+                }
+            }
+            case Flush -> {
+                if(!eventList.isEmpty()) {
+                    flush();
+                    checkDatabase();
+                }
+            }
+            case Shutdown -> {
+                flush();
+                sqliteConn.finalize(stmt);
+                sqliteConn.close();
+                reservedArena.close();
+            }
         }
     }
 
-    private void onMsg(LogEvent event) {
-        eventList.add(event);
-        if(flushThreshold > 0 && eventList.size() > flushThreshold) {
-            flush(true);
-        }
-    }
-
-    private void flush(boolean checkLimitation) {
+    private void flush() {
         if(!eventList.isEmpty()) {
             sqliteConn.begin();
             for (LogEvent logEvent : eventList) {
@@ -131,30 +140,19 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
             }
             sqliteConn.commit();
             currentRowCount += eventList.size();
-            if(checkLimitation && (exceedMaxRowCountLimitation() || exceedMaxRecordingTimeLimitation())) {
-                openNewSqliteDatabase();
-            }
             eventList.clear();
         }
     }
 
-    private boolean exceedMaxRowCountLimitation() {
-        return maxRowCount > 0 && currentRowCount > maxRowCount;
-    }
-
-    private boolean exceedMaxRecordingTimeLimitation() {
-        return maxRecordingTime > 0 && eventList.getLast().timestamp() - currentCreateTime > maxRecordingTime;
+    private void checkDatabase() {
+        if((maxRowCount > 0 && currentRowCount > maxRowCount)
+                || (maxRecordingTime > 0 && eventList.getLast().timestamp() - currentCreateTime > maxRecordingTime)) {
+            openNewSqliteDatabase();
+        }
     }
 
     private static MemorySegment wrapText(WriteBuffer writeBuffer, MemorySegment segment) {
         writeBuffer.writeSegment(segment);
         return writeBuffer.toSegment();
-    }
-
-    private void shutdown() {
-        flush(false);
-        sqliteConn.finalize(stmt);
-        sqliteConn.close();
-        reservedArena.close();
     }
 }

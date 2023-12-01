@@ -1,34 +1,35 @@
 package cn.zorcc.common.network;
 
-import cn.zorcc.common.AbstractLifeCycle;
-import cn.zorcc.common.Clock;
-import cn.zorcc.common.Constants;
-import cn.zorcc.common.ExceptionType;
+import cn.zorcc.common.*;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.api.*;
 import cn.zorcc.common.network.lib.OsNetworkLibrary;
+import cn.zorcc.common.structure.IntMap;
+import cn.zorcc.common.structure.IntPair;
 import cn.zorcc.common.structure.Mutex;
 import cn.zorcc.common.structure.Wheel;
+import org.jctools.queues.atomic.MpscLinkedAtomicQueue;
 
 import java.lang.foreign.Arena;
+import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
 public final class Net extends AbstractLifeCycle {
     private static final Logger log = new Logger(Net.class);
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
-    private static final AtomicInteger counter = new AtomicInteger(0);
+    private static final AtomicInteger connectCounter = new AtomicInteger(0);
     private static final Provider tcpProvider = new TcpProvider();
     private static final Provider sslProvider = SslProvider.newClientProvider();
+    private static final Listener defaultListener = new Listener(null, null, null, null, null, null, null, null);
+    private static final NetConfig defaultNetConfig = new NetConfig();
     private static final PollerConfig defaultPollerConfig = new PollerConfig();
     private static final WriterConfig defaultWriterConfig = new WriterConfig();
     private static final SocketConfig defaultSocketConfig = new SocketConfig();
@@ -41,10 +42,76 @@ public final class Net extends AbstractLifeCycle {
      */
     private static final Duration defaultGracefulShutdownTimeout = Duration.ofSeconds(30);
     private final State state = new State();
-    private final List<Listener> listeners = new ArrayList<>();
+    private final Mux mux = osNetworkLibrary.createMux();
     private final Set<Provider> providers = new HashSet<>();
     private final List<Poller> pollers;
     private final List<Writer> writers;
+    private final Thread netThread;
+    private final Queue<Listener> netQueue = new MpscLinkedAtomicQueue<>();
+
+    private Thread createNetThread(NetConfig netConfig) {
+        return Thread.ofPlatform().unstarted(() -> {
+            int maxEvents = netConfig.getMaxEvents();
+            int muxTimeout = netConfig.getMuxTimeout();
+            int backlog = netConfig.getBacklog();
+            IntMap<Listener> listenerMap = new IntMap<>(netConfig.getMapSize());
+            try(Arena arena = Arena.ofConfined()) {
+                Timeout timeout = Timeout.of(arena, muxTimeout);
+                MemorySegment events = arena.allocate(MemoryLayout.sequenceLayout(maxEvents, osNetworkLibrary.eventLayout()));
+                for( ; ; ) {
+                    int count = osNetworkLibrary.muxWait(mux, events, maxEvents, timeout);
+                    if(count < 0) {
+                        int errno = osNetworkLibrary.errno();
+                        if(errno == osNetworkLibrary.interruptCode()) {
+                            return ;
+                        }else {
+                            throw new FrameworkException(ExceptionType.NETWORK, STR."Mux wait failed with errno : \{errno}");
+                        }
+                    }
+                    for( ; ; ) {
+                        Listener listener = netQueue.poll();
+                        if(listener == null) {
+                            break ;
+                        }else if(listener == defaultListener) {
+                            return ;
+                        }else {
+                            Socket socket = listener.socket();
+                            Loc loc = listener.loc();
+                            log.info(STR."Listener registered for \{loc}");
+                            listenerMap.put(socket.intValue(), listener);
+                            osNetworkLibrary.bindAndListen(socket, loc, backlog);
+                        }
+                    }
+                    for(int index = 0; index < count; ++index) {
+                        IntPair pair = osNetworkLibrary.access(events, index);
+                        int eventType = pair.second();
+                        if(eventType != Constants.NET_R) {
+                            throw new FrameworkException(ExceptionType.NETWORK, STR."Unhandled event type : \{eventType}");
+                        }
+                        Listener listener = listenerMap.get(pair.first());
+                        if(listener == null) {
+                            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+                        }
+                        Socket serverSocket = listener.socket();
+                        SocketAndLoc socketAndLoc = osNetworkLibrary.accept(listener.loc(), serverSocket, listener.socketConfig());
+                        Socket clientSocket = socketAndLoc.socket();
+                        Loc clientLoc = socketAndLoc.loc();
+                        int seq = listener.counter().getAndIncrement();
+                        Poller poller = pollers.get(seq % pollers.size());
+                        Writer writer = writers.get(seq % writers.size());
+                        Encoder encoder = listener.encoderSupplier().get();
+                        Decoder decoder = listener.decoderSupplier().get();
+                        Handler handler = listener.handlerSupplier().get();
+                        Channel channel = new Channel(clientSocket, encoder, decoder, handler, poller, writer, clientLoc);
+                        Sentry sentry = listener.provider().create(channel);
+                        poller.submit(new PollerTask(PollerTaskType.BIND, channel, sentry));
+                        osNetworkLibrary.ctl(poller.mux(), clientSocket, 0, Constants.NET_W);
+                    }
+                }
+            }
+
+        });
+    }
 
     public static Provider tcpProvider() {
         return tcpProvider;
@@ -55,18 +122,25 @@ public final class Net extends AbstractLifeCycle {
     }
 
     public Net() {
-        this(defaultPollerConfig, defaultWriterConfig);
+        this(defaultNetConfig, defaultPollerConfig, defaultWriterConfig);
     }
 
     public Net(PollerConfig pollerConfig) {
-        this(pollerConfig, defaultWriterConfig);
+        this(defaultNetConfig, pollerConfig, defaultWriterConfig);
     }
 
     public Net(WriterConfig writerConfig) {
-        this(defaultPollerConfig, writerConfig);
+        this(defaultNetConfig, defaultPollerConfig, writerConfig);
     }
 
     public Net(PollerConfig pollerConfig, WriterConfig writerConfig) {
+        this(defaultNetConfig, pollerConfig, writerConfig);
+    }
+
+    public Net(NetConfig netConfig, PollerConfig pollerConfig, WriterConfig writerConfig) {
+        if(netConfig == null || pollerConfig == null || writerConfig == null) {
+            throw new NullPointerException();
+        }
         if(!instanceFlag.compareAndSet(false, true)) {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.SINGLETON_MSG);
         }
@@ -80,6 +154,7 @@ public final class Net extends AbstractLifeCycle {
         }
         this.pollers = IntStream.range(0, pollerCount).mapToObj(_ -> new Poller(pollerConfig)).toList();
         this.writers = IntStream.range(0, writerCount).mapToObj(_ -> new Writer(writerConfig)).toList();
+        this.netThread = createNetThread(netConfig);
         addProvider(tcpProvider());
         addProvider(sslProvider());
     }
@@ -90,11 +165,19 @@ public final class Net extends AbstractLifeCycle {
             if(current > Constants.RUNNING) {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
-            Listener listener = new Listener(listenerConfig, pollers, writers);
-            listeners.add(listener);
-            if(current == Constants.RUNNING) {
-                listener.thread().start();
+            Supplier<Encoder> encoderSupplier = Objects.requireNonNull(listenerConfig.getEncoderSupplier());
+            Supplier<Decoder> decoderSupplier = Objects.requireNonNull(listenerConfig.getDecoderSupplier());
+            Supplier<Handler> handlerSupplier = Objects.requireNonNull(listenerConfig.getHandlerSupplier());
+            Provider provider = Objects.requireNonNull(listenerConfig.getProvider());
+            Loc loc = Objects.requireNonNull(listenerConfig.getLoc());
+            SocketConfig socketConfig = Objects.requireNonNull(listenerConfig.getSocketConfig());
+            Socket socket = osNetworkLibrary.createSocket(loc);
+            osNetworkLibrary.configureServerSocket(socket, loc, socketConfig);
+            Listener listener = new Listener(encoderSupplier, decoderSupplier, handlerSupplier, provider, loc, new AtomicInteger(0), socket, socketConfig);
+            if (!netQueue.offer(listener)) {
+                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
+            osNetworkLibrary.ctl(mux, socket, 0, Constants.NET_R);
         }
     }
 
@@ -110,7 +193,7 @@ public final class Net extends AbstractLifeCycle {
     public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Provider provider, Duration duration, SocketConfig socketConfig) {
         Socket socket = osNetworkLibrary.createSocket(loc);
         osNetworkLibrary.configureClientSocket(socket, socketConfig);
-        int seq = counter.getAndIncrement();
+        int seq = connectCounter.getAndIncrement();
         Poller poller = pollers.get(seq % pollers.size());
         Writer writer = writers.get(seq % writers.size());
         Channel channel = new Channel(socket, encoder, decoder, handler, poller, writer, loc);
@@ -119,11 +202,13 @@ public final class Net extends AbstractLifeCycle {
             MemorySegment sockAddr = osNetworkLibrary.createSockAddr(loc, arena);
             if(osNetworkLibrary.connect(socket, sockAddr) == 0) {
                 poller.submit(new PollerTask(PollerTaskType.BIND, channel, sentry));
+                osNetworkLibrary.ctl(poller.mux(), socket, 0, Constants.NET_W);
             }else {
                 int errno = osNetworkLibrary.errno();
                 if (errno == osNetworkLibrary.connectBlockCode()) {
                     poller.submit(new PollerTask(PollerTaskType.BIND, channel, sentry));
                     Wheel.wheel().addJob(() -> poller.submit(new PollerTask(PollerTaskType.UNBIND, channel, duration)), duration);
+                    osNetworkLibrary.ctl(poller.mux(), socket, 0, Constants.NET_W);
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to connect, errno : \{errno}");
                 }
@@ -153,7 +238,7 @@ public final class Net extends AbstractLifeCycle {
             state.set(Constants.RUNNING);
             pollers.forEach(poller -> poller.thread().start());
             writers.forEach(writer -> writer.thread().start());
-            listeners.forEach(listener -> listener.thread().start());
+            netThread.start();
         }
     }
 
@@ -166,10 +251,10 @@ public final class Net extends AbstractLifeCycle {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
             state.set(Constants.CLOSING);
-            listeners.forEach(listener -> listener.thread().interrupt());
-            for (Listener listener : listeners) {
-                listener.thread().join();
+            if (!netQueue.offer(defaultListener)) {
+                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
+            netThread.join();
             pollers.forEach(poller -> poller.submit(new PollerTask(PollerTaskType.EXIT, null, defaultGracefulShutdownTimeout)));
             writers.forEach(writer -> writer.submit(new WriterTask(WriterTaskType.EXIT, null, null, null)));
             for (Poller poller : pollers) {

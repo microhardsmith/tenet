@@ -3,7 +3,6 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.*;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.log.LoggerConsumer;
 import cn.zorcc.common.network.api.Decoder;
 import cn.zorcc.common.network.api.Encoder;
 import cn.zorcc.common.network.api.Handler;
@@ -24,8 +23,6 @@ public class EchoTest {
 
     @Test
     public void testIpv6EchoClient() throws InterruptedException {
-        Context.load(Wheel.wheel(), Wheel.class);
-        Context.load(new LoggerConsumer(), LoggerConsumer.class);
         Net netClient = createEchoNetClient();
         Context.load(netClient, Net.class);
         Context.init();
@@ -35,8 +32,6 @@ public class EchoTest {
 
     @Test
     public void testIpv4EchoClient() throws InterruptedException {
-        Context.load(Wheel.wheel(), Wheel.class);
-        Context.load(new LoggerConsumer(), LoggerConsumer.class);
         Net netClient = createEchoNetClient();
         Context.load(netClient, Net.class);
         Context.init();
@@ -46,8 +41,6 @@ public class EchoTest {
 
     @Test
     public void testEchoServer() throws InterruptedException {
-        Context.load(Wheel.wheel(), Wheel.class);
-        Context.load(new LoggerConsumer(), LoggerConsumer.class);
         Net netServer = createEchoNetServer();
         Context.load(netServer, Net.class);
         Context.init();

@@ -133,14 +133,9 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     int muxWait(Mux mux, MemorySegment events, int maxEvents, Timeout timeout);
 
     /**
-     *   For listener to access the events array, since listener always get the same server socket accept event, this is no return value for it
-     */
-    void listenerAccess(Socket serverSocket, MemorySegment events, int index);
-
-    /**
      *   For poller to access the events array, the first return value represents the socket, the second value represents the event type
      */
-    IntPair pollerAccess(MemorySegment buffer, MemorySegment events, int index);
+    IntPair access(MemorySegment events, int index);
 
     /**
      *   Retrieve an ipv4 port from the target addr
@@ -310,22 +305,22 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     /**
      *   Accept a connection, note that IPV6 is compatible with IPV4, so even if Loc is IPV6 based, it may also accept IPV4 connection
      */
-    default SocketAndLoc accept(ListenerConfig config, Loc loc, Socket socket) {
+    default SocketAndLoc accept(Loc loc, Socket socket, SocketConfig socketConfig) {
         return switch (loc.ipType()) {
-            case IPV4 -> acceptIpv4Connection(config, socket);
-            case IPV6 -> acceptIpv6Connection(config, socket);
+            case IPV4 -> acceptIpv4Connection(socket, socketConfig);
+            case IPV6 -> acceptIpv6Connection(socket, socketConfig);
             case null -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         };
     }
 
-    private SocketAndLoc acceptIpv6Connection(ListenerConfig listenerConfig, Socket socket) {
+    private SocketAndLoc acceptIpv6Connection(Socket socket, SocketConfig socketConfig) {
         final int ipv6AddressSize = ipv6AddressSize();
         final int ipv6AddressLen = ipv6AddressLen();
         try(Arena arena = Arena.ofConfined()) {
             MemorySegment clientAddr = arena.allocate(ipv6AddressSize);
             MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, ipv6AddressLen);
             Socket clientSocket = accept(socket, clientAddr);
-            configureClientSocket(clientSocket, listenerConfig.getSocketOptions());
+            configureClientSocket(clientSocket, socketConfig);
             if(getIpv6Address(clientAddr, address) < 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to get client's ipv6 address, errno : \{errno()}");
             }
@@ -339,14 +334,14 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
         }
     }
 
-    private SocketAndLoc acceptIpv4Connection(ListenerConfig config, Socket socket) {
+    private SocketAndLoc acceptIpv4Connection(Socket socket, SocketConfig socketConfig) {
         final int ipv4AddressSize = ipv4AddressSize();
         final int ipv4AddressLen = ipv4AddressLen();
         try(Arena arena = Arena.ofConfined()) {
             MemorySegment clientAddr = arena.allocate(ipv4AddressSize);
             MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, ipv4AddressLen);
             Socket clientSocket = accept(socket, clientAddr);
-            configureClientSocket(clientSocket, config.getSocketOptions());
+            configureClientSocket(clientSocket, socketConfig);
             if(getIpv4Address(clientAddr, address) < 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to get client's ipv4 address, errno : \{errno()}");
             }

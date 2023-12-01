@@ -28,6 +28,6 @@ public final class DefaultContextListener implements ContextListener {
 
     @Override
     public void onStarted() {
-        log.debug("DefaultContext was initialized successfully");
+        log.debug("DefaultContext initialized successfully");
     }
 }

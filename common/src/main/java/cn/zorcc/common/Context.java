@@ -2,62 +2,77 @@ package cn.zorcc.common;
 
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
+import cn.zorcc.common.structure.Mutex;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.RuntimeMXBean;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
- *   Context is the core of a tenet application, it serves as a singleton pool
+ *   Context is the core of a tenet application, it serves as a singleton pool, and used for triggering Lifecycle events
  *   Application developers should provide different ContextListener implementation to affect how Context works in their app
- *   The containerMap was guarded by a lock, the performance of loading and getting container from Context is not our first consideration, you should load everything at startup, and let them die in sequence when application exit
- *
+ *   The containerMap was guarded by a lock, the performance of loading and getting container from Context is not our first concern
+ *   Developers should load everything at startup, and let them exit in sequence when the whole application exits
  */
 public final class Context {
+    record Container(
+            Object target,
+            Class<?> type
+    ) {
+
+    }
     private static final Logger log = new Logger(Context.class);
-    private static final AtomicBoolean initFlag = new AtomicBoolean(false);
     private static final Map<Class<?>, Object> containerMap = new HashMap<>();
-    private static final List<LifeCycle> cycles = new ArrayList<>();
-    private static final Lock lock = new ReentrantLock();
+    private static final Deque<Container> pendingContainers = new ArrayDeque<>();
+    private static final State contextState = new State();
     private static final ContextListener contextListener = ServiceLoader.load(ContextListener.class).findFirst().orElse(new DefaultContextListener());
 
     public static void init() {
-        if (!initFlag.compareAndSet(false, true)) {
-            throw new FrameworkException(ExceptionType.CONTEXT, "Context has been initialized");
-        }
         long nano = Clock.nano();
-        RuntimeMXBean runtimeMXBean = ManagementFactory.getRuntimeMXBean();
-        String[] pidAndDevice = runtimeMXBean.getName().split("@");
-        log.info(STR."Process running with Pid: \{pidAndDevice[0]} on Device: \{pidAndDevice[1]}");
-        contextListener.beforeStarted();
-        if(initializeContainers()) {
-            Runtime.getRuntime().addShutdownHook(Thread.ofPlatform().name("Exit").unstarted(() -> cycles.reversed().forEach(LifeCycle::UninterruptibleExit)));
-            contextListener.onStarted();
-        }else {
-            System.exit(1);
+        try(Mutex _ = contextState.withMutex()) {
+            int currentState = contextState.get();
+            if(currentState != Constants.INITIAL) {
+                throw new FrameworkException(ExceptionType.CONTEXT, "Context has been initialized");
+            }
+            List<Container> tempContainers = new ArrayList<>(pendingContainers);
+            pendingContainers.clear();
+            contextListener.beforeStarted();
+            pendingContainers.addAll(tempContainers);
+            List<LifeCycle> cycles = new ArrayList<>();
+            while (!pendingContainers.isEmpty()) {
+                Container container = pendingContainers.pollFirst();
+                Object target = container.target();
+                Class<?> type = container.type();
+                if(containerMap.putIfAbsent(type, target) != null) {
+                    throw new FrameworkException(ExceptionType.CONTEXT, STR."Container already exist : \{type.getSimpleName()}");
+                }
+                if(target instanceof LifeCycle lifeCycle) {
+                    cycles.addLast(lifeCycle);
+                }
+                contextListener.onLoaded(target, type);
+            }
+            initializeCycles(cycles);
+            RuntimeMXBean runtimeMXBean = ManagementFactory.getRuntimeMXBean();
+            String[] pidAndDevice = runtimeMXBean.getName().split("@");
+            log.info(STR."Process running with Pid: \{pidAndDevice[0]} on Device: \{pidAndDevice[1]}");
+            log.info(STR."Tenet application started in \{ Duration.ofNanos(Clock.elapsed(nano)).toMillis()} ms, JVM running for \{runtimeMXBean.getUptime()} ms");
         }
-        log.info(STR."Tenet application started in \{ Duration.ofNanos(Clock.elapsed(nano)).toMillis()} ms, JVM running for \{runtimeMXBean.getUptime()} ms");
     }
 
-    private static boolean initializeContainers() {
-        int index = 0, size = cycles.size();
-        lock.lock();
-        try{
-            while (index < size)  {
-                cycles.get(index++).init();
+    private static void initializeCycles(List<LifeCycle> cycles) {
+        List<LifeCycle> finishedCycles = new ArrayList<>(cycles.size());
+        for (LifeCycle cycle : cycles) {
+            try{
+                cycle.init();
+            }catch (RuntimeException e) {
+                log.error("Initializing container failed", e);
+                finishedCycles.reversed().forEach(LifeCycle::UninterruptibleExit);
+                System.exit(1);
             }
-            return true;
-        }catch (FrameworkException e) {
-            log.error("Err caught when initializing container, exiting application now", e);
-            cycles.subList(0, index).reversed().forEach(LifeCycle::UninterruptibleExit);
-            return false;
-        }finally {
-            lock.unlock();
+            finishedCycles.addLast(cycle);
         }
+        Runtime.getRuntime().addShutdownHook(Thread.ofPlatform().unstarted(() -> finishedCycles.reversed().forEach(LifeCycle::UninterruptibleExit)));
     }
 
     public static <T> void load(T target, Class<T> type) {
@@ -67,32 +82,25 @@ public final class Context {
         if (!type.isAssignableFrom(target.getClass())) {
             throw new FrameworkException(ExceptionType.CONTEXT, STR."Container doesn't match its class : \{type.getSimpleName()}");
         }
-        lock.lock();
-        try{
-            if(containerMap.putIfAbsent(type, target) != null) {
-                throw new FrameworkException(ExceptionType.CONTEXT, STR."Container already exist : \{type.getSimpleName()}");
+        try (Mutex _ = contextState.withMutex()) {
+            int currentState = contextState.get();
+            if(currentState == Constants.INITIAL) {
+                pendingContainers.addLast(new Container(target, type));
+            }else {
+                throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
             }
-            if(target instanceof LifeCycle lifeCycle) {
-                cycles.add(lifeCycle);
-            }
-            contextListener.onLoaded(target, type);
-        }finally {
-            lock.unlock();
         }
     }
 
+
     @SuppressWarnings("unchecked")
     public static <T> T get(Class<T> type) {
-        lock.lock();
-        try{
+        try(Mutex _ = contextState.withMutex()){
             Object o = containerMap.computeIfAbsent(type, contextListener::onRequested);
             if(o == null) {
                 throw new FrameworkException(ExceptionType.CONTEXT, STR."Unable to retrieve target container : \{type.getName()}");
             }
             return (T) o;
-        }finally {
-            lock.unlock();
         }
     }
-
 }

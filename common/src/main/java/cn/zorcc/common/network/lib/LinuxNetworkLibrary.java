@@ -181,16 +181,7 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public void listenerAccess(Socket serverSocket, MemorySegment events, int index) {
-        int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
-        int socket = NativeUtil.getInt(events, index * eventSize + dataOffset + fdOffset);
-        if(socket != serverSocket.intValue() || (event & Constants.EPOLL_IN) == 0) {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-        }
-    }
-
-    @Override
-    public IntPair pollerAccess(MemorySegment buffer, MemorySegment events, int index) {
+    public IntPair access(MemorySegment events, int index) {
         int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
         int socket = NativeUtil.getInt(events, index * eventSize + dataOffset + fdOffset);
         if((event & (Constants.EPOLL_IN | Constants.EPOLL_HUP | Constants.EPOLL_RDHUP)) != 0) {

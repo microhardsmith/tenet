@@ -2,6 +2,7 @@ package cn.zorcc.common.network;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
+import cn.zorcc.common.State;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.api.Protocol;
@@ -18,17 +19,12 @@ public final class SentryPollerNode implements PollerNode {
     private final IntMap<PollerNode> nodeMap;
     private final Channel channel;
     private final Sentry sentry;
-    private final State channelState = new State();
+    private final State channelState = new State(Constants.NET_W);
 
     public SentryPollerNode(IntMap<PollerNode> nodeMap, Channel channel, Sentry sentry) {
         this.nodeMap = nodeMap;
         this.channel = channel;
         this.sentry = sentry;
-    }
-
-    @Override
-    public void onMounted() {
-        ctl(Constants.NET_W);
     }
 
     @Override
@@ -99,9 +95,9 @@ public final class SentryPollerNode implements PollerNode {
             close();
             return ;
         }
+        ctl(Constants.NET_R);
         Protocol protocol = sentry.toProtocol();
         ProtocolPollerNode protocolPollerNode = new ProtocolPollerNode(nodeMap, channel, protocol, channelState);
-        protocolPollerNode.onMounted();
         nodeMap.replace(channel.socket().intValue(), this, protocolPollerNode);
         channel.writer().submit(new WriterTask(WriterTaskType.INITIATE, channel, new ProtoAndState(protocol, channelState), null));
     }

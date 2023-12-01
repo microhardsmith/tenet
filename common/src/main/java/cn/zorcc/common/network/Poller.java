@@ -74,7 +74,7 @@ public final class Poller {
                     }
                     for(int index = 0; index < count; index++) {
                         MemorySegment reserved = reservedArray[index];
-                        IntPair pair = osNetworkLibrary.pollerAccess(reserved, events, index);
+                        IntPair pair = osNetworkLibrary.access(events, index);
                         PollerNode pollerNode = nodeMap.get(pair.first());
                         if(pollerNode != null) {
                             int event = pair.second();
@@ -133,7 +133,6 @@ public final class Poller {
         if(pollerTask.msg() instanceof Sentry sentry) {
             SentryPollerNode sentryPollerNode = new SentryPollerNode(nodeMap, channel, sentry);
             nodeMap.put(channel.socket().intValue(), sentryPollerNode);
-            sentryPollerNode.onMounted();
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }

@@ -2,6 +2,7 @@ package cn.zorcc.common.network;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
+import cn.zorcc.common.State;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;

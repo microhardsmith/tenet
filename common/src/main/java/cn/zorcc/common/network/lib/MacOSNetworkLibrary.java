@@ -181,16 +181,7 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public void listenerAccess(Socket serverSocket, MemorySegment events, int index) {
-        short filter = NativeUtil.getShort(events, index * keventSize + filterOffset);
-        long ident = NativeUtil.getLong(events, index * keventSize + identOffset);
-        if(ident != serverSocket.longValue() || filter != Constants.EVFILT_READ) {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-        }
-    }
-
-    @Override
-    public IntPair pollerAccess(MemorySegment buffer, MemorySegment events, int index) {
+    public IntPair access(MemorySegment events, int index) {
         short filter = NativeUtil.getShort(events, index * keventSize + filterOffset);
         long socket = NativeUtil.getLong(events, index * keventSize + identOffset);
         if(filter == Constants.EVFILT_READ) {

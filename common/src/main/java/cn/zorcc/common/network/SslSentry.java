@@ -91,14 +91,15 @@ public final class SslSentry implements Sentry {
 
     private int verifyCertificate() {
         if(!clientSide) {
-            MemorySegment certificate = SslBinding.sslGetPeerCertificate(ssl);
-            if(NativeUtil.checkNullPointer(certificate)) {
+            MemorySegment x509 = SslBinding.sslGetPeerCertificate(ssl);
+            if(NativeUtil.checkNullPointer(x509)) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Server certificate not provided");
             }
             long verifyResult = SslBinding.sslGetVerifyResult(ssl);
             if(verifyResult != 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, STR."Server certificate cannot be verified, verify result : \{verifyResult}");
             }
+            SslBinding.x509Free(x509);
         }
         return Constants.NET_UPDATE;
     }
