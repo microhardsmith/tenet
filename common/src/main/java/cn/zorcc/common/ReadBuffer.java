@@ -54,7 +54,7 @@ public final class ReadBuffer {
     }
 
     public byte readByte() {
-        long nextIndex = readIndex + 1;
+        long nextIndex = readIndex + NativeUtil.getByteSize();
         if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
@@ -67,7 +67,7 @@ public final class ReadBuffer {
      *   The returning segment would have the same scope as current ReadBuffer
      */
     public MemorySegment readSegment(long count) {
-        long nextIndex = readIndex + count;
+        long nextIndex = readIndex + count * NativeUtil.getByteSize();
         if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
@@ -93,7 +93,7 @@ public final class ReadBuffer {
     }
 
     public byte[] readBytes(long count) {
-        long nextIndex = readIndex + count;
+        long nextIndex = readIndex + count * NativeUtil.getByteSize();
         if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
@@ -103,7 +103,7 @@ public final class ReadBuffer {
     }
 
     public short readShort() {
-        long nextIndex = readIndex + 2;
+        long nextIndex = readIndex + NativeUtil.getShortSize();
         if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
@@ -113,7 +113,7 @@ public final class ReadBuffer {
     }
 
     public int readInt() {
-        long nextIndex = readIndex + 4;
+        long nextIndex = readIndex + NativeUtil.getIntSize();
         if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
@@ -123,7 +123,7 @@ public final class ReadBuffer {
     }
 
     public long readLong() {
-        long nextIndex = readIndex + 8;
+        long nextIndex = readIndex + NativeUtil.getLongSize();
         if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }

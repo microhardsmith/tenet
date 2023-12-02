@@ -24,7 +24,7 @@ public final class NativeUtil {
     /**
      *   Global NULL pointer, don't use it if the application would modify the actual address of this pointer
      */
-    public static final MemorySegment NULL_POINTER = MemorySegment.ofAddress(0).reinterpret(ValueLayout.ADDRESS.byteSize(), Arena.global(), null);
+    public static final MemorySegment NULL_POINTER = MemorySegment.ofAddress(0);
     /**
      *   Current operating system name
      */
@@ -341,25 +341,18 @@ public final class NativeUtil {
     }
 
     public static MemorySegment allocateStr(Arena arena, String str) {
-        byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
-        MemorySegment memorySegment = arena.allocateArray(ValueLayout.JAVA_BYTE, bytes.length + 1);
-        for(int i = 0; i < bytes.length; i++) {
-            setByte(memorySegment, i, bytes[i]);
-        }
-        setByte(memorySegment, bytes.length, Constants.NUT);
-        return memorySegment;
+        return arena.allocateUtf8String(str);
     }
 
     public static MemorySegment allocateStr(Arena arena, String str, int len) {
-        byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
-        if(len < bytes.length + 1) {
+        MemorySegment strSegment = MemorySegment.ofArray(str.getBytes(StandardCharsets.UTF_8));
+        long size = strSegment.byteSize();
+        if(len < size + 1) {
             throw new FrameworkException(ExceptionType.NATIVE, "String out of range");
         }
         MemorySegment memorySegment = arena.allocateArray(ValueLayout.JAVA_BYTE, len);
-        for(int i = 0; i < bytes.length; i++) {
-            setByte(memorySegment, i, bytes[i]);
-        }
-        setByte(memorySegment, bytes.length, Constants.NUT);
+        MemorySegment.copy(strSegment, 0, memorySegment, 0, size);
+        setByte(memorySegment, size, Constants.NUT);
         return memorySegment;
     }
 
@@ -386,6 +379,6 @@ public final class NativeUtil {
                 }
             }
         }
-        throw new FrameworkException(ExceptionType.NATIVE, "Not a valid C style string");
+        throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED);
     }
 }
