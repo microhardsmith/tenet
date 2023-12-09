@@ -16,4 +16,9 @@ public record Socket(
     public Socket(long socket) {
         this(NativeUtil.castInt(socket), socket);
     }
+
+    @Override
+    public int hashCode() {
+        return intValue;
+    }
 }

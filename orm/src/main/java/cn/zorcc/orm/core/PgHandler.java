@@ -1,8 +1,8 @@
 package cn.zorcc.orm.core;
 
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.network.Channel;
 import cn.zorcc.common.network.TaggedResult;
+import cn.zorcc.common.network.api.Channel;
 import cn.zorcc.common.network.api.Handler;
 
 import java.util.concurrent.BlockingQueue;

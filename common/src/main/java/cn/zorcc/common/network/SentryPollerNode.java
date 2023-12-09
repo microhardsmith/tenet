@@ -5,6 +5,7 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.State;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
+import cn.zorcc.common.network.api.Channel;
 import cn.zorcc.common.network.api.Protocol;
 import cn.zorcc.common.network.api.Sentry;
 import cn.zorcc.common.network.lib.OsNetworkLibrary;
@@ -20,11 +21,13 @@ public final class SentryPollerNode implements PollerNode {
     private final Channel channel;
     private final Sentry sentry;
     private final State channelState = new State(Constants.NET_W);
+    private final Runnable callback;
 
-    public SentryPollerNode(IntMap<PollerNode> nodeMap, Channel channel, Sentry sentry) {
+    public SentryPollerNode(IntMap<PollerNode> nodeMap, Channel channel, Sentry sentry, Runnable callback) {
         this.nodeMap = nodeMap;
         this.channel = channel;
         this.sentry = sentry;
+        this.callback = callback;
     }
 
     @Override
@@ -113,6 +116,9 @@ public final class SentryPollerNode implements PollerNode {
             sentry.doClose();
         }catch (RuntimeException e) {
             log.error("Failed to close sentry", e);
+        }
+        if(callback != null) {
+            Thread.ofVirtual().start(callback);
         }
     }
 }

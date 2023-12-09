@@ -3,6 +3,7 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.*;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
+import cn.zorcc.common.network.api.Channel;
 import cn.zorcc.common.network.api.Protocol;
 import cn.zorcc.common.network.lib.OsNetworkLibrary;
 import cn.zorcc.common.structure.IntMap;
@@ -48,10 +49,10 @@ public final class ProtocolPollerNode implements PollerNode {
             close();
             return ;
         }
-        if(r > 0) {
-            handleEvent(r);
+        if(r >= 0) {
+            handleReceived(reserved, len, r);
         }else {
-            handleReceived(reserved, len, -r);
+            handleEvent(r);
         }
     }
 
@@ -65,7 +66,7 @@ public final class ProtocolPollerNode implements PollerNode {
             close();
             return ;
         }
-        if(r > 0) {
+        if(r < 0) {
             handleEvent(r);
         }
     }
@@ -133,10 +134,11 @@ public final class ProtocolPollerNode implements PollerNode {
 
     private void ctl(int expected) {
         try(Mutex _ = channelState.withMutex()) {
-            int current = channelState.get();
+            int state = channelState.get();
+            int current = state & Constants.NET_RW;
             if(current != expected) {
                 osNetworkLibrary.ctl(channel.poller().mux(), channel.socket(), current, expected);
-                channelState.set(expected);
+                channelState.set((expected - current) + state);
             }
         }
     }
@@ -227,14 +229,14 @@ public final class ProtocolPollerNode implements PollerNode {
                 carrier.cas(Carrier.HOLDER, Carrier.FAILED);
             }
             try(Mutex _ = channelState.withMutex()) {
-                int current = channelState.get();
-                int rwState = current & Constants.NET_RW;
-                if(rwState > 0) {
-                    osNetworkLibrary.ctl(channel.poller().mux(), channel.socket(), rwState, 0);
-                    current -= rwState;
+                int state = channelState.get();
+                int current = state & Constants.NET_RW;
+                if(current != Constants.NET_NONE) {
+                    osNetworkLibrary.ctl(channel.poller().mux(), channel.socket(), current, Constants.NET_NONE);
+                    state -= (current - Constants.NET_NONE);
                 }
-                channelState.set(current | Constants.NET_PC);
-                if((current & Constants.NET_WC) > 0) {
+                channelState.set(state | Constants.NET_PC);
+                if((state & Constants.NET_WC) == Constants.NET_WC) {
                     closeProtocol();
                 }else {
                     channel.writer().submit(new WriterTask(WriterTaskType.CLOSE, channel, null, null));

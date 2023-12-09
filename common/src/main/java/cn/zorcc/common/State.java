@@ -9,10 +9,6 @@ public final class State {
     private final Mutex mutex = new Mutex();
     private int state;
 
-    public State() {
-        this(Constants.INITIAL);
-    }
-
     public State(int initialState) {
         this.state = initialState;
     }
@@ -37,5 +33,14 @@ public final class State {
         boolean r = (state & mask) > 0;
         state &= ~mask;
         return r;
+    }
+
+    public boolean cas(int expectedValue, int newValue) {
+        if(state == expectedValue) {
+            state = newValue;
+            return true;
+        }else {
+            return false;
+        }
     }
 }

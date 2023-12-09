@@ -5,6 +5,7 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.State;
 import cn.zorcc.common.bindings.SslBinding;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.network.api.Channel;
 import cn.zorcc.common.network.api.Protocol;
 import cn.zorcc.common.network.lib.OsNetworkLibrary;
 import cn.zorcc.common.structure.Mutex;
@@ -23,7 +24,7 @@ public class SslProtocol implements Protocol {
     private static final int SEND_WANT_WRITE = 1 << 8;
     private final Channel channel;
     private final MemorySegment ssl;
-    private final State sslState = new State();
+    private final State sslState = new State(Constants.INITIAL);
 
     public SslProtocol(Channel channel, MemorySegment ssl) {
         this.channel = channel;
@@ -49,7 +50,7 @@ public class SslProtocol implements Protocol {
                     throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform SSL_read(), err code : \{err}");
                 }
             }else {
-                return -received;
+                return received;
             }
         }
     }
@@ -80,7 +81,7 @@ public class SslProtocol implements Protocol {
                     throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform SSL_write(), err code : \{err}");
                 }
             }else {
-                return -written;
+                return written;
             }
         }
     }

@@ -1,5 +1,7 @@
 package cn.zorcc.common.jmh;
 
+import cn.zorcc.common.ExceptionType;
+import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.CompressUtil;
 import cn.zorcc.common.util.NativeUtil;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -34,7 +36,7 @@ public class CompressionJmhTest extends JmhTest {
                 NativeUtil.setByte(originalSegment, i, original[i]);
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new FrameworkException(ExceptionType.JSON, "Json file not found", e);
         }
     }
 

@@ -4,7 +4,7 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.network.api.Callback;
+import cn.zorcc.common.network.api.Channel;
 import cn.zorcc.common.network.api.Decoder;
 import cn.zorcc.common.network.api.Encoder;
 import cn.zorcc.common.network.api.Handler;
@@ -17,95 +17,40 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.IntFunction;
 
-public final class Channel {
-    public static final int SEQ = 0;
-    private static final Logger log = new Logger(Channel.class);
-    /**
-     *   Default shutdown timeout for each channel
-     */
-    private static final Duration defaultShutdownDuration = Duration.ofSeconds(5);
-    /**
-     *   Default send timeout for each channel
-     */
-    private static final Duration defaultSendTimeoutDuration = Duration.ofSeconds(30);
-    private final Socket socket;
-    private final Encoder encoder;
-    private final Decoder decoder;
-    private final Handler handler;
-    private final Poller poller;
-    private final Writer writer;
-    private final Loc loc;
-    private final AtomicInteger tg = new AtomicInteger(SEQ + 1);
-    private final AtomicBoolean st = new AtomicBoolean(false);
+public record ChannelImpl(
+        Socket socket,
+        Encoder encoder,
+        Decoder decoder,
+        Handler handler,
+        Poller poller,
+        Writer writer,
+        Loc loc,
+        AtomicInteger tg,
+        AtomicBoolean st
+) implements Channel {
+    private static final Logger log = new Logger(ChannelImpl.class);
 
-    public Channel(Socket socket, Encoder encoder, Decoder decoder, Handler handler, Poller poller, Writer writer, Loc loc) {
-        this.socket = socket;
-        this.encoder = encoder;
-        this.decoder = decoder;
-        this.handler = handler;
-        this.poller = poller;
-        this.writer = writer;
-        this.loc = loc;
+    public ChannelImpl(Socket socket, Encoder encoder, Decoder decoder, Handler handler, Poller poller, Writer writer, Loc loc) {
+        this(socket, encoder, decoder, handler, poller, writer, loc, new AtomicInteger(Channel.SEQ + 1), new AtomicBoolean(false));
     }
 
-    public Socket socket() {
-        return socket;
-    }
-
-    public Encoder encoder() {
-        return encoder;
-    }
-
-    public Decoder decoder() {
-        return decoder;
-    }
-
-    public Handler handler() {
-        return handler;
-    }
-
-    public Poller poller() {
-        return poller;
-    }
-
-    public Writer writer() {
-        return writer;
-    }
-
-    public Loc loc() {
-        return loc;
-    }
-
-    /**
-     *   Send msg over the channel, this method could be invoked from any thread
-     *   the msg will be processed by the writer thread, there is no guarantee that the msg will deliver, the callBack only indicates that calling operating system's API was successful
-     *   the caller should provide a timeout mechanism to ensure the msg is not dropped, such as retransmission timeout
-     */
-    public void sendMsg(Object msg, Callback callback) {
+    @Override
+    public void sendMsg(Object msg, WriterCallback writerCallback) {
         if(msg == null) {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
-        writer.submit(new WriterTask(WriterTaskType.SINGLE_MSG, this, msg, callback));
+        writer.submit(new WriterTask(WriterTaskType.SINGLE_MSG, this, msg, writerCallback));
     }
 
-    public void sendMsg(Object msg) {
-        sendMsg(msg, null);
-    }
-
-    /**
-     *  Send multiple msg over the channel, aggregate several msg together could reduce the system call times for better efficiency
-     */
-    public void sendMultipleMsg(Collection<Object> msgs, Callback callback) {
+    @Override
+    public void sendMultipleMsg(Collection<Object> msgs, WriterCallback writerCallback) {
         if(msgs == null || msgs.isEmpty()) {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
-        writer.submit(new WriterTask(WriterTaskType.MULTIPLE_MSG, this, msgs, callback));
+        writer.submit(new WriterTask(WriterTaskType.MULTIPLE_MSG, this, msgs, writerCallback));
     }
 
-    public void sendMultipleMsg(Collection<Object> msgs) {
-        sendMultipleMsg(msgs, null);
-    }
-
+    @Override
     public Object sendTaggedMsg(IntFunction<Object> taggedFunction, Duration timeout) {
         if(taggedFunction == null) {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -118,10 +63,7 @@ public final class Channel {
         return sendMsgWithTimeout(msg, tag, timeout);
     }
 
-    public Object sendTaggedMsg(IntFunction<Object> taggedFunction) {
-        return sendTaggedMsg(taggedFunction, defaultSendTimeoutDuration);
-    }
-
+    @Override
     public Object sendMultipleTaggedMsg(IntFunction<Collection<Object>> taggedFunctions, Duration timeout) {
         if(taggedFunctions == null) {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -134,10 +76,7 @@ public final class Channel {
         return sendMultipleMsgWithTimeout(msgs, tag, timeout);
     }
 
-    public Object sendMultipleTaggedMsg(IntFunction<Collection<Object>> taggedFunctions) {
-        return sendMultipleTaggedMsg(taggedFunctions, defaultSendTimeoutDuration);
-    }
-
+    @Override
     public Object sendCircleMsg(Object msg, Duration timeout) {
         if(msg == null) {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -145,10 +84,7 @@ public final class Channel {
         return sendMsgWithTimeout(msg, SEQ, timeout);
     }
 
-    public Object sendCircleMsg(Object msg) {
-        return sendCircleMsg(msg, defaultSendTimeoutDuration);
-    }
-
+    @Override
     public Object sendMultipleCircleMsg(Collection<Object> msgs, Duration timeout) {
         if(msgs == null || msgs.isEmpty()) {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -156,15 +92,11 @@ public final class Channel {
         return sendMultipleMsgWithTimeout(msgs, SEQ, timeout);
     }
 
-    public Object sendMultipleCircleMsg(Collection<Object> msgs) {
-        return sendMultipleCircleMsg(msgs, defaultSendTimeoutDuration);
-    }
-
     private Object sendMsgWithTimeout(Object msg, int tag, Duration timeout) {
         TaggedMsg taggedMsg = new TaggedMsg(tag);
         Duration duration = timeout == null ? defaultSendTimeoutDuration : timeout;
         poller.submit(new PollerTask(PollerTaskType.REGISTER, this, taggedMsg));
-        writer.submit(new WriterTask(WriterTaskType.SINGLE_MSG, this, msg, new Callback() {
+        writer.submit(new WriterTask(WriterTaskType.SINGLE_MSG, this, msg, new WriterCallback() {
             @Override
             public void onSuccess(Channel channel) {
                 Wheel.wheel().addJob(() -> channel.poller().submit(new PollerTask(PollerTaskType.TIMEOUT, channel, taggedMsg)), duration);
@@ -183,7 +115,7 @@ public final class Channel {
         TaggedMsg taggedMsg = new TaggedMsg(tag);
         Duration duration = timeout == null ? defaultSendTimeoutDuration : timeout;
         poller.submit(new PollerTask(PollerTaskType.REGISTER, this, taggedMsg));
-        writer.submit(new WriterTask(WriterTaskType.MULTIPLE_MSG, this, msgs, new Callback() {
+        writer.submit(new WriterTask(WriterTaskType.MULTIPLE_MSG, this, msgs, new WriterCallback() {
             @Override
             public void onSuccess(Channel channel) {
                 Wheel.wheel().addJob(() -> channel.poller().submit(new PollerTask(PollerTaskType.TIMEOUT, channel, taggedMsg)), duration);
@@ -198,10 +130,7 @@ public final class Channel {
         return taggedMsg.carrier().target().get();
     }
 
-    public void shutdown() {
-        shutdown(defaultShutdownDuration);
-    }
-
+    @Override
     public void shutdown(Duration duration) {
         if(st.compareAndSet(false, true)) {
             try{

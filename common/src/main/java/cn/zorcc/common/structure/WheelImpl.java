@@ -47,10 +47,6 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
         this.cMask = mask >> 1;
         this.queue = new MpscUnboundedAtomicArrayQueue<>(Constants.KB);
         this.wheel = new JobImpl[slots];
-        final Runnable empty = () -> {};
-        for(int i = 0; i < slots; i++) {
-            wheel[i] = new JobImpl(0, 0, empty);
-        }
         this.wheelThread = Thread.ofPlatform().name("Wheel").unstarted(this::run);
     }
 
@@ -114,11 +110,15 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
     }
 
     private void run() {
-        final Scale scale = new Scale();
+        long nano = Clock.nano();
+        long milli = Clock.current();
+        int slot = 0;
         for( ; ; ) {
-            final long milli = scale.milli;
-            final int slot = scale.slot;
-            scale.update();
+            final long currentMilli = milli;
+            final int currentSlot = slot;
+            nano = nano + tickNano;
+            milli = milli + tick;
+            slot = (slot + 1) & mask;
 
             // inspecting if there are tasks that should be added to the wheel
             for( ; ;) {
@@ -129,25 +129,25 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
                     return ;
                 }else {
                     // if delay is smaller than current milli, we should run it in current slot, so we select tasks before running wheel
-                    final long delayMillis = Math.max(job.execMilli - milli, 0);
+                    final long delayMillis = Math.max(job.execMilli - currentMilli, 0);
                     if(delayMillis >= bound) {
                         waitSet.add(job);
                     }else {
-                        job.pos = (int) ((slot + (delayMillis / tick)) & mask);
+                        job.pos = (int) ((currentSlot + (delayMillis / tick)) & mask);
                         insert(job);
                     }
                 }
             }
 
             // check if we need to scan the waiting queue
-            if((slot & cMask) == 0) {
+            if((currentSlot & cMask) == 0) {
                 Iterator<JobImpl> iterator = waitSet.iterator();
                 while (iterator.hasNext()) {
                     JobImpl job = iterator.next();
-                    final long delayMillis = job.execMilli - milli;
+                    final long delayMillis = job.execMilli - currentMilli;
                     if(delayMillis < bound) {
                         iterator.remove();
-                        job.pos = (int) ((slot + (delayMillis / tick)) & mask);
+                        job.pos = (int) ((currentSlot + (delayMillis / tick)) & mask);
                         insert(job);
                     }else {
                         // if current task is not for scheduling, then the following tasks won't be available
@@ -157,10 +157,9 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
             }
             
             // processing wheel's current mission
-            final JobImpl head = wheel[slot];
-            JobImpl current = head.next;
+            JobImpl current = wheel[currentSlot];
             while (current != null) {
-                JobImpl next = remove(current);
+                JobImpl next = current.next;
                 // the executor thread and the canceller thread will fight for ownership, but only one would succeed
                 if(current.owner.compareAndSet(false, true)) {
                     Thread.ofVirtual().name("wheel-job-" + counter.getAndIncrement()).start(current.mission);
@@ -178,7 +177,7 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
                         if(period >= bound) {
                             waitSet.add(current);
                         }else {
-                            current.pos = (int) ((slot + (period / tick)) & mask);
+                            current.pos = (int) ((currentSlot + (period / tick)) & mask);
                             insert(current);
                         }
                     }
@@ -187,68 +186,28 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
             }
             
             // park until next slot, it's safe even the value is negative
-            LockSupport.parkNanos(scale.nano - Clock.nano());
+            LockSupport.parkNanos(nano - Clock.nano());
         }
     }
 
-    /**
-     *   insert the target node after the head
-     */
-    private void insert(final JobImpl target) {
-        final JobImpl head = wheel[target.pos];
-        JobImpl next = head.next;
-        head.next = target;
-        target.prev = head;
-        if(next != null) {
-            next.prev = target;
-            target.next = next;
+    private void insert(JobImpl target) {
+        int pos = target.pos;
+        final JobImpl current = wheel[pos];
+        if(current != null) {
+            target.next = current;
+            current.prev = target;
         }
+        wheel[pos] = target;
     }
 
-    /**
-     *   remove the target node from current linked-list, return next node
-     */
-    private JobImpl remove(final JobImpl target) {
+    private JobImpl remove(JobImpl target) {
+        int pos = target.pos;
         JobImpl prev = target.prev;
         JobImpl next = target.next;
-        prev.next = next;
-        if(next != null) {
-            next.prev = prev;
+        if(prev == null) {
+            // TODO
         }
-        return next;
-    }
-
-    /**
-     * 时间刻度记录,每次进入时间轮将更新当前Scale为下次运行状态
-     */
-    private final class Scale {
-        /**
-         *   应进入槽位的纳秒时间 用于计算时间间隔
-         */
-        private long nano;
-        /**
-         *   应进入槽位的毫秒时间戳 用于获取当前时间
-         */
-        private long milli;
-        /**
-         *   应运行槽位
-         */
-        private int slot;
-
-        Scale() {
-            this.nano = Clock.nano();
-            this.milli = Clock.current();
-            this.slot = 0;
-        }
-
-        /**
-         *   更新当前时间槽状态为下一时刻
-         */
-        public void update() {
-            nano = nano + tickNano;
-            milli = milli + tick;
-            slot = (slot + 1) & mask;
-        }
+        return null;
     }
 
     private static final class JobImpl implements Job, Comparable<JobImpl> {
@@ -258,16 +217,12 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
         private JobImpl next;
         private final Runnable mission;
         private final AtomicBoolean owner = new AtomicBoolean(false);
-        private final AtomicLong count = new AtomicLong(0);
         private final long period;
 
         JobImpl(long execMilli, long period, Runnable runnable) {
             this.execMilli = execMilli;
             this.period = period;
-            this.mission = () -> {
-                runnable.run();
-                count.incrementAndGet();
-            };
+            this.mission = runnable;
         }
 
         JobImpl(long execMilli, long period, LongConsumer consumer) {
@@ -275,13 +230,7 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
             this.period = period;
             this.mission = () -> {
                 consumer.accept(execMilli);
-                count.incrementAndGet();
             };
-        }
-
-        @Override
-        public long count() {
-            return count.get();
         }
 
         @Override

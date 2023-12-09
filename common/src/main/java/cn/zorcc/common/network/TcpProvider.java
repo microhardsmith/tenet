@@ -1,6 +1,7 @@
 package cn.zorcc.common.network;
 
 import cn.zorcc.common.log.Logger;
+import cn.zorcc.common.network.api.Channel;
 import cn.zorcc.common.network.api.Provider;
 import cn.zorcc.common.network.api.Sentry;
 

@@ -21,6 +21,7 @@ import java.lang.foreign.ValueLayout;
  *   3. Catch exception in the upper level and close the underlying channel to provide robustness
  */
 public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNetworkLibrary, MacOSNetworkLibrary {
+
     /**
      *   Return the default connect block errno of the underlying operating system
      */
@@ -96,7 +97,6 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
      */
     void setKeepAlive(Socket socket, boolean b);
 
-
     /**
      *   Set socket's TCP_NODELAY option
      */
@@ -140,12 +140,12 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     /**
      *   Retrieve an ipv4 port from the target addr
      */
-    short ipv4Port(MemorySegment addr);
+    short getIpv4Port(MemorySegment addr);
 
     /**
      *   Retrieve an ipv6 port from the target addr
      */
-    short ipv6Port(MemorySegment addr);
+    short getIpv6Port(MemorySegment addr);
 
     /**
      *   Connect to the remote sockAddr
@@ -313,6 +313,8 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
         };
     }
 
+    String IPV4_MAPPED_FORMAT = "::ffff:";
+    int IPV4_PREFIX_LENGTH = IPV4_MAPPED_FORMAT.length();
     private SocketAndLoc acceptIpv6Connection(Socket socket, SocketConfig socketConfig) {
         final int ipv6AddressSize = ipv6AddressSize();
         final int ipv6AddressLen = ipv6AddressLen();
@@ -325,9 +327,9 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
                 throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to get client's ipv6 address, errno : \{errno()}");
             }
             String ip = NativeUtil.getStr(address, ipv6AddressLen);
-            int port = 0xFFFF & ipv6Port(clientAddr);
-            if(NativeUtil.isIpv4MappedIpv6Address(ip)) {
-                return new SocketAndLoc(clientSocket, new Loc(IpType.IPV4, NativeUtil.toIpv4Address(ip), port));
+            int port = 0xFFFF & getIpv6Port(clientAddr);
+            if(ip.startsWith(IPV4_MAPPED_FORMAT)) {
+                return new SocketAndLoc(clientSocket, new Loc(IpType.IPV4, ip.substring(IPV4_PREFIX_LENGTH), port));
             }else {
                 return new SocketAndLoc(clientSocket, new Loc(IpType.IPV6, ip, port));
             }
@@ -346,7 +348,7 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
                 throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to get client's ipv4 address, errno : \{errno()}");
             }
             String ip = NativeUtil.getStr(address, ipv4AddressLen);
-            int port = 0xFFFF & ipv4Port(clientAddr);
+            int port = 0xFFFF & getIpv4Port(clientAddr);
             Loc clientLoc = new Loc(IpType.IPV4, ip, port);
             return new SocketAndLoc(clientSocket, clientLoc);
         }

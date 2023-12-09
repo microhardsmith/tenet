@@ -194,12 +194,12 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public short ipv4Port(MemorySegment addr) {
+    public short getIpv4Port(MemorySegment addr) {
         return TenetMacosBinding.ipv4Port(addr);
     }
 
     @Override
-    public short ipv6Port(MemorySegment addr) {
+    public short getIpv6Port(MemorySegment addr) {
         return TenetMacosBinding.ipv6Port(addr);
     }
 

@@ -1,19 +1,19 @@
 package cn.zorcc.common.network.api;
 
-import cn.zorcc.common.network.Channel;
-
 /**
- *   Connector factory with customized deallocated procedure provided
- *   If developers want to use other Provider implementation rather than default TcpProvider or SslProvider, use Net.registerProvider() to inject it
+ *   Sentry factory with customized deallocated procedure provided
  */
+@FunctionalInterface
 public interface Provider {
     /**
-     *   Return a newly created connector instance
+     *   Return a newly created sentry instance
      */
     Sentry create(Channel channel);
 
     /**
-     *   Release current provider's resources
+     *   Release current provider's resources, implementation could choose to override it
      */
-    void close();
+    default void close() {
+
+    }
 }

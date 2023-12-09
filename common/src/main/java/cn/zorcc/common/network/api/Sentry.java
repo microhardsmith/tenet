@@ -10,11 +10,13 @@ public interface Sentry {
     /**
      *   This function would be invoked when channel become readable
      *   the parameter len will always be the exact length of data segment
+     *   return a flag to indicate a state change
      */
     int onReadableEvent(MemorySegment reserved, int len);
 
     /**
      *   This function would be invoked when channel become writable
+     *   return a flag to indicate a state change
      */
     int onWritableEvent();
 

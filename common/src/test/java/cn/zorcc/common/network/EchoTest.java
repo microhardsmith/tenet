@@ -3,6 +3,7 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.*;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
+import cn.zorcc.common.network.api.Channel;
 import cn.zorcc.common.network.api.Decoder;
 import cn.zorcc.common.network.api.Encoder;
 import cn.zorcc.common.network.api.Handler;
@@ -89,7 +90,7 @@ public class EchoTest {
         listenerConfig.setProvider(Net.tcpProvider());
         listenerConfig.setLoc(serverLoc);
         Net net = new Net();
-        net.addListener(listenerConfig);
+        net.addServerListener(listenerConfig);
         return net;
     }
 

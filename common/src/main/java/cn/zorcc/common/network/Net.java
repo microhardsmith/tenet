@@ -25,7 +25,7 @@ public final class Net extends AbstractLifeCycle {
     private static final Logger log = new Logger(Net.class);
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
-    private static final AtomicInteger connectCounter = new AtomicInteger(0);
+    private static final AtomicInteger counter = new AtomicInteger(0);
     private static final Provider tcpProvider = new TcpProvider();
     private static final Provider sslProvider = SslProvider.newClientProvider();
     private static final Listener defaultListener = new Listener(null, null, null, null, null, null, null, null);
@@ -36,14 +36,14 @@ public final class Net extends AbstractLifeCycle {
     /**
      *   Default client connect timeout, could be modified according to your scenario
      */
-    private static final Duration defaultConnectTimeout = Duration.ofSeconds(5);
+    private static final DurationWithCallback DEFAULT_DURATION_WITH_CALLBACK = new DurationWithCallback(Duration.ofSeconds(5), null);
     /**
      *   Default graceful shutdown timeout, could be modified according to your scenario
      */
     private static final Duration defaultGracefulShutdownTimeout = Duration.ofSeconds(30);
-    private final State state = new State();
+    private final State state = new State(Constants.INITIAL);
     private final Mux mux = osNetworkLibrary.createMux();
-    private final Set<Provider> providers = new HashSet<>();
+    private final Set<Provider> providers = new HashSet<>(List.of(tcpProvider, sslProvider));
     private final List<Poller> pollers;
     private final List<Writer> writers;
     private final Thread netThread;
@@ -75,9 +75,10 @@ public final class Net extends AbstractLifeCycle {
                         }else if(listener == defaultListener) {
                             return ;
                         }else {
+                            addProvider(listener.provider());
                             Socket socket = listener.socket();
                             Loc loc = listener.loc();
-                            log.info(STR."Listener registered for \{loc}");
+                            log.info(STR."Server listener registered for \{loc}");
                             listenerMap.put(socket.intValue(), listener);
                             osNetworkLibrary.bindAndListen(socket, loc, backlog);
                         }
@@ -86,14 +87,21 @@ public final class Net extends AbstractLifeCycle {
                         IntPair pair = osNetworkLibrary.access(events, index);
                         int eventType = pair.second();
                         if(eventType != Constants.NET_R) {
-                            throw new FrameworkException(ExceptionType.NETWORK, STR."Unhandled event type : \{eventType}");
+                            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
                         }
                         Listener listener = listenerMap.get(pair.first());
                         if(listener == null) {
                             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
                         }
                         Socket serverSocket = listener.socket();
-                        SocketAndLoc socketAndLoc = osNetworkLibrary.accept(listener.loc(), serverSocket, listener.socketConfig());
+                        Loc serverLoc = listener.loc();
+                        SocketAndLoc socketAndLoc;
+                        try{
+                            socketAndLoc = osNetworkLibrary.accept(serverLoc, serverSocket, listener.socketConfig());
+                        }catch (RuntimeException e) {
+                            log.error(STR."Failed to accept connection on \{ serverLoc }", e);
+                            continue ;
+                        }
                         Socket clientSocket = socketAndLoc.socket();
                         Loc clientLoc = socketAndLoc.loc();
                         int seq = listener.counter().getAndIncrement();
@@ -102,10 +110,10 @@ public final class Net extends AbstractLifeCycle {
                         Encoder encoder = listener.encoderSupplier().get();
                         Decoder decoder = listener.decoderSupplier().get();
                         Handler handler = listener.handlerSupplier().get();
-                        Channel channel = new Channel(clientSocket, encoder, decoder, handler, poller, writer, clientLoc);
+                        Channel channel = new ChannelImpl(clientSocket, encoder, decoder, handler, poller, writer, clientLoc);
                         Sentry sentry = listener.provider().create(channel);
                         poller.submit(new PollerTask(PollerTaskType.BIND, channel, sentry));
-                        osNetworkLibrary.ctl(poller.mux(), clientSocket, 0, Constants.NET_W);
+                        osNetworkLibrary.ctl(poller.mux(), clientSocket, Constants.NET_NONE, Constants.NET_W);
                     }
                 }
             }
@@ -142,7 +150,7 @@ public final class Net extends AbstractLifeCycle {
             throw new NullPointerException();
         }
         if(!instanceFlag.compareAndSet(false, true)) {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.SINGLETON_MSG);
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
         int pollerCount = pollerConfig.getPollerCount();
         if(pollerCount <= 0) {
@@ -155,11 +163,9 @@ public final class Net extends AbstractLifeCycle {
         this.pollers = IntStream.range(0, pollerCount).mapToObj(_ -> new Poller(pollerConfig)).toList();
         this.writers = IntStream.range(0, writerCount).mapToObj(_ -> new Writer(writerConfig)).toList();
         this.netThread = createNetThread(netConfig);
-        addProvider(tcpProvider());
-        addProvider(sslProvider());
     }
 
-    public void addListener(ListenerConfig listenerConfig) {
+    public void addServerListener(ListenerConfig listenerConfig) {
         try(Mutex _ = state.withMutex()) {
             int current = state.get();
             if(current > Constants.RUNNING) {
@@ -177,38 +183,43 @@ public final class Net extends AbstractLifeCycle {
             if (!netQueue.offer(listener)) {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
-            osNetworkLibrary.ctl(mux, socket, 0, Constants.NET_R);
+            osNetworkLibrary.ctl(mux, socket, Constants.NET_NONE, Constants.NET_R);
         }
     }
 
     public void addProvider(Provider provider) {
-        try(Mutex _ = state.withMutex()) {
-            if(state.get() > Constants.RUNNING) {
-                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        if(provider != tcpProvider && provider != sslProvider) {
+            try(Mutex _ = state.withMutex()) {
+                if(state.get() > Constants.RUNNING) {
+                    throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+                }
+                providers.add(provider);
             }
-            providers.add(provider);
         }
     }
 
-    public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Provider provider, Duration duration, SocketConfig socketConfig) {
+    public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Provider provider, SocketConfig socketConfig, DurationWithCallback durationWithCallback) {
         Socket socket = osNetworkLibrary.createSocket(loc);
         osNetworkLibrary.configureClientSocket(socket, socketConfig);
-        int seq = connectCounter.getAndIncrement();
+        int seq = counter.getAndIncrement();
         Poller poller = pollers.get(seq % pollers.size());
         Writer writer = writers.get(seq % writers.size());
-        Channel channel = new Channel(socket, encoder, decoder, handler, poller, writer, loc);
+        Channel channel = new ChannelImpl(socket, encoder, decoder, handler, poller, writer, loc);
+        addProvider(provider);
         Sentry sentry = provider.create(channel);
         try(Arena arena = Arena.ofConfined()) {
             MemorySegment sockAddr = osNetworkLibrary.createSockAddr(loc, arena);
             if(osNetworkLibrary.connect(socket, sockAddr) == 0) {
                 poller.submit(new PollerTask(PollerTaskType.BIND, channel, sentry));
-                osNetworkLibrary.ctl(poller.mux(), socket, 0, Constants.NET_W);
+                osNetworkLibrary.ctl(poller.mux(), socket, Constants.NET_NONE, Constants.NET_W);
             }else {
                 int errno = osNetworkLibrary.errno();
                 if (errno == osNetworkLibrary.connectBlockCode()) {
-                    poller.submit(new PollerTask(PollerTaskType.BIND, channel, sentry));
-                    Wheel.wheel().addJob(() -> poller.submit(new PollerTask(PollerTaskType.UNBIND, channel, duration)), duration);
-                    osNetworkLibrary.ctl(poller.mux(), socket, 0, Constants.NET_W);
+                    Duration duration = durationWithCallback.duration();
+                    Runnable callback = durationWithCallback.callback();
+                    poller.submit(new PollerTask(PollerTaskType.BIND, channel, callback == null ? sentry : new SentryWithCallback(sentry, callback)));
+                    Wheel.wheel().addJob(() -> poller.submit(new PollerTask(PollerTaskType.UNBIND, channel, null)), duration);
+                    osNetworkLibrary.ctl(poller.mux(), socket, Constants.NET_NONE, Constants.NET_W);
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to connect, errno : \{errno}");
                 }
@@ -217,15 +228,15 @@ public final class Net extends AbstractLifeCycle {
     }
 
     public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Provider provider, SocketConfig socketConfig) {
-        connect(loc, encoder, decoder, handler, provider, defaultConnectTimeout, socketConfig);
+        connect(loc, encoder, decoder, handler, provider, socketConfig, DEFAULT_DURATION_WITH_CALLBACK);
     }
 
-    public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Provider provider, Duration duration) {
-        connect(loc, encoder, decoder, handler, provider, duration, defaultSocketConfig);
+    public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Provider provider, DurationWithCallback durationWithCallback) {
+        connect(loc, encoder, decoder, handler, provider, defaultSocketConfig, durationWithCallback);
     }
 
     public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Provider provider) {
-        connect(loc, encoder, decoder, handler, provider, defaultConnectTimeout, defaultSocketConfig);
+        connect(loc, encoder, decoder, handler, provider, defaultSocketConfig, DEFAULT_DURATION_WITH_CALLBACK);
     }
 
     @Override

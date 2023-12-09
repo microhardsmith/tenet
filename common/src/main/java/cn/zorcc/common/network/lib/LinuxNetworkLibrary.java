@@ -161,16 +161,16 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
         }
         int epfd = mux.epfd();
         int fd = socket.intValue();
-        if(to == 0) {
+        if(to == Constants.NET_NONE) {
             checkInt(TenetLinuxBinding.epollCtl(epfd, Constants.EPOLL_CTL_DEL, fd, NativeUtil.NULL_POINTER), "epoll_ctl");
         }else {
-            int target = ((to & Constants.NET_R) != 0 ? Constants.EPOLL_IN | Constants.EPOLL_RDHUP : 0) |
-                    ((to & Constants.NET_W) != 0 ? Constants.EPOLL_OUT : 0);
+            int target = ((to & Constants.NET_R) != Constants.NET_NONE ? Constants.EPOLL_IN | Constants.EPOLL_RDHUP : 0) |
+                    ((to & Constants.NET_W) != Constants.NET_NONE ? Constants.EPOLL_OUT : 0);
             try(Arena arena = Arena.ofConfined()) {
                 MemorySegment ev = arena.allocate(epollEventLayout);
                 NativeUtil.setInt(ev, eventsOffset, target);
                 NativeUtil.setInt(ev, dataOffset + fdOffset, fd);
-                checkInt(TenetLinuxBinding.epollCtl(epfd, from == 0 ? Constants.EPOLL_CTL_ADD : Constants.EPOLL_CTL_MOD, fd, ev), "epoll_ctl");
+                checkInt(TenetLinuxBinding.epollCtl(epfd, from == Constants.NET_NONE ? Constants.EPOLL_CTL_ADD : Constants.EPOLL_CTL_MOD, fd, ev), "epoll_ctl");
             }
         }
     }
@@ -184,7 +184,7 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
     public IntPair access(MemorySegment events, int index) {
         int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
         int socket = NativeUtil.getInt(events, index * eventSize + dataOffset + fdOffset);
-        if((event & (Constants.EPOLL_IN | Constants.EPOLL_HUP | Constants.EPOLL_RDHUP)) != 0) {
+        if((event & (Constants.EPOLL_IN | Constants.EPOLL_ERR | Constants.EPOLL_HUP | Constants.EPOLL_RDHUP)) != 0) {
             return new IntPair(socket, Constants.NET_R);
         }else if((event & Constants.EPOLL_OUT) != 0) {
             return new IntPair(socket, Constants.NET_W);
@@ -194,12 +194,12 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public short ipv4Port(MemorySegment addr) {
+    public short getIpv4Port(MemorySegment addr) {
         return TenetLinuxBinding.ipv4Port(addr);
     }
 
     @Override
-    public short ipv6Port(MemorySegment addr) {
+    public short getIpv6Port(MemorySegment addr) {
         return TenetLinuxBinding.ipv6Port(addr);
     }
 

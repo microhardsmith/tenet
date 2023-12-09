@@ -28,10 +28,10 @@ public final class IntMap<T> {
         int slot = val & mask;
         IntMapNode<T> current = nodes[slot];
         while (current != null) {
-            if(current.getVal() == val) {
-                return current.getValue();
+            if(current.val == val) {
+                return current.value;
             }else {
-                current = current.getNext();
+                current = current.next;
             }
         }
         return null;
@@ -42,13 +42,13 @@ public final class IntMap<T> {
      */
     public void put(int val, T value) {
         IntMapNode<T> n = new IntMapNode<>();
-        n.setVal(val);
-        n.setValue(value);
+        n.val = val;
+        n.value = value;
         int slot = val & mask;
         IntMapNode<T> current = nodes[slot];
         if (current != null) {
-            n.setNext(current);
-            current.setPrev(n);
+            n.next = current;
+            current.prev = n;
         }
         nodes[slot] = n;
         count++;
@@ -61,11 +61,11 @@ public final class IntMap<T> {
         int slot = val & mask;
         IntMapNode<T> current = nodes[slot];
         while (current != null) {
-            if(current.getVal() == val && current.getValue() == oldValue) {
-                current.setValue(newValue);
+            if(current.val == val && current.value == oldValue) {
+                current.value = newValue;
                 return ;
             }else {
-                current = current.getNext();
+                current = current.next;
             }
         }
         throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
@@ -78,23 +78,23 @@ public final class IntMap<T> {
         int slot = val & mask;
         IntMapNode<T> current = nodes[slot];
         while (current != null){
-            if(current.getVal() != val) {
-                current = current.getNext();
-            }else if(current.getValue() != value) {
+            if(current.val != val) {
+                current = current.next;
+            }else if(current.value != value) {
                 return false;
             }else {
-                IntMapNode<T> prev = current.getPrev();
-                IntMapNode<T> next = current.getNext();
+                IntMapNode<T> prev = current.prev;
+                IntMapNode<T> next = current.next;
                 if(prev != null) {
-                    prev.setNext(next);
+                    prev.next = next;
                 }else {
                     nodes[slot] = next;
                 }
                 if(next != null) {
-                    next.setPrev(prev);
+                    next.prev = prev;
                 }
-                current.setPrev(null);
-                current.setNext(null);
+                current.prev = null;
+                current.next = null;
                 count--;
                 return true;
             }
@@ -124,10 +124,20 @@ public final class IntMap<T> {
         for (IntMapNode<T> n : nodes) {
             IntMapNode<T> t = n;
             while (t != null) {
-                result.add(t.getValue());
-                t = t.getNext();
+                result.add(t.value);
+                t = t.next;
             }
         }
         return result;
+    }
+
+    /**
+     *   Representing a node value in IntMap
+     */
+    private static final class IntMapNode<T> {
+        private int val;
+        private T value;
+        private IntMapNode<T> prev;
+        private IntMapNode<T> next;
     }
 }

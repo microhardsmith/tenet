@@ -167,28 +167,28 @@ public final class WriteBuffer extends OutputStream {
     }
 
     public void setByte(long index, byte value) {
-        if(index + 1 > writeIndex) {
+        if(index + NativeUtil.getByteSize() > writeIndex) {
             throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
         }
         NativeUtil.setByte(segment, index, value);
     }
 
     public void setShort(long index, short value) {
-        if(index + 2 > writeIndex) {
+        if(index + NativeUtil.getShortSize() > writeIndex) {
             throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
         }
         NativeUtil.setShort(segment, index, value);
     }
 
     public void setInt(long index, int value) {
-        if(index + 4 > writeIndex) {
+        if(index + NativeUtil.getIntSize() > writeIndex) {
             throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
         }
         NativeUtil.setInt(segment, index, value);
     }
 
     public void setLong(long index, long value) {
-        if(index + 8 > writeIndex) {
+        if(index + NativeUtil.getLongSize() > writeIndex) {
             throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
         }
         NativeUtil.setLong(segment, index, value);
@@ -206,10 +206,10 @@ public final class WriteBuffer extends OutputStream {
      */
     public WriteBuffer truncate(long offset) {
         if(offset > writeIndex) {
-            throw new RuntimeException("Truncate index overflow");
+            throw new FrameworkException(ExceptionType.NATIVE, "Truncate index overflow");
         }
         WriteBuffer w = new WriteBuffer(segment.asSlice(offset, size - offset), policy);
-        writeIndex = writeIndex - offset;
+        w.writeIndex = writeIndex - offset;
         return w;
     }
 

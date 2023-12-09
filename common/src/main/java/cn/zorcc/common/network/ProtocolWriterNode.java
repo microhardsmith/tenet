@@ -6,7 +6,7 @@ import cn.zorcc.common.State;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.network.api.Callback;
+import cn.zorcc.common.network.api.Channel;
 import cn.zorcc.common.network.api.Protocol;
 import cn.zorcc.common.network.lib.OsNetworkLibrary;
 import cn.zorcc.common.structure.IntMap;
@@ -30,7 +30,7 @@ public final class ProtocolWriterNode implements WriterNode {
     private record Task(
             Arena arena,
             MemorySegment memorySegment,
-            Callback callback
+            WriterCallback writerCallback
     ) {
 
     }
@@ -59,7 +59,7 @@ public final class ProtocolWriterNode implements WriterNode {
     public void onMsg(MemorySegment reserved, WriterTask writerTask) {
         if(writerTask.channel() == channel) {
             Object msg = writerTask.msg();
-            Callback callback = writerTask.callback();
+            WriterCallback writerCallback = writerTask.writerCallback();
             try(final WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(reserved)) {
                 try{
                     channel.encoder().encode(writeBuffer, msg);
@@ -69,9 +69,9 @@ public final class ProtocolWriterNode implements WriterNode {
                     return ;
                 }
                 if(writeBuffer.writeIndex() > 0) {
-                    sendMsg(writeBuffer, callback);
-                }else if(callback != null) {
-                    callback.invokeOnSuccess(channel);
+                    sendMsg(writeBuffer, writerCallback);
+                }else if(writerCallback != null) {
+                    writerCallback.invokeOnSuccess(channel);
                 }
             }
         }
@@ -80,7 +80,7 @@ public final class ProtocolWriterNode implements WriterNode {
     @Override
     public void onMultipleMsg(MemorySegment reserved, WriterTask writerTask) {
         if(writerTask.channel() == channel && writerTask.msg() instanceof Collection<?> msgs) {
-            Callback callback = writerTask.callback();
+            WriterCallback writerCallback = writerTask.writerCallback();
             try(final WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(reserved)) {
                 try{
                     for (Object msg : msgs) {
@@ -92,9 +92,9 @@ public final class ProtocolWriterNode implements WriterNode {
                     return ;
                 }
                 if(writeBuffer.writeIndex() > 0) {
-                    sendMsg(writeBuffer, callback);
-                }else if(callback != null) {
-                    callback.invokeOnSuccess(channel);
+                    sendMsg(writeBuffer, writerCallback);
+                }else if(writerCallback != null) {
+                    writerCallback.invokeOnSuccess(channel);
                 }
             } catch (FrameworkException e) {
                 log.error("WriterNode error while sending multiple msg", e);
@@ -116,7 +116,7 @@ public final class ProtocolWriterNode implements WriterNode {
                     return ;
                 }
                 MemorySegment data = task.memorySegment();
-                Callback callback = task.callback();
+                WriterCallback writerCallback = task.writerCallback();
                 int len = (int) data.byteSize();
                 int r;
                 try{
@@ -126,19 +126,18 @@ public final class ProtocolWriterNode implements WriterNode {
                     close();
                     return ;
                 }
-                if(r >= 0) {
-                    taskQueue.addFirst(task);
-                    if(r > 0) {
-                        handleEvent(r);
-                    }
-                }else {
-                    int written = -r;
-                    if(written == len) {
-                        if(callback != null) {
-                            callback.invokeOnSuccess(channel);
+                if(r > 0) {
+                    if(r == len) {
+                        if(writerCallback != null) {
+                            writerCallback.invokeOnSuccess(channel);
                         }
                     }else {
-                        taskQueue.addFirst(new Task(task.arena(), data.asSlice(r, len - r), callback));
+                        taskQueue.addFirst(new Task(task.arena(), data.asSlice(r, len - r), writerCallback));
+                    }
+                }else {
+                    taskQueue.addFirst(task);
+                    if(r < 0) {
+                        handleEvent(r);
                     }
                 }
             }
@@ -167,7 +166,7 @@ public final class ProtocolWriterNode implements WriterNode {
     /**
      *   Send msg over the channel, invoking its callback if successful, otherwise copy the data locally for channel to become writable
      */
-    private void sendMsg(WriteBuffer writeBuffer, Callback callback) {
+    private void sendMsg(WriteBuffer writeBuffer, WriterCallback writerCallback) {
         MemorySegment data = writeBuffer.toSegment();
         if(taskQueue == null) {
             int len = (int) data.byteSize();
@@ -179,34 +178,33 @@ public final class ProtocolWriterNode implements WriterNode {
                 close();
                 return ;
             }
-            if(r >= 0) {
-                taskQueue = new ArrayDeque<>();
-                copyLocally(data, callback);
-                if(r > 0) {
-                    handleEvent(r);
-                }
-            }else {
-                int written = -r;
-                if(written == len) {
-                    if(callback != null) {
-                        callback.invokeOnSuccess(channel);
+            if(r > 0) {
+                if(r == len) {
+                    if(writerCallback != null) {
+                        writerCallback.invokeOnSuccess(channel);
                     }
                 }else {
                     taskQueue = new ArrayDeque<>();
-                    copyLocally(data.asSlice(written, len - written), callback);
+                    copyLocally(data.asSlice(r, len - r), writerCallback);
+                }
+            }else {
+                taskQueue = new ArrayDeque<>();
+                copyLocally(data, writerCallback);
+                if(r < 0) {
+                    handleEvent(r);
                 }
             }
         }else {
-            copyLocally(data, callback);
+            copyLocally(data, writerCallback);
         }
     }
 
-    private void copyLocally(MemorySegment segment, Callback callback) {
+    private void copyLocally(MemorySegment segment, WriterCallback writerCallback) {
         Arena arena = Arena.ofConfined();
         long size = segment.byteSize();
         MemorySegment memorySegment = arena.allocateArray(ValueLayout.JAVA_BYTE, size);
         MemorySegment.copy(segment, 0, memorySegment, 0, size);
-        taskQueue.addLast(new Task(arena, memorySegment, callback));
+        taskQueue.addLast(new Task(arena, memorySegment, writerCallback));
     }
 
     private void handleEvent(int r) {
@@ -225,16 +223,23 @@ public final class ProtocolWriterNode implements WriterNode {
 
     private boolean ctlWithStateChecked(int expected) {
         try(Mutex _ = channelState.withMutex()) {
-            int current = channelState.get();
-            if((current & Constants.NET_PC) > 0) {
+            int state = channelState.get();
+            if((state & Constants.NET_PC) == Constants.NET_PC) {
                 return true;
             }
-            if(expected == Constants.NET_PW && (current & Constants.NET_W) == 0) {
-                osNetworkLibrary.ctl(channel.poller().mux(), channel.socket(), current, current + Constants.NET_W);
-                channelState.set(current + Constants.NET_W);
-            }else if(expected == Constants.NET_PR && (current & Constants.NET_R) == 0) {
-                osNetworkLibrary.ctl(channel.poller().mux(), channel.socket(), current, current + Constants.NET_R);
-                channelState.set(current + Constants.NET_R);
+            int current = state & Constants.NET_RW;
+            if(expected == Constants.NET_PW) {
+                int to = current | Constants.NET_W;
+                if(to != current) {
+                    osNetworkLibrary.ctl(channel.poller().mux(), channel.socket(), current, to);
+                    channelState.set(state + (to - current));
+                }
+            }else if(expected == Constants.NET_PR) {
+                int to = current | Constants.NET_R;
+                if(to != current) {
+                    osNetworkLibrary.ctl(channel.poller().mux(), channel.socket(), current, to);
+                    channelState.set(state + (to - current));
+                }
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
@@ -284,9 +289,9 @@ public final class ProtocolWriterNode implements WriterNode {
             if(taskQueue != null) {
                 taskQueue.forEach(task -> {
                     task.arena().close();
-                    Callback callback = task.callback();
-                    if(callback != null) {
-                        callback.invokeOnFailure(channel);
+                    WriterCallback writerCallback = task.writerCallback();
+                    if(writerCallback != null) {
+                        writerCallback.invokeOnFailure(channel);
                     }
                 });
                 taskQueue = null;

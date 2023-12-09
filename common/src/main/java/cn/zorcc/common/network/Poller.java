@@ -4,6 +4,7 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
+import cn.zorcc.common.network.api.Channel;
 import cn.zorcc.common.network.api.Sentry;
 import cn.zorcc.common.network.lib.OsNetworkLibrary;
 import cn.zorcc.common.structure.IntMap;
@@ -130,19 +131,18 @@ public final class Poller {
 
     private static void handleBindMsg(IntMap<PollerNode> nodeMap, PollerTask pollerTask) {
         Channel channel = pollerTask.channel();
-        if(pollerTask.msg() instanceof Sentry sentry) {
-            SentryPollerNode sentryPollerNode = new SentryPollerNode(nodeMap, channel, sentry);
-            nodeMap.put(channel.socket().intValue(), sentryPollerNode);
-        }else {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-        }
+        SentryPollerNode sentryPollerNode = switch (pollerTask.msg()) {
+            case Sentry sentry -> new SentryPollerNode(nodeMap, channel, sentry, null);
+            case SentryWithCallback sentryWithCallback-> new SentryPollerNode(nodeMap, channel, sentryWithCallback.sentry(), sentryWithCallback.runnable());
+            default -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        };
+        nodeMap.put(channel.socket().intValue(), sentryPollerNode);
     }
 
     private void handleUnbindMsg(IntMap<PollerNode> nodeMap, PollerTask pollerTask) {
         Channel channel = pollerTask.channel();
         PollerNode pollerNode = nodeMap.get(channel.socket().intValue());
-        if(pollerNode instanceof SentryPollerNode sentryPollerNode && pollerTask.msg() instanceof Duration duration) {
-            log.info(STR."Connection timeout after \{duration.toMillis()} millis for address : \{channel.loc()}");
+        if(pollerNode instanceof SentryPollerNode sentryPollerNode) {
             sentryPollerNode.onClose(pollerTask);
         }
     }

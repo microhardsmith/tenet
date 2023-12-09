@@ -28,7 +28,6 @@ public final class ListenerConfig {
      *   Target provider for server-side application, Net.tcpProvider() and Net.sslProvider() are recommended to use
      */
     private Provider provider;
-
     /**
      *   Target host:port to bind and listen
      *   For Ipv6 server, it's recommended to listen on "::"

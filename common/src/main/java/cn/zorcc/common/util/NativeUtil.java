@@ -146,15 +146,6 @@ public final class NativeUtil {
         }
     }
 
-    private static final String IPV4_MAPPED_FORMAT = "::ffff:";
-    public static boolean isIpv4MappedIpv6Address(String ip) {
-        return ip.startsWith(IPV4_MAPPED_FORMAT);
-    }
-
-    public static String toIpv4Address(String ip) {
-        return ip.substring(IPV4_MAPPED_FORMAT.length());
-    }
-
     private static String getDynamicLibraryName(String identifier) {
         return switch (osType) {
             case Windows -> STR."lib\{identifier}.dll";
@@ -187,20 +178,20 @@ public final class NativeUtil {
     /**
      *  Load function from dynamic library
      */
-    public static MethodHandle methodHandle(SymbolLookup lookup, String methodName, FunctionDescriptor functionDescriptor) {
+    public static MethodHandle methodHandle(SymbolLookup lookup, String methodName, FunctionDescriptor functionDescriptor, Linker.Option... options) {
         MemorySegment methodPointer = lookup.find(methodName)
                 .orElseThrow(() -> new FrameworkException(ExceptionType.NATIVE, STR."Unable to load target native method : \{methodName}"));
-        return linker.downcallHandle(methodPointer, functionDescriptor);
+        return linker.downcallHandle(methodPointer, functionDescriptor, options);
     }
 
     /**
      *   Due to macro issue, there could be multiple implementations from the dynamic library, then this function could be used
      */
-    public static MethodHandle methodHandle(SymbolLookup lookup, List<String> methodNames, FunctionDescriptor functionDescriptor) {
+    public static MethodHandle methodHandle(SymbolLookup lookup, List<String> methodNames, FunctionDescriptor functionDescriptor, Linker.Option... options) {
         for (String methodName : methodNames) {
             Optional<MemorySegment> methodPointer = lookup.find(methodName);
             if (methodPointer.isPresent()) {
-                return linker.downcallHandle(methodPointer.get(), functionDescriptor);
+                return linker.downcallHandle(methodPointer.get(), functionDescriptor, options);
             }
         }
         throw new FrameworkException(ExceptionType.NATIVE, STR."Unable to load target native method : \{methodNames}");

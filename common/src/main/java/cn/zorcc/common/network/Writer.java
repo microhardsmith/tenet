@@ -4,6 +4,7 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
+import cn.zorcc.common.network.api.Channel;
 import cn.zorcc.common.structure.IntMap;
 
 import java.lang.foreign.Arena;
@@ -14,8 +15,8 @@ import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class Writer {
-    private static final AtomicInteger globalCounter = new AtomicInteger(0);
     private static final Logger log = new Logger(Writer.class);
+    private static final AtomicInteger counter = new AtomicInteger(0);
     private final BlockingQueue<WriterTask> queue = new LinkedTransferQueue<>();
     private final Thread writerThread;
     public Writer(WriterConfig writerConfig) {
@@ -33,7 +34,7 @@ public final class Writer {
     }
 
     private Thread createWriterThread(WriterConfig writerConfig) {
-        int sequence = globalCounter.getAndIncrement();
+        int sequence = counter.getAndIncrement();
         return Thread.ofPlatform().name("writer-" + sequence).unstarted(() -> {
             log.info(STR."Initializing writer thread, sequence : \{sequence}");
             try(Arena arena = Arena.ofConfined()){

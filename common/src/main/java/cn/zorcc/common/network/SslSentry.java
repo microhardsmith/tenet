@@ -4,6 +4,7 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.bindings.SslBinding;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.network.api.Channel;
 import cn.zorcc.common.network.api.Protocol;
 import cn.zorcc.common.network.api.Sentry;
 import cn.zorcc.common.network.lib.OsNetworkLibrary;

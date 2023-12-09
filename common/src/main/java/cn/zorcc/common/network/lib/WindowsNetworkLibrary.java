@@ -197,7 +197,7 @@ public final class WindowsNetworkLibrary implements OsNetworkLibrary {
     public IntPair access(MemorySegment events, int index) {
         int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
         long socket = NativeUtil.getLong(events, index * eventSize + dataOffset + sockOffset);
-        if((event & (Constants.EPOLL_IN | Constants.EPOLL_HUP | Constants.EPOLL_RDHUP)) != 0) {
+        if((event & (Constants.EPOLL_IN | Constants.EPOLL_ERR | Constants.EPOLL_HUP | Constants.EPOLL_RDHUP)) != 0) {
             return new IntPair((int) socket, Constants.NET_R);
         }else if((event & Constants.EPOLL_OUT) != 0) {
             return new IntPair((int) socket, Constants.NET_W);
@@ -207,12 +207,12 @@ public final class WindowsNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public short ipv4Port(MemorySegment addr) {
+    public short getIpv4Port(MemorySegment addr) {
         return TenetWindowsBinding.ipv4Port(addr);
     }
 
     @Override
-    public short ipv6Port(MemorySegment addr) {
+    public short getIpv6Port(MemorySegment addr) {
         return TenetWindowsBinding.ipv6Port(addr);
     }
 

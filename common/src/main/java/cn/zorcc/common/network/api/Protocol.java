@@ -11,20 +11,20 @@ public interface Protocol {
     /**
      *   Indicates that protocol could read from the socket now, this function will always be invoked on poller thread
      *   the parameter len will always be the exact length of reserved segment
-     *   return a positive number to indicate a state change, or a negative number indicates the actually bytes read
+     *   return a positive number to indicate actual bytes read, or a flag to indicate a state change
      */
     int onReadableEvent(MemorySegment reserved, int len);
 
     /**
      *   Indicates that protocol could write to the socket now, this function will always be invoked on poller thread
-     *   return a positive number to indicate a state change
+     *   return a flag to indicate a state change
      */
     int onWritableEvent();
 
     /**
-     *   Perform the actual write operation
+     *   Perform the actual write operation, this function will always be invoked on writer thread
      *   the parameter len will always be the exact length of data segment
-     *   return a positive number to indicate a state change, or a negative number indicates the actually bytes read
+     *   return a positive number to indicate actual bytes written, or a flag to indicate a state change
      */
     int doWrite(MemorySegment data, int len);
 

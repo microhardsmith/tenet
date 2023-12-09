@@ -31,11 +31,11 @@ public final class Constants {
     public static final String IS = "is";
     public static final String APPLY = "apply";
     public static final String ACCEPT = "accept";
-    public static final String SINGLETON_MSG = "Violating singleton";
     public static final int INITIAL = 0;
-    public static final int RUNNING = 1;
-    public static final int CLOSING = 2;
-    public static final int STOPPED = 3;
+    public static final int STARTING = 1;
+    public static final int RUNNING = 2;
+    public static final int CLOSING = 3;
+    public static final int STOPPED = 4;
     public static final String DEFAULT_TIME_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS";
     public static final Clock SYSTEM_CLOCK = Clock.systemDefaultZone();
     public static final ZoneOffset LOCAL_ZONE_OFFSET = OffsetTime.now().getOffset();
@@ -105,7 +105,7 @@ public final class Constants {
     /**
      * 文件分隔符在windows linux macOS中都应该使用'/'
      */
-    public static final String SEPARATOR = String.valueOf('\u002f');
+    public static final String SEPARATOR = "/";
     /**
      * log配置文件名称
      */
@@ -308,15 +308,16 @@ public final class Constants {
     /**
      *   Net
      */
-    public static final int NET_IGNORED = 1;
-    public static final int NET_UPDATE = 1 << 2;
-    public static final int NET_W = 1 << 4; // register write only
-    public static final int NET_PW = 1 << 6; // register write if possible
-    public static final int NET_R = 1 << 8; // register read only
-    public static final int NET_PR = 1 << 10; // register read if possible
+    public static final int NET_NONE = Integer.MIN_VALUE;
+    public static final int NET_IGNORED = Integer.MIN_VALUE | 1;
+    public static final int NET_UPDATE = Integer.MIN_VALUE | (1 << 2);
+    public static final int NET_W = Integer.MIN_VALUE | (1 << 4); // register write only
+    public static final int NET_PW = Integer.MIN_VALUE | (1 << 6); // register write if possible
+    public static final int NET_R = Integer.MIN_VALUE | (1 << 8); // register read only
+    public static final int NET_PR = Integer.MIN_VALUE | (1 << 10); // register read if possible
     public static final int NET_RW = NET_R | NET_W; // register read and write
-    public static final int NET_PC = 1 << 12;
-    public static final int NET_WC = 1 << 16;
+    public static final int NET_PC = Integer.MIN_VALUE | (1 << 12);
+    public static final int NET_WC = Integer.MIN_VALUE | (1 << 16);
 
     /**
      *   Ssl library

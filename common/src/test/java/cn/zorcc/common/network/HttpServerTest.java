@@ -7,6 +7,7 @@ import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.http.*;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.log.LoggerConsumer;
+import cn.zorcc.common.network.api.Channel;
 import cn.zorcc.common.network.api.Handler;
 import cn.zorcc.common.structure.Wheel;
 import cn.zorcc.common.util.CompressUtil;
@@ -61,7 +62,7 @@ public class HttpServerTest {
         httpListenerConfig.setProvider(Net.tcpProvider());
         httpListenerConfig.setLoc(HTTP_LOC);
         Net net = new Net();
-        net.addListener(httpListenerConfig);
+        net.addServerListener(httpListenerConfig);
         return net;
     }
 
@@ -73,7 +74,7 @@ public class HttpServerTest {
         httpsListenerConfig.setProvider(SslProvider.newServerProvider(PUBLIC_KEY_FILE, PRIVATE_KEY_FILE));
         httpsListenerConfig.setLoc(HTTPS_LOC);
         Net net = new Net();
-        net.addListener(httpsListenerConfig);
+        net.addServerListener(httpsListenerConfig);
         return net;
     }
 
@@ -91,8 +92,8 @@ public class HttpServerTest {
         httpsListenerConfig.setProvider(SslProvider.newServerProvider(PUBLIC_KEY_FILE, PRIVATE_KEY_FILE));
         httpsListenerConfig.setLoc(HTTPS_LOC);
         Net net = new Net();
-        net.addListener(httpListenerConfig);
-        net.addListener(httpsListenerConfig);
+        net.addServerListener(httpListenerConfig);
+        net.addServerListener(httpsListenerConfig);
         return net;
     }
 

@@ -3,6 +3,7 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.network.api.Channel;
 import cn.zorcc.common.network.api.Protocol;
 import cn.zorcc.common.network.lib.OsNetworkLibrary;
 
@@ -21,7 +22,7 @@ public final class TcpProtocol implements Protocol {
         if(received < 0) {
             throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform recv(), errno : \{osNetworkLibrary.errno()}");
         }else {
-            return -received;
+            return received;
         }
     }
 
