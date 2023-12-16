@@ -3,7 +3,6 @@ package cn.zorcc.common;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
 
-import java.io.OutputStream;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -13,7 +12,7 @@ import java.util.Arrays;
 /**
  *   Direct memory WriteBuffer, not thread-safe, custom Resizer could be chosen to modify the default expansion mechanism
  */
-public final class WriteBuffer extends OutputStream {
+public final class WriteBuffer implements AutoCloseable {
     private static final int DEFAULT_HEAP_BUFFER_SIZE = 32;
     private MemorySegment segment;
     private long size;
@@ -73,13 +72,7 @@ public final class WriteBuffer extends OutputStream {
         writeIndex = nextIndex;
     }
 
-    @Override
-    public void write(int b) {
-        writeByte((byte) b);
-    }
-
-    @Override
-    public void write(byte[] b, int off, int len) {
+    public void writeBytes(byte[] b, int off, int len) {
         if(len < 0 || off + len > b.length) {
             throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
         }
@@ -87,11 +80,6 @@ public final class WriteBuffer extends OutputStream {
         resize(nextIndex);
         MemorySegment.copy(MemorySegment.ofArray(b), off, segment, writeIndex, len);
         writeIndex = nextIndex;
-    }
-
-    @Override
-    public void write(byte[] b) {
-        writeBytes(b);
     }
 
     public void writeBytes(byte... bytes) {

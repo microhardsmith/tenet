@@ -7,6 +7,7 @@ import cn.zorcc.common.bindings.DeflateBinding;
 import cn.zorcc.common.exception.FrameworkException;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -140,23 +141,23 @@ public final class CompressUtil {
     }
 
     public static byte[] compressUsingJdkGzip(final byte[] rawData, final int level) {
-        try(WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer(); GZIPOutputStream gzipOutputStream = new GZIPOutputStream(writeBuffer){{
+        try(ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream(rawData.length); GZIPOutputStream gzipOutputStream = new GZIPOutputStream(byteArrayOutputStream){{
             def.setLevel(level >= Deflater.BEST_SPEED && level <= Deflater.BEST_COMPRESSION ? level : Deflater.DEFAULT_COMPRESSION);
         }}) {
             gzipOutputStream.write(rawData);
             gzipOutputStream.finish();
-            return writeBuffer.toArray();
+            return byteArrayOutputStream.toByteArray();
         } catch (IOException e) {
             throw new FrameworkException(ExceptionType.COMPRESS, "Unable to perform gzip compression", e);
         }
     }
 
     public static byte[] decompressUsingJdkGzip(final byte[] compressedData) {
-        try (WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer(); GZIPInputStream gzipIn = new GZIPInputStream(new ByteArrayInputStream(compressedData))) {
+        try (WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer(compressedData.length); GZIPInputStream gzipIn = new GZIPInputStream(new ByteArrayInputStream(compressedData))) {
             byte[] buffer = new byte[CHUNK_SIZE];
             int bytesRead;
             while ((bytesRead = gzipIn.read(buffer)) != -1) {
-                writeBuffer.write(buffer, 0, bytesRead);
+                writeBuffer.writeBytes(buffer, 0, bytesRead);
             }
             return writeBuffer.toArray();
         }catch (IOException e) {
@@ -177,7 +178,7 @@ public final class CompressUtil {
         try(WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer()) {
             while (!deflater.finished()) {
                 int len = deflater.deflate(buffer);
-                writeBuffer.write(buffer, 0, len);
+                writeBuffer.writeBytes(buffer, 0, len);
             }
             return writeBuffer.toArray();
         } finally {
@@ -192,7 +193,7 @@ public final class CompressUtil {
             byte[] buffer = new byte[CHUNK_SIZE];
             while (!inflater.finished()) {
                 int decompressLen = inflater.inflate(buffer);
-                writeBuffer.write(buffer, 0, decompressLen);
+                writeBuffer.writeBytes(buffer, 0, decompressLen);
             }
             return writeBuffer.toArray();
         }catch (DataFormatException e) {

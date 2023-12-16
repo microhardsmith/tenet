@@ -4,7 +4,6 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.network.api.Channel;
 import cn.zorcc.common.network.api.Decoder;
 import cn.zorcc.common.network.api.Encoder;
 import cn.zorcc.common.network.api.Handler;

@@ -1,7 +1,6 @@
 package cn.zorcc.common.network;
 
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.network.api.Channel;
 
 /**
  *   CallBack interface, could be used for implementing back-pressure or other mechanisms

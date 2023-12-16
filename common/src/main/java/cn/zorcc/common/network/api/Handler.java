@@ -1,5 +1,6 @@
 package cn.zorcc.common.network.api;
 
+import cn.zorcc.common.network.Channel;
 import cn.zorcc.common.network.TaggedResult;
 
 /**

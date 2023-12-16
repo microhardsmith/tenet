@@ -1,21 +1,23 @@
-package cn.zorcc.common.network.api;
+package cn.zorcc.common.network;
 
-import cn.zorcc.common.network.*;
+import cn.zorcc.common.network.api.Decoder;
+import cn.zorcc.common.network.api.Encoder;
+import cn.zorcc.common.network.api.Handler;
 
 import java.time.Duration;
 import java.util.Collection;
 import java.util.function.IntFunction;
 
-public interface Channel {
+public sealed interface Channel permits ChannelImpl {
     int SEQ = 0;
-    /**
-     *   Default shutdown timeout for each channel
-     */
-    Duration defaultShutdownDuration = Duration.ofSeconds(5);
     /**
      *   Default send timeout for each channel
      */
     Duration defaultSendTimeoutDuration = Duration.ofSeconds(30);
+    /**
+     *   Default shutdown timeout for each channel
+     */
+    Duration defaultShutdownDuration = Duration.ofSeconds(5);
 
     /**
      *   Get the underlying socket associated with this channel

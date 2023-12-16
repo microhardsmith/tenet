@@ -1,5 +1,7 @@
 package cn.zorcc.common.network.api;
 
+import cn.zorcc.common.network.Channel;
+
 /**
  *   Sentry factory with customized deallocated procedure provided
  */

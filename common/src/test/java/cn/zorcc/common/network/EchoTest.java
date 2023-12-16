@@ -3,7 +3,6 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.*;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.network.api.Channel;
 import cn.zorcc.common.network.api.Decoder;
 import cn.zorcc.common.network.api.Encoder;
 import cn.zorcc.common.network.api.Handler;
@@ -58,7 +57,7 @@ public class EchoTest {
         @Override
         public void onConnected(Channel channel) {
             log.info("Client channel connected");
-            Wheel.wheel().addPeriodicJob(() -> channel.sendMsg("Hello : " + counter.getAndIncrement()), Duration.ZERO, Duration.ofSeconds(1));
+            Wheel.wheel().addPeriodicJob(() -> channel.sendMsg(STR."Hello : \{counter.getAndIncrement()}"), Duration.ZERO, Duration.ofSeconds(1));
         }
 
         @Override

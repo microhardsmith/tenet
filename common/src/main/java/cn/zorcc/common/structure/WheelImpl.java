@@ -8,27 +8,25 @@ import cn.zorcc.common.exception.FrameworkException;
 import org.jctools.queues.atomic.MpscUnboundedAtomicArrayQueue;
 
 import java.time.Duration;
-import java.util.Iterator;
-import java.util.Queue;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
-import java.util.function.LongConsumer;
 
 public final class WheelImpl extends AbstractLifeCycle implements Wheel {
-    private static final long ONCE = Long.MIN_VALUE;
-    private static final AtomicLong counter = new AtomicLong(0);
+    private static final long ONE_TIME_MISSION = -1;
+    private static final long CANCEL_ONE_TIME_MISSION = -2;
+    private static final long CANCEL_PERIOD_MISSION = -3;
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
-    private static final JobImpl exit = new JobImpl(Long.MIN_VALUE, Long.MIN_VALUE, () -> {});
+    private static final WheelTask exitTask = new WheelTask(Long.MIN_VALUE, Long.MIN_VALUE, () -> {});
     private final int mask;
     private final long tick;
     private final long tickNano;
     private final long bound;
     private final int cMask;
-    private final Queue<JobImpl> queue;
-    private final JobImpl[] wheel;
-    private final TreeSet<JobImpl> waitSet = new TreeSet<>(JobImpl::compareTo);
+    private final Queue<WheelTask> taskQueue;
+    private final Job[] wheel;
+    private final Map<Runnable, Job> jobMap = new HashMap<>();
+    private final TreeSet<Job> waitSet = new TreeSet<>(Job::compareTo);
     private final Thread wheelThread;
     private WheelImpl(int slots, long tick) {
         if(!instanceFlag.compareAndSet(false, true)) {
@@ -45,12 +43,12 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
         this.tickNano = Duration.ofMillis(tick).toNanos();
         this.bound = slots * tick;
         this.cMask = mask >> 1;
-        this.queue = new MpscUnboundedAtomicArrayQueue<>(Constants.KB);
-        this.wheel = new JobImpl[slots];
-        this.wheelThread = Thread.ofPlatform().name("Wheel").unstarted(this::run);
+        this.taskQueue = new MpscUnboundedAtomicArrayQueue<>(Constants.KB);
+        this.wheel = new Job[slots];
+        this.wheelThread = Thread.ofPlatform().name("wheel").unstarted(this::run);
     }
 
-    public static final Wheel instance = new WheelImpl(Wheel.slots, Wheel.tick);
+    public static final Wheel INSTANCE = new WheelImpl(Wheel.slots, Wheel.tick);
 
     @Override
     public void doInit() {
@@ -59,55 +57,40 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
 
     @Override
     public void doExit() throws InterruptedException {
-        if (!queue.offer(exit)) {
+        if (!taskQueue.offer(exitTask)) {
             throw new FrameworkException(ExceptionType.WHEEL, Constants.UNREACHED);
         }
         wheelThread.join();
     }
 
     @Override
-    public Job addJob(Runnable job, Duration delay) {
-        return enqueue(delay.toMillis(), ONCE, job);
+    public Runnable addJob(Runnable mission, Duration delay) {
+        return addWheelTask(mission, delay, null);
     }
 
     @Override
-    public Job addPeriodicJob(Runnable job, Duration delay, Duration period) {
+    public Runnable addPeriodicJob(Runnable mission, Duration delay, Duration period) {
         long periodDelayMillis = period.toMillis();
         if (periodDelayMillis <= tick) {
             throw new FrameworkException(ExceptionType.WHEEL, "Wheel tick is too large for current task, might consider tuning Wheel's default parameters");
         }
-        return enqueue(delay.toMillis(), periodDelayMillis, job);
+        return addWheelTask(mission, delay, period);
     }
 
-    @Override
-    public Job addJob(LongConsumer job, Duration delay) {
-        return enqueue(delay.toMillis(), ONCE, job);
-    }
-
-    @Override
-    public Job addPeriodicJob(LongConsumer job, Duration delay, Duration period) {
-        long periodDelayMillis = period.toMillis();
-        if (periodDelayMillis <= tick) {
-            throw new FrameworkException(ExceptionType.WHEEL, "Wheel tick is too large for current task, might consider tuning Wheel's default parameters");
-        }
-        return enqueue(delay.toMillis(), periodDelayMillis, job);
-    }
-
-    private Job enqueue(long delayMillis, long periodDelayMillis, Runnable job) {
-        JobImpl result = new JobImpl(Clock.current() + delayMillis, periodDelayMillis, job);
-        if (!queue.offer(result)) {
+    private Runnable addWheelTask(Runnable mission, Duration delay, Duration period) {
+        long current = Clock.current();
+        WheelTask wheelTask = new WheelTask(current + delay.toMillis(), period == null ? ONE_TIME_MISSION : period.toMillis(), mission);
+        WheelTask cancelTask = new WheelTask(current + delay.toMillis(), period == null ? CANCEL_ONE_TIME_MISSION : CANCEL_PERIOD_MISSION, mission);
+        if(!taskQueue.offer(wheelTask)) {
             throw new FrameworkException(ExceptionType.WHEEL, Constants.UNREACHED);
         }
-        return result;
+        return () -> {
+            if(!taskQueue.offer(cancelTask)) {
+                throw new FrameworkException(ExceptionType.WHEEL, Constants.UNREACHED);
+            }
+        };
     }
 
-    private Job enqueue(long delayMillis, long periodDelayMillis, LongConsumer job) {
-        JobImpl result = new JobImpl(Clock.current() + delayMillis, periodDelayMillis, job);
-        if (!queue.offer(result)) {
-            throw new FrameworkException(ExceptionType.WHEEL, Constants.UNREACHED);
-        }
-        return result;
-    }
 
     private void run() {
         long nano = Clock.nano();
@@ -122,33 +105,36 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
 
             // inspecting if there are tasks that should be added to the wheel
             for( ; ;) {
-                final JobImpl job = queue.poll();
-                if(job == null) {
+                final WheelTask task = taskQueue.poll();
+                if(task == null) {
                     break;
-                }else if(job == exit) {
+                }else if(task == exitTask) {
                     return ;
                 }else {
                     // if delay is smaller than current milli, we should run it in current slot, so we select tasks before running wheel
-                    final long delayMillis = Math.max(job.execMilli - currentMilli, 0);
-                    if(delayMillis >= bound) {
-                        waitSet.add(job);
+                    Job job = new Job(task.execMilli(), task.period(), task.mission());
+                    long delayMillis = Math.max(task.execMilli() - currentMilli, 0);
+                    int pos = calculatePos(currentSlot, delayMillis);
+                    if(task.period() == CANCEL_ONE_TIME_MISSION) {
+                        cancelJob(job, pos);
+                    }else if(task.period() == CANCEL_PERIOD_MISSION) {
+                        cancelPeriodJob(job);
                     }else {
-                        job.pos = (int) ((currentSlot + (delayMillis / tick)) & mask);
-                        insert(job);
+                        insertJob(job, pos, delayMillis);
                     }
                 }
             }
 
             // check if we need to scan the waiting queue
             if((currentSlot & cMask) == 0) {
-                Iterator<JobImpl> iterator = waitSet.iterator();
+                Iterator<Job> iterator = waitSet.iterator();
                 while (iterator.hasNext()) {
-                    JobImpl job = iterator.next();
-                    final long delayMillis = job.execMilli - currentMilli;
+                    Job job = iterator.next();
+                    long delayMillis = job.execMilli - currentMilli;
+                    int pos = calculatePos(currentSlot, delayMillis);
                     if(delayMillis < bound) {
                         iterator.remove();
-                        job.pos = (int) ((currentSlot + (delayMillis / tick)) & mask);
-                        insert(job);
+                        insertJob(job, pos, delayMillis);
                     }else {
                         // if current task is not for scheduling, then the following tasks won't be available
                         break;
@@ -157,90 +143,108 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
             }
             
             // processing wheel's current mission
-            JobImpl current = wheel[currentSlot];
+            Job current = wheel[currentSlot];
             while (current != null) {
-                JobImpl next = current.next;
-                // the executor thread and the canceller thread will fight for ownership, but only one would succeed
-                if(current.owner.compareAndSet(false, true)) {
-                    Thread.ofVirtual().name("wheel-job-" + counter.getAndIncrement()).start(current.mission);
-                    final long period = current.period;
-                    if(period == ONCE) {
-                        // help GC
-                        current.prev = null;
-                        current.next = null;
-                    } else {
-                        // reset current node's status
-                        current.owner.set(false);
+                if(current.pos == currentSlot) {
+                    Thread.ofVirtual().name("job").start(current.mission);
+                    long period = current.period;
+                    if(period != ONE_TIME_MISSION) {
                         current.execMilli = current.execMilli + period;
-                        current.prev = null;
-                        current.next = null;
-                        if(period >= bound) {
-                            waitSet.add(current);
-                        }else {
-                            current.pos = (int) ((currentSlot + (period / tick)) & mask);
-                            insert(current);
-                        }
+                        int pos = calculatePos(currentSlot, period);
+                        insertJob(current, pos, period);
                     }
                 }
+                Job next = current.next;
+                current.next = null;
                 current = next;
             }
+            wheel[currentSlot] = null;
             
             // park until next slot, it's safe even the value is negative
             LockSupport.parkNanos(nano - Clock.nano());
         }
     }
 
-    private void insert(JobImpl target) {
-        int pos = target.pos;
-        final JobImpl current = wheel[pos];
-        if(current != null) {
-            target.next = current;
-            current.prev = target;
+    private void cancelJob(Job job, int pos) {
+        if(!waitSet.remove(job)) {
+            Job current = wheel[pos];
+            while (current != null) {
+                if(current.mission == job.mission) {
+                    current.pos = -1;
+                    return ;
+                }else {
+                    current = current.next;
+                }
+            }
+            throw new FrameworkException(ExceptionType.WHEEL, "Wrong use of wheel");
         }
-        wheel[pos] = target;
     }
 
-    private JobImpl remove(JobImpl target) {
-        int pos = target.pos;
-        JobImpl prev = target.prev;
-        JobImpl next = target.next;
-        if(prev == null) {
-            // TODO
+    private void cancelPeriodJob(Job job) {
+        Job target = jobMap.remove(job.mission);
+        if(target != null) {
+            if(target.pos == -1) {
+                if(!waitSet.remove(target)) {
+                    throw new FrameworkException(ExceptionType.WHEEL, Constants.UNREACHED);
+                }
+            }else {
+                Job current = wheel[target.pos];
+                while (current != null) {
+                    if(current.mission == job.mission) {
+                        current.pos = -1;
+                        return ;
+                    }else {
+                        current = current.next;
+                    }
+                }
+            }
+        }else {
+            throw new FrameworkException(ExceptionType.WHEEL, "Wrong use of wheel");
         }
-        return null;
     }
 
-    private static final class JobImpl implements Job, Comparable<JobImpl> {
+    private void insertJob(Job job, int pos, long delayMillis) {
+        if(job.period != ONE_TIME_MISSION) {
+            jobMap.put(job.mission, job);
+        }
+        if(delayMillis >= bound) {
+            job.pos = -1;
+            waitSet.add(job);
+        }else {
+            job.pos = pos;
+            Job current = wheel[pos];
+            if(current != null) {
+                job.next = current;
+            }
+            wheel[pos] = job;
+        }
+    }
+
+    private int calculatePos(int currentSlot, long delayMillis) {
+        return (int) ((currentSlot + (delayMillis / tick)) & mask);
+    }
+
+    private static final class Job implements Comparable<Job> {
         private long execMilli;
         private int pos;
-        private JobImpl prev;
-        private JobImpl next;
-        private final Runnable mission;
-        private final AtomicBoolean owner = new AtomicBoolean(false);
+        private Job next;
         private final long period;
+        private final Runnable mission;
 
-        JobImpl(long execMilli, long period, Runnable runnable) {
+        Job(long execMilli, long period, Runnable runnable) {
             this.execMilli = execMilli;
             this.period = period;
             this.mission = runnable;
         }
 
-        JobImpl(long execMilli, long period, LongConsumer consumer) {
-            this.execMilli = execMilli;
-            this.period = period;
-            this.mission = () -> {
-                consumer.accept(execMilli);
-            };
+        @Override
+        public int compareTo(Job other) {
+            return Long.compare(execMilli, other.execMilli);
         }
 
         @Override
-        public boolean cancel() {
-            return owner.compareAndSet(false, true);
-        }
-
-        @Override
-        public int compareTo(JobImpl o) {
-            return Long.compare(execMilli, o.execMilli);
+        public boolean equals(Object obj) {
+            return obj instanceof Job job && mission == job.mission;
         }
     }
 }

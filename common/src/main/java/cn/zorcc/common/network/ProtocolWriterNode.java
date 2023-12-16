@@ -6,7 +6,6 @@ import cn.zorcc.common.State;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.network.api.Channel;
 import cn.zorcc.common.network.api.Protocol;
 import cn.zorcc.common.network.lib.OsNetworkLibrary;
 import cn.zorcc.common.structure.IntMap;
@@ -96,9 +95,6 @@ public final class ProtocolWriterNode implements WriterNode {
                 }else if(writerCallback != null) {
                     writerCallback.invokeOnSuccess(channel);
                 }
-            } catch (FrameworkException e) {
-                log.error("WriterNode error while sending multiple msg", e);
-                close();
             }
         }
     }

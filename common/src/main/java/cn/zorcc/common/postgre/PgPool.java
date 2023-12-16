@@ -1,6 +1,6 @@
 package cn.zorcc.common.postgre;
 
-import cn.zorcc.common.network.api.Channel;
+import cn.zorcc.common.network.Channel;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
