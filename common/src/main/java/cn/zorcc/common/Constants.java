@@ -316,6 +316,7 @@ public final class Constants {
     public static final int NET_R = Integer.MIN_VALUE | (1 << 8); // register read only
     public static final int NET_PR = Integer.MIN_VALUE | (1 << 10); // register read if possible
     public static final int NET_RW = NET_R | NET_W; // register read and write
+    public static final int NET_PRW = NET_PR | NET_PW; // register read and write if possible
     public static final int NET_PC = Integer.MIN_VALUE | (1 << 12);
     public static final int NET_WC = Integer.MIN_VALUE | (1 << 16);
 

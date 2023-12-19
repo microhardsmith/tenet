@@ -1,6 +1,7 @@
 package cn.zorcc.common.context;
 
 import cn.zorcc.common.AbstractLifeCycle;
+import cn.zorcc.common.Constants;
 import cn.zorcc.common.Context;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.structure.Wheel;
@@ -32,5 +33,12 @@ public class ContextTest {
         Thread.sleep(5000);
         exitPeriod.run();
         Thread.sleep(Long.MAX_VALUE);
+    }
+
+    @Test
+    public void testConstants() {
+        System.out.println(Constants.NET_PW);
+        System.out.println(Constants.NET_W);
+        System.out.println(Constants.NET_W << 2);
     }
 }

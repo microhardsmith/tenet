@@ -115,23 +115,27 @@ public final class ProtocolWriterNode implements WriterNode {
                 WriterCallback writerCallback = task.writerCallback();
                 int len = (int) data.byteSize();
                 int r;
-                try{
-                    r = protocol.doWrite(data, len);
-                }catch (RuntimeException e) {
-                    log.error("Failed to perform doWrite()", e);
-                    close();
-                    return ;
-                }
-                if(r > 0) {
-                    if(r == len) {
-                        if(writerCallback != null) {
-                            writerCallback.invokeOnSuccess(channel);
+                for( ; ; ) {
+                    try{
+                        r = protocol.doWrite(data, len);
+                        if(r > 0 && r < len) {
+                            len = len - r;
+                            data = data.asSlice(r, len);
+                        }else {
+                            break;
                         }
-                    }else {
-                        taskQueue.addFirst(new Task(task.arena(), data.asSlice(r, len - r), writerCallback));
+                    }catch (RuntimeException e) {
+                        log.error("Failed to perform doWrite()", e);
+                        close();
+                        return ;
+                    }
+                }
+                if(r == len) {
+                    if(writerCallback != null) {
+                        writerCallback.invokeOnSuccess(channel);
                     }
                 }else {
-                    taskQueue.addFirst(task);
+                    taskQueue.addFirst(new Task(task.arena(), data, writerCallback));
                     if(r < 0) {
                         handleEvent(r);
                     }
@@ -167,21 +171,24 @@ public final class ProtocolWriterNode implements WriterNode {
         if(taskQueue == null) {
             int len = (int) data.byteSize();
             int r;
-            try{
-                r = protocol.doWrite(data, len);
-            }catch (RuntimeException e) {
-                log.error("Failed to perform doWrite()", e);
-                close();
-                return ;
-            }
-            if(r > 0) {
-                if(r == len) {
-                    if(writerCallback != null) {
-                        writerCallback.invokeOnSuccess(channel);
+            for( ; ; ) {
+                try{
+                    r = protocol.doWrite(data, len);
+                    if(r > 0 && r < len) {
+                        len = len - r;
+                        data = data.asSlice(r, len);
+                    }else {
+                        break;
                     }
-                }else {
-                    taskQueue = new ArrayDeque<>();
-                    copyLocally(data.asSlice(r, len - r), writerCallback);
+                }catch (RuntimeException e) {
+                    log.error("Failed to perform doWrite()", e);
+                    close();
+                    return ;
+                }
+            }
+            if(r == len) {
+                if(writerCallback != null) {
+                    writerCallback.invokeOnSuccess(channel);
                 }
             }else {
                 taskQueue = new ArrayDeque<>();
@@ -211,8 +218,8 @@ public final class ProtocolWriterNode implements WriterNode {
         }
     }
 
-    private void ctl(int expected) {
-        if(ctlWithStateChecked(expected)) {
+    private void ctl(int r) {
+        if(ctlWithStateChecked(expectedState(r))) {
             close();
         }
     }
@@ -224,23 +231,22 @@ public final class ProtocolWriterNode implements WriterNode {
                 return true;
             }
             int current = state & Constants.NET_RW;
-            if(expected == Constants.NET_PW) {
-                int to = current | Constants.NET_W;
-                if(to != current) {
-                    osNetworkLibrary.ctl(channel.poller().mux(), channel.socket(), current, to);
-                    channelState.set(state + (to - current));
-                }
-            }else if(expected == Constants.NET_PR) {
-                int to = current | Constants.NET_R;
-                if(to != current) {
-                    osNetworkLibrary.ctl(channel.poller().mux(), channel.socket(), current, to);
-                    channelState.set(state + (to - current));
-                }
-            }else {
-                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+            int to = current | expected;
+            if(to != current) {
+                osNetworkLibrary.ctl(channel.poller().mux(), channel.socket(), current, to);
+                channelState.set(state + (to - current));
             }
             return false;
         }
+    }
+
+    private int expectedState(int r) {
+        return switch (r) {
+            case Constants.NET_PW -> Constants.NET_W;
+            case Constants.NET_PR -> Constants.NET_R;
+            case Constants.NET_PRW -> Constants.NET_RW;
+            default -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        };
     }
 
     private void conditionalShutdown(Duration duration) {

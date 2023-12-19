@@ -33,7 +33,7 @@ public final class SentryPollerNode implements PollerNode {
     public void onReadableEvent(MemorySegment reserved, int len) {
         try{
             handleEvent(sentry.onReadableEvent(reserved, len));
-        }catch (FrameworkException e) {
+        }catch (RuntimeException e) {
             log.error("Exception thrown in sentryPollerNode when invoking onReadableEvent()", e);
             close();
         }
@@ -43,7 +43,7 @@ public final class SentryPollerNode implements PollerNode {
     public void onWritableEvent() {
         try {
             handleEvent(sentry.onWritableEvent());
-        }catch (FrameworkException e) {
+        }catch (RuntimeException e) {
             log.error("Exception thrown in sentryPollerNode when invoking onWritableEvent()", e);
             close();
         }

@@ -43,7 +43,7 @@ public final class ProtocolPollerNode implements PollerNode {
         int r;
         try{
             r = protocol.onReadableEvent(reserved, len);
-        }catch (FrameworkException e) {
+        }catch (RuntimeException e) {
             log.error("Exception thrown in protocolPollerNode when invoking onReadableEvent()", e);
             close();
             return ;
@@ -60,7 +60,7 @@ public final class ProtocolPollerNode implements PollerNode {
         int r;
         try{
             r = protocol.onWritableEvent();
-        }catch (FrameworkException e) {
+        }catch (RuntimeException e) {
             log.error("Exception thrown in protocolPollerNode when invoking onWritableEvent()", e);
             close();
             return ;
@@ -156,7 +156,7 @@ public final class ProtocolPollerNode implements PollerNode {
         if(tempBuffer == null) {
             long len = memorySegment.byteSize();
             long readIndex = process(memorySegment);
-            if(readIndex != Integer.MIN_VALUE && readIndex < len) {
+            if(readIndex >= 0 && readIndex < len) {
                 tempBuffer = WriteBuffer.newDefaultWriteBuffer(Arena.ofConfined(), len);
                 tempBuffer.writeSegment(readIndex == 0 ? memorySegment : memorySegment.asSlice(readIndex, len - readIndex));
             }
@@ -167,7 +167,7 @@ public final class ProtocolPollerNode implements PollerNode {
             if(readIndex == len) {
                 tempBuffer.close();
                 tempBuffer = null;
-            }else if(readIndex != Integer.MIN_VALUE && readIndex != 0) {
+            }else if(readIndex > 0) {
                 tempBuffer = tempBuffer.truncate(readIndex);
             }
         }
@@ -180,7 +180,7 @@ public final class ProtocolPollerNode implements PollerNode {
         }catch (RuntimeException e) {
             log.error("Err occurred in decoder", e);
             close();
-            return Integer.MIN_VALUE;
+            return -1;
         }
         if(!entityList.isEmpty()) {
             for (Object entity : entityList) {
@@ -190,7 +190,7 @@ public final class ProtocolPollerNode implements PollerNode {
                 }catch (RuntimeException e) {
                     log.error("Err occurred in onRecv()", e);
                     close();
-                    return Integer.MIN_VALUE;
+                    return -1;
                 }
                 if(taggedResult != null) {
                     int tag = taggedResult.tag();
