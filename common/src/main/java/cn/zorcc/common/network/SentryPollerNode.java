@@ -107,6 +107,9 @@ public final class SentryPollerNode implements PollerNode {
     private void close() {
         if(nodeMap.remove(channel.socket().intValue(), this)) {
             closeSentry();
+            if(nodeMap.isEmpty()) {
+                channel.poller().submit(new PollerTask(PollerTaskType.POTENTIAL_EXIT, null, null));
+            }
         }
     }
 

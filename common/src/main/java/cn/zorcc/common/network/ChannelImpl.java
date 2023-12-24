@@ -1,5 +1,6 @@
 package cn.zorcc.common.network;
 
+import cn.zorcc.common.Carrier;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
@@ -98,11 +99,12 @@ public record ChannelImpl(
         writer.submit(new WriterTask(WriterTaskType.SINGLE_MSG, this, msg, new WriterCallback() {
             @Override
             public void onSuccess(Channel channel) {
-                Wheel.wheel().addJob(() -> channel.poller().submit(new PollerTask(PollerTaskType.TIMEOUT, channel, taggedMsg)), duration);
+                Wheel.wheel().addJob(() -> channel.poller().submit(new PollerTask(PollerTaskType.UNREGISTER, channel, taggedMsg)), duration);
             }
 
             @Override
             public void onFailure(Channel channel) {
+                taggedMsg.carrier().cas(Carrier.HOLDER, Carrier.FAILED);
                 poller.submit(new PollerTask(PollerTaskType.UNREGISTER, channel, taggedMsg));
             }
         }));
@@ -117,11 +119,12 @@ public record ChannelImpl(
         writer.submit(new WriterTask(WriterTaskType.MULTIPLE_MSG, this, msgs, new WriterCallback() {
             @Override
             public void onSuccess(Channel channel) {
-                Wheel.wheel().addJob(() -> channel.poller().submit(new PollerTask(PollerTaskType.TIMEOUT, channel, taggedMsg)), duration);
+                Wheel.wheel().addJob(() -> channel.poller().submit(new PollerTask(PollerTaskType.UNREGISTER, channel, taggedMsg)), duration);
             }
 
             @Override
             public void onFailure(Channel channel) {
+                taggedMsg.carrier().cas(Carrier.HOLDER, Carrier.FAILED);
                 poller.submit(new PollerTask(PollerTaskType.UNREGISTER, channel, taggedMsg));
             }
         }));

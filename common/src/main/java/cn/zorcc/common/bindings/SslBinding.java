@@ -5,10 +5,7 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
 
-import java.lang.foreign.FunctionDescriptor;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SymbolLookup;
-import java.lang.foreign.ValueLayout;
+import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.util.List;
 
@@ -32,6 +29,7 @@ public final class SslBinding {
     private static final MethodHandle sslCtxCheckPrivateKeyMethod;
     private static final MethodHandle sslCtxCtrlMethod;
     private static final MethodHandle sslCtxSetVerifyMethod;
+    private static final MethodHandle sslCtxSetDefaultVerifyPath;
     private static final MethodHandle sslNewMethod;
     private static final MethodHandle sslSetFdMethod;
     private static final MethodHandle sslConnectMethod;
@@ -45,6 +43,8 @@ public final class SslBinding {
     private static final MethodHandle sslGetVerifyResult;
     private static final MethodHandle sslGetPeerCertificate;
     private static final MethodHandle x509Free;
+    private static final MethodHandle errGet;
+    private static final MethodHandle errString;
 
     static {
         crypto = NativeUtil.loadLibrary(Constants.CRYPTO);
@@ -56,6 +56,7 @@ public final class SslBinding {
         sslCtxCheckPrivateKeyMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_check_private_key", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         sslCtxCtrlMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_ctrl", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
         sslCtxSetVerifyMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_set_verify", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        sslCtxSetDefaultVerifyPath = NativeUtil.methodHandle(ssl, "SSL_CTX_set_default_verify_paths", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         sslNewMethod = NativeUtil.methodHandle(ssl, "SSL_new", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         sslSetFdMethod = NativeUtil.methodHandle(ssl, "SSL_set_fd", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         sslConnectMethod = NativeUtil.methodHandle(ssl, "SSL_connect", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
@@ -69,6 +70,8 @@ public final class SslBinding {
         sslGetVerifyResult = NativeUtil.methodHandle(ssl, "SSL_get_verify_result", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
         sslGetPeerCertificate = NativeUtil.methodHandle(ssl, List.of("SSL_get_peer_certificate", "SSL_get1_peer_certificate"), FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         x509Free = NativeUtil.methodHandle(crypto, "X509_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+        errGet = NativeUtil.methodHandle(crypto, "ERR_get_error", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+        errString = NativeUtil.methodHandle(crypto, "ERR_error_string", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
     }
 
     private SslBinding() {
@@ -125,6 +128,14 @@ public final class SslBinding {
     public static void setVerify(MemorySegment ctx, int mode, MemorySegment callback) {
         try{
             sslCtxSetVerifyMethod.invokeExact(ctx, mode, callback);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static int setDefaultVerifyPath(MemorySegment ctx) {
+        try{
+            return (int) sslCtxSetDefaultVerifyPath.invokeExact(ctx);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
@@ -234,6 +245,22 @@ public final class SslBinding {
         }
     }
 
+    public static long errGet() {
+        try{
+            return (long) errGet.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static MemorySegment errString(long err, MemorySegment buf) {
+        try{
+            return (MemorySegment) errString.invokeExact(err, buf);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
     /**
      *   configure CTX for non-blocking socket with several preassigned options
      */
@@ -246,6 +273,14 @@ public final class SslBinding {
         }
         if(((~ctxCtrl(ctx, SSL_CTRL_CLEAR_MODE, Constants.SSL_MODE_AUTO_RETRY, NativeUtil.NULL_POINTER)) & Constants.SSL_MODE_AUTO_RETRY) == 0) {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        }
+    }
+
+    public static String getErrDescription() {
+        try(Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocateArray(ValueLayout.JAVA_BYTE, Constants.KB);
+            MemorySegment ptr = errString(errGet(), buf).reinterpret(Long.MAX_VALUE);
+            return NativeUtil.getStr(ptr);
         }
     }
 }

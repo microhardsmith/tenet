@@ -9,12 +9,10 @@ import cn.zorcc.common.network.lib.OsNetworkLibrary;
 
 import java.lang.foreign.MemorySegment;
 
-public final class TcpSentry implements Sentry {
+public record TcpSentry(
+        Channel channel
+) implements Sentry {
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
-    private final Channel channel;
-    public TcpSentry(Channel channel) {
-        this.channel = channel;
-    }
 
     @Override
     public int onReadableEvent(MemorySegment reserved, int len) {

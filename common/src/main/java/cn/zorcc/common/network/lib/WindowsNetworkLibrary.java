@@ -174,16 +174,16 @@ public final class WindowsNetworkLibrary implements OsNetworkLibrary {
         }
         MemorySegment winHandle = mux.winHandle();
         long fd = socket.longValue();
-        if(to == 0) {
+        if(to == Constants.NET_NONE) {
             checkInt(TenetWindowsBinding.epollCtl(winHandle, Constants.EPOLL_CTL_DEL, fd, NativeUtil.NULL_POINTER), "epollCtl");
         }else {
-            int target = ((to & Constants.NET_R) != 0 ? Constants.EPOLL_IN | Constants.EPOLL_RDHUP : 0) |
-                    ((to & Constants.NET_W) != 0 ? Constants.EPOLL_OUT : 0);
+            int target = ((to & Constants.NET_R) != Constants.NET_NONE ? (Constants.EPOLL_IN | Constants.EPOLL_RDHUP) : 0) |
+                    ((to & Constants.NET_W) != Constants.NET_NONE ? Constants.EPOLL_OUT : 0);
             try(Arena arena = Arena.ofConfined()) {
                 MemorySegment ev = arena.allocate(epollEventLayout);
                 NativeUtil.setInt(ev, eventsOffset, target);
                 NativeUtil.setLong(ev, dataOffset + sockOffset, fd);
-                checkInt(TenetWindowsBinding.epollCtl(winHandle, from == 0 ? Constants.EPOLL_CTL_ADD : Constants.EPOLL_CTL_MOD, fd, ev), "epollCtl");
+                checkInt(TenetWindowsBinding.epollCtl(winHandle, from == Constants.NET_NONE ? Constants.EPOLL_CTL_ADD : Constants.EPOLL_CTL_MOD, fd, ev), "epollCtl");
             }
         }
     }

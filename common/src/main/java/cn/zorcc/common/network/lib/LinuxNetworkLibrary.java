@@ -164,7 +164,7 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
         if(to == Constants.NET_NONE) {
             checkInt(TenetLinuxBinding.epollCtl(epfd, Constants.EPOLL_CTL_DEL, fd, NativeUtil.NULL_POINTER), "epoll_ctl");
         }else {
-            int target = ((to & Constants.NET_R) != Constants.NET_NONE ? Constants.EPOLL_IN | Constants.EPOLL_RDHUP : 0) |
+            int target = ((to & Constants.NET_R) != Constants.NET_NONE ? (Constants.EPOLL_IN | Constants.EPOLL_RDHUP) : 0) |
                     ((to & Constants.NET_W) != Constants.NET_NONE ? Constants.EPOLL_OUT : 0);
             try(Arena arena = Arena.ofConfined()) {
                 MemorySegment ev = arena.allocate(epollEventLayout);

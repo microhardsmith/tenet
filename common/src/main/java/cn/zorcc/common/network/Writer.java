@@ -34,7 +34,7 @@ public final class Writer {
 
     private Thread createWriterThread(WriterConfig writerConfig) {
         int sequence = counter.getAndIncrement();
-        return Thread.ofPlatform().name("writer-" + sequence).unstarted(() -> {
+        return Thread.ofPlatform().name(STR."writer-\{sequence}").unstarted(() -> {
             log.info(STR."Initializing writer thread, sequence : \{sequence}");
             try(Arena arena = Arena.ofConfined()){
                 IntMap<WriterNode> nodeMap = new IntMap<>(writerConfig.getMapSize());
@@ -69,7 +69,7 @@ public final class Writer {
                     }
                 }
                 case POTENTIAL_EXIT -> {
-                    if(state == Constants.CLOSING) {
+                    if(state == Constants.CLOSING && nodeMap.isEmpty()) {
                         return ;
                     }
                 }

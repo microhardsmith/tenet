@@ -1,9 +1,6 @@
 package cn.zorcc.common.postgre;
 
-import cn.zorcc.common.Constants;
-import cn.zorcc.common.ExceptionType;
-import cn.zorcc.common.ReadBuffer;
-import cn.zorcc.common.WriteBuffer;
+import cn.zorcc.common.*;
 import cn.zorcc.common.bindings.SslBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Channel;
@@ -19,14 +16,13 @@ import java.lang.foreign.MemorySegment;
 
 public final class PgSentry implements Sentry {
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
-    private static final int INITIAL = 0;
     private static final int WAITING_SSL = 1;
-    private static final int WANT_READ = 2;
-    private static final int WANT_WRITE = 3;
+    private static final int WANT_READ = 1 << 1;
+    private static final int WANT_WRITE = 1 << 2;
     private final Channel channel;
     private final MemorySegment sslCtx;
     private final PgConfig pgConfig;
-    private int state = INITIAL;
+    private final State sslState = new State(Constants.INITIAL);
     private MemorySegment ssl;
     public PgSentry(Channel channel, MemorySegment sslCtx, PgConfig pgConfig) {
         this.channel = channel;
@@ -36,7 +32,7 @@ public final class PgSentry implements Sentry {
 
     @Override
     public int onReadableEvent(MemorySegment reserved, int len) {
-        if(state == WAITING_SSL) {
+        if(sslState.unregister(WAITING_SSL)) {
             byte b = new ReadBuffer(reserved).readByte();
             if(b == Constants.PG_SSL_OK) {
                 ssl = SslBinding.sslNew(sslCtx);
@@ -50,7 +46,7 @@ public final class PgSentry implements Sentry {
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
-        }else if(state == WANT_READ) {
+        }else if(sslState.unregister(WANT_READ)) {
             return handshake();
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -59,7 +55,9 @@ public final class PgSentry implements Sentry {
 
     @Override
     public int onWritableEvent() {
-        if(state == INITIAL) {
+        if(sslState.unregister(WANT_WRITE)) {
+            return handshake();
+        }else {
             int errOpt = osNetworkLibrary.getErrOpt(channel.socket());
             if(errOpt != 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to establish postgresql connection, err opt : \{errOpt}");
@@ -73,20 +71,16 @@ public final class PgSentry implements Sentry {
                 if(sent != len) {
                     throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
                 }
-                state = WAITING_SSL;
+                sslState.register(WAITING_SSL);
                 return Constants.NET_IGNORED;
             }
-        }else if(state == WANT_WRITE) {
-            return handshake();
-        }else {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
     @Override
     public Protocol toProtocol() {
         if(ssl != null) {
-            return new SslProtocol(channel, ssl);
+            return new SslProtocol(channel, ssl, sslState);
         }else {
             return new TcpProtocol(channel);
         }
@@ -109,10 +103,10 @@ public final class PgSentry implements Sentry {
         }else {
             int err = SslBinding.sslGetErr(ssl, r);
             if(err == Constants.SSL_ERROR_WANT_READ) {
-                state = WANT_READ;
+                sslState.register(WANT_READ);
                 return Constants.NET_R;
             }else if(err == Constants.SSL_ERROR_WANT_WRITE) {
-                state = WANT_WRITE;
+                sslState.register(WANT_WRITE);
                 return Constants.NET_W;
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform SSL_handshake(), err code : \{err}");

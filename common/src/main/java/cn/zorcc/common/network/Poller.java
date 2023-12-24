@@ -45,7 +45,7 @@ public final class Poller {
 
     private Thread createPollerThread(PollerConfig pollerConfig) {
         int sequence = counter.getAndIncrement();
-        return Thread.ofPlatform().name("poller-" + sequence).unstarted(() -> {
+        return Thread.ofPlatform().name(STR."poller-\{sequence}").unstarted(() -> {
             log.info(STR."Initializing poller thread, sequence : \{sequence}");
             IntMap<PollerNode> nodeMap = new IntMap<>(pollerConfig.getMapSize());
             try(Arena arena = Arena.ofConfined()) {
@@ -108,7 +108,7 @@ public final class Poller {
                 case UNREGISTER -> handleUnregisterMsg(nodeMap, pollerTask);
                 case CLOSE -> handleCloseMsg(nodeMap, pollerTask);
                 case POTENTIAL_EXIT -> {
-                    if(currentState == Constants.CLOSING) {
+                    if(currentState == Constants.CLOSING && nodeMap.isEmpty()) {
                         return Constants.STOPPED;
                     }
                 }

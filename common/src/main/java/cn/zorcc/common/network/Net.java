@@ -36,16 +36,13 @@ public final class Net extends AbstractLifeCycle {
     /**
      *   Default client connect timeout, could be modified according to your scenario
      */
-    private static final DurationWithCallback DEFAULT_DURATION_WITH_CALLBACK = new DurationWithCallback(Duration.ofSeconds(5), null);
-    /**
-     *   Default graceful shutdown timeout, could be modified according to your scenario
-     */
-    private static final Duration defaultGracefulShutdownTimeout = Duration.ofSeconds(30);
+    private static final DurationWithCallback defaultDurationWithCallback = new DurationWithCallback(Duration.ofSeconds(5), null);
     private final State state = new State(Constants.INITIAL);
     private final Mux mux = osNetworkLibrary.createMux();
     private final Set<Provider> providers = new HashSet<>(List.of(tcpProvider, sslProvider));
     private final List<Poller> pollers;
     private final List<Writer> writers;
+    private final Duration shutdownTimeout;
     private final Thread netThread;
     private final Queue<Listener> netQueue = new MpscLinkedAtomicQueue<>();
 
@@ -162,6 +159,7 @@ public final class Net extends AbstractLifeCycle {
         }
         this.pollers = IntStream.range(0, pollerCount).mapToObj(_ -> new Poller(pollerConfig)).toList();
         this.writers = IntStream.range(0, writerCount).mapToObj(_ -> new Writer(writerConfig)).toList();
+        this.shutdownTimeout = Duration.ofSeconds(netConfig.getGracefulShutdownTimeout());
         this.netThread = createNetThread(netConfig);
     }
 
@@ -188,13 +186,11 @@ public final class Net extends AbstractLifeCycle {
     }
 
     public void addProvider(Provider provider) {
-        if(provider != tcpProvider && provider != sslProvider) {
-            try(Mutex _ = state.withMutex()) {
-                if(state.get() > Constants.RUNNING) {
-                    throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-                }
-                providers.add(provider);
+        try(Mutex _ = state.withMutex()) {
+            if(state.get() > Constants.RUNNING) {
+                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
+            providers.add(provider);
         }
     }
 
@@ -228,7 +224,7 @@ public final class Net extends AbstractLifeCycle {
     }
 
     public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Provider provider, SocketConfig socketConfig) {
-        connect(loc, encoder, decoder, handler, provider, socketConfig, DEFAULT_DURATION_WITH_CALLBACK);
+        connect(loc, encoder, decoder, handler, provider, socketConfig, defaultDurationWithCallback);
     }
 
     public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Provider provider, DurationWithCallback durationWithCallback) {
@@ -236,7 +232,7 @@ public final class Net extends AbstractLifeCycle {
     }
 
     public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Provider provider) {
-        connect(loc, encoder, decoder, handler, provider, defaultSocketConfig, DEFAULT_DURATION_WITH_CALLBACK);
+        connect(loc, encoder, decoder, handler, provider, defaultSocketConfig, defaultDurationWithCallback);
     }
 
     @Override
@@ -259,14 +255,14 @@ public final class Net extends AbstractLifeCycle {
             long nano = Clock.nano();
             int current = state.get();
             if(current != Constants.RUNNING) {
-                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+                return ;
             }
             state.set(Constants.CLOSING);
             if (!netQueue.offer(defaultListener)) {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
             netThread.join();
-            pollers.forEach(poller -> poller.submit(new PollerTask(PollerTaskType.EXIT, null, defaultGracefulShutdownTimeout)));
+            pollers.forEach(poller -> poller.submit(new PollerTask(PollerTaskType.EXIT, null, shutdownTimeout)));
             writers.forEach(writer -> writer.submit(new WriterTask(WriterTaskType.EXIT, null, null, null)));
             for (Poller poller : pollers) {
                 poller.thread().join();

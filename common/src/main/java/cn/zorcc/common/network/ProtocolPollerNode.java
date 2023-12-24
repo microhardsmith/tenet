@@ -99,13 +99,16 @@ public final class ProtocolPollerNode implements PollerNode {
         if(pollerTask.channel() == channel && pollerTask.msg() instanceof TaggedMsg taggedMsg) {
             int tag = taggedMsg.tag();
             if(tag == Channel.SEQ) {
-                if(taggedMsg.carrier() == carrier) {
+                if(carrier != null && taggedMsg.carrier() == carrier) {
                     carrier.cas(Carrier.HOLDER, Carrier.FAILED);
                     carrier = null;
                 }
             }else if(msgMap != null) {
                 if(msgMap.remove(tag, taggedMsg)) {
                     taggedMsg.carrier().cas(Carrier.HOLDER, Carrier.FAILED);
+                    if(msgMap.isEmpty()) {
+                        msgMap = null;
+                    }
                 }
             }
         }
@@ -197,6 +200,7 @@ public final class ProtocolPollerNode implements PollerNode {
                     if(tag == Channel.SEQ) {
                         if(carrier != null) {
                             carrier.cas(Carrier.HOLDER, taggedResult.entity());
+                            carrier = null;
                         }
                     }else {
                         TaggedMsg taggedMsg = msgMap.get(tag);
@@ -236,8 +240,10 @@ public final class ProtocolPollerNode implements PollerNode {
                 }
                 channelState.set(state | Constants.NET_PC);
                 if((state & Constants.NET_WC) == Constants.NET_WC) {
+                    log.info("Poller close finally");
                     closeProtocol();
                 }else {
+                    log.info("Poller tell writer to close now");
                     channel.writer().submit(new WriterTask(WriterTaskType.CLOSE, channel, null, null));
                 }
             }

@@ -18,11 +18,7 @@ public enum PollerTaskType {
      */
     UNREGISTER,
     /**
-     *   Indicates a taggedMsg has been timeout
-     */
-    TIMEOUT,
-    /**
-     *   Force close a underlying channel
+     *   Force close an underlying channel
      */
     CLOSE,
     /**

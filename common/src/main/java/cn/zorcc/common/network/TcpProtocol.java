@@ -8,12 +8,10 @@ import cn.zorcc.common.network.lib.OsNetworkLibrary;
 
 import java.lang.foreign.MemorySegment;
 
-public final class TcpProtocol implements Protocol {
+public record TcpProtocol(
+        Channel channel
+) implements Protocol {
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
-    private final Channel channel;
-    public TcpProtocol(Channel channel) {
-        this.channel = channel;
-    }
 
     @Override
     public int onReadableEvent(MemorySegment reserved, int len) {
@@ -43,7 +41,7 @@ public final class TcpProtocol implements Protocol {
                 throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform send(), errno : \{errno}");
             }
         }else {
-            return -r;
+            return r;
         }
     }
 

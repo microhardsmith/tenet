@@ -11,7 +11,11 @@ import cn.zorcc.common.structure.Mutex;
 
 import java.lang.foreign.MemorySegment;
 
-public class SslProtocol implements Protocol {
+public record SslProtocol(
+        Channel channel,
+        MemorySegment ssl,
+        State sslState
+) implements Protocol {
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
     /**
      *   We don't need RECV_WANT_READ or RECV_WANT_WRITE here
@@ -21,14 +25,6 @@ public class SslProtocol implements Protocol {
      */
     private static final int SEND_WANT_READ = 1 << 4;
     private static final int SEND_WANT_WRITE = 1 << 8;
-    private final Channel channel;
-    private final MemorySegment ssl;
-    private final State sslState = new State(Constants.INITIAL);
-
-    public SslProtocol(Channel channel, MemorySegment ssl) {
-        this.channel = channel;
-        this.ssl = ssl;
-    }
 
     @Override
     public int onReadableEvent(MemorySegment reserved, int len) {

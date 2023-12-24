@@ -20,6 +20,8 @@ public class EchoTest {
     private static final Loc serverLoc = new Loc(IpType.IPV6, port);
     private static final Loc clientIpv4Loc = new Loc(IpType.IPV4, "127.0.0.1", port);
     private static final Loc clientIpv6Loc = new Loc(IpType.IPV6, "::1", port);
+    private static final String PUBLIC_KEY_FILE = "C:/workspace/ca/server.crt";
+    private static final String PRIVATE_KEY_FILE = "C:/workspace/ca/server.key";
 
     @Test
     public void testIpv6EchoClient() throws InterruptedException {
@@ -27,6 +29,15 @@ public class EchoTest {
         Context.load(netClient, Net.class);
         Context.init();
         netClient.connect(clientIpv6Loc, new EchoEncoder(), new EchoDecoder(), new EchoClientHandler(), Net.tcpProvider());
+        Thread.sleep(Long.MAX_VALUE);
+    }
+
+    @Test
+    public void testIpv6EchoClientWithSsl() throws InterruptedException {
+        Net netClient = createEchoNetClient();
+        Context.load(netClient, Net.class);
+        Context.init();
+        netClient.connect(clientIpv6Loc, new EchoEncoder(), new EchoDecoder(), new EchoClientHandler(), Net.sslProvider());
         Thread.sleep(Long.MAX_VALUE);
     }
 
@@ -40,8 +51,25 @@ public class EchoTest {
     }
 
     @Test
+    public void testIpv4EchoClientWithSsl() throws InterruptedException {
+        Net netClient = createEchoNetClient();
+        Context.load(netClient, Net.class);
+        Context.init();
+        netClient.connect(clientIpv4Loc, new EchoEncoder(), new EchoDecoder(), new EchoClientHandler(), Net.sslProvider());
+        Thread.sleep(Long.MAX_VALUE);
+    }
+
+    @Test
     public void testEchoServer() throws InterruptedException {
-        Net netServer = createEchoNetServer();
+        Net netServer = createEchoNetServer(false);
+        Context.load(netServer, Net.class);
+        Context.init();
+        Thread.sleep(Long.MAX_VALUE);
+    }
+
+    @Test
+    public void testEchoServerWithSsl() throws InterruptedException {
+        Net netServer = createEchoNetServer(true);
         Context.load(netServer, Net.class);
         Context.init();
         Thread.sleep(Long.MAX_VALUE);
@@ -81,12 +109,16 @@ public class EchoTest {
         }
     }
 
-    private static Net createEchoNetServer() {
+    private static Net createEchoNetServer(boolean usingSsl) {
         ListenerConfig listenerConfig = new ListenerConfig();
         listenerConfig.setEncoderSupplier(EchoEncoder::new);
         listenerConfig.setDecoderSupplier(EchoDecoder::new);
         listenerConfig.setHandlerSupplier(EchoServerHandler::new);
-        listenerConfig.setProvider(Net.tcpProvider());
+        if(usingSsl) {
+            listenerConfig.setProvider(SslProvider.newServerProvider(PUBLIC_KEY_FILE, PRIVATE_KEY_FILE));
+        }else {
+            listenerConfig.setProvider(Net.tcpProvider());
+        }
         listenerConfig.setLoc(serverLoc);
         Net net = new Net();
         net.addServerListener(listenerConfig);

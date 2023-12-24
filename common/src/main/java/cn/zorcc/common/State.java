@@ -30,7 +30,7 @@ public final class State {
     }
 
     public boolean unregister(int mask) {
-        boolean r = (state & mask) > 0;
+        boolean r = (state & mask) != 0;
         state &= ~mask;
         return r;
     }

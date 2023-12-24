@@ -301,7 +301,7 @@ public final class ProtocolWriterNode implements WriterNode {
             try (Mutex _ = channelState.withMutex()) {
                 int current = channelState.get();
                 channelState.set(current | Constants.NET_WC);
-                if((current & Constants.NET_PC) > 0) {
+                if((current & Constants.NET_PC) == Constants.NET_PC) {
                     closeProtocol();
                 }else {
                     channel.poller().submit(new PollerTask(PollerTaskType.CLOSE, channel, null));

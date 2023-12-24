@@ -2,8 +2,10 @@ package cn.zorcc.common.network;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
+import cn.zorcc.common.State;
 import cn.zorcc.common.bindings.SslBinding;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.api.Protocol;
 import cn.zorcc.common.network.api.Sentry;
 import cn.zorcc.common.network.lib.OsNetworkLibrary;
@@ -11,25 +13,23 @@ import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.MemorySegment;
 
-public final class SslSentry implements Sentry {
+public record SslSentry(
+        Channel channel,
+        boolean clientSide,
+        MemorySegment ssl,
+        State sslState
+) implements Sentry {
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
-    private static final int INITIAL = 0;
-    private static final int WANT_READ = 1;
-    private static final int WANT_WRITE = 2;
-    private final Channel channel;
-    private final boolean clientSide;
-    private final MemorySegment ssl;
-    private int state = INITIAL;
-
+    private static final Logger log = new Logger(SslSentry.class);
+    private static final int WANT_READ = 1 << 1;
+    private static final int WANT_WRITE = 1 << 2;
     public SslSentry(Channel channel, boolean clientSide, MemorySegment ssl) {
-        this.channel = channel;
-        this.clientSide = clientSide;
-        this.ssl = ssl;
+        this(channel, clientSide, ssl, new State(Constants.INITIAL));
     }
 
     @Override
     public int onReadableEvent(MemorySegment reserved, int len) {
-        if(state == WANT_READ) {
+        if(sslState.unregister(WANT_READ)) {
             return handshake();
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -38,7 +38,9 @@ public final class SslSentry implements Sentry {
 
     @Override
     public int onWritableEvent() {
-        if(state == INITIAL) {
+        if(sslState.unregister(WANT_WRITE)) {
+            return handshake();
+        }else {
             Socket socket = channel.socket();
             int errOpt = osNetworkLibrary.getErrOpt(socket);
             if(errOpt == 0) {
@@ -51,16 +53,12 @@ public final class SslSentry implements Sentry {
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to establish connection, err opt : \{errOpt}");
             }
-        }else if(state == WANT_WRITE) {
-            return handshake();
-        }else {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
     @Override
     public Protocol toProtocol() {
-        return new SslProtocol(channel, ssl);
+        return new SslProtocol(channel, ssl, sslState);
     }
 
     @Override
@@ -78,13 +76,15 @@ public final class SslSentry implements Sentry {
         }else {
             int err = SslBinding.sslGetErr(ssl, r);
             if(err == Constants.SSL_ERROR_WANT_READ) {
-                state = WANT_READ;
+                log.info("Register read");
+                sslState.register(WANT_READ);
                 return Constants.NET_R;
             }else if(err == Constants.SSL_ERROR_WANT_WRITE) {
-                state = WANT_WRITE;
+                log.info("Register write");
+                sslState.register(WANT_WRITE);
                 return Constants.NET_W;
             }else {
-                throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform SSL_handshake(), err code : \{err}");
+                throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform SSL_handshake(), return value : \{r}, err code : \{err}, description : \{SslBinding.getErrDescription()}, errno : \{OsNetworkLibrary.CURRENT.errno()}}");
             }
         }
     }

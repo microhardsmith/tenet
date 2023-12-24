@@ -23,6 +23,11 @@ public final class NetConfig {
      */
     private int mapSize = 64;
 
+    /**
+     *  Graceful shutdown timeout in seconds
+     */
+    private int gracefulShutdownTimeout = 30;
+
     public int getMaxEvents() {
         return maxEvents;
     }
@@ -53,5 +58,13 @@ public final class NetConfig {
 
     public void setMapSize(int mapSize) {
         this.mapSize = mapSize;
+    }
+
+    public int getGracefulShutdownTimeout() {
+        return gracefulShutdownTimeout;
+    }
+
+    public void setGracefulShutdownTimeout(int gracefulShutdownTimeout) {
+        this.gracefulShutdownTimeout = gracefulShutdownTimeout;
     }
 }
