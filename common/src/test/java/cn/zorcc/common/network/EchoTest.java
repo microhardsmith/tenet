@@ -20,8 +20,8 @@ public class EchoTest {
     private static final Loc serverLoc = new Loc(IpType.IPV6, port);
     private static final Loc clientIpv4Loc = new Loc(IpType.IPV4, "127.0.0.1", port);
     private static final Loc clientIpv6Loc = new Loc(IpType.IPV6, "::1", port);
-    private static final String PUBLIC_KEY_FILE = "C:/workspace/ca/server.crt";
-    private static final String PRIVATE_KEY_FILE = "C:/workspace/ca/server.key";
+    private static final String PUBLIC_KEY_FILE = "/Users/liuxichen/ca/server.crt";
+    private static final String PRIVATE_KEY_FILE = "/Users/liuxichen/ca/server.key";
 
     @Test
     public void testIpv6EchoClient() throws InterruptedException {
@@ -85,7 +85,8 @@ public class EchoTest {
         @Override
         public void onConnected(Channel channel) {
             log.info("Client channel connected");
-            Wheel.wheel().addPeriodicJob(() -> channel.sendMsg(STR."Hello : \{counter.getAndIncrement()}"), Duration.ZERO, Duration.ofSeconds(1));
+            //Wheel.wheel().addPeriodicJob(() -> channel.sendMsg(STR."Hello : \{counter.getAndIncrement()}"), Duration.ZERO, Duration.ofSeconds(60));
+            Wheel.wheel().addJob(() -> channel.shutdown(Duration.ofSeconds(1000)), Duration.ofSeconds(5));
         }
 
         @Override

@@ -20,7 +20,6 @@ public record SslSentry(
         State sslState
 ) implements Sentry {
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
-    private static final Logger log = new Logger(SslSentry.class);
     private static final int WANT_READ = 1 << 1;
     private static final int WANT_WRITE = 1 << 2;
     public SslSentry(Channel channel, boolean clientSide, MemorySegment ssl) {
@@ -48,7 +47,7 @@ public record SslSentry(
                 if(r == 1) {
                     return handshake();
                 }else {
-                    throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform sslSetFd(), err code : \{SslBinding.sslGetErr(ssl, r)}");
+                    return SslBinding.throwException(SslBinding.sslGetErr(ssl, r), "SSL_set_fd()");
                 }
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to establish connection, err opt : \{errOpt}");
@@ -76,21 +75,19 @@ public record SslSentry(
         }else {
             int err = SslBinding.sslGetErr(ssl, r);
             if(err == Constants.SSL_ERROR_WANT_READ) {
-                log.info("Register read");
                 sslState.register(WANT_READ);
                 return Constants.NET_R;
             }else if(err == Constants.SSL_ERROR_WANT_WRITE) {
-                log.info("Register write");
                 sslState.register(WANT_WRITE);
                 return Constants.NET_W;
             }else {
-                throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform SSL_handshake(), return value : \{r}, err code : \{err}, description : \{SslBinding.getErrDescription()}, errno : \{OsNetworkLibrary.CURRENT.errno()}}");
+                return SslBinding.throwException(err, "SSL_handshake()");
             }
         }
     }
 
     private int verifyCertificate() {
-        if(!clientSide) {
+        if(clientSide) {
             MemorySegment x509 = SslBinding.sslGetPeerCertificate(ssl);
             if(NativeUtil.checkNullPointer(x509)) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Server certificate not provided");

@@ -27,7 +27,7 @@ public final class Net extends AbstractLifeCycle {
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
     private static final AtomicInteger counter = new AtomicInteger(0);
     private static final Provider tcpProvider = new TcpProvider();
-    private static final Provider sslProvider = SslProvider.newClientProvider();
+    private static final Provider sslProvider = SslProvider.newClientProvider(System.getProperty(Constants.CA_FILE), System.getProperty(Constants.CA_DIR));
     private static final Listener defaultListener = new Listener(null, null, null, null, null, null, null, null);
     private static final NetConfig defaultNetConfig = new NetConfig();
     private static final PollerConfig defaultPollerConfig = new PollerConfig();

@@ -3,6 +3,7 @@ package cn.zorcc.common.bindings;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.network.lib.OsNetworkLibrary;
 import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.*;
@@ -30,6 +31,7 @@ public final class SslBinding {
     private static final MethodHandle sslCtxCtrlMethod;
     private static final MethodHandle sslCtxSetVerifyMethod;
     private static final MethodHandle sslCtxSetDefaultVerifyPath;
+    private static final MethodHandle sslCtxLoadVerifyLocations;
     private static final MethodHandle sslNewMethod;
     private static final MethodHandle sslSetFdMethod;
     private static final MethodHandle sslConnectMethod;
@@ -57,6 +59,7 @@ public final class SslBinding {
         sslCtxCtrlMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_ctrl", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
         sslCtxSetVerifyMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_set_verify", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         sslCtxSetDefaultVerifyPath = NativeUtil.methodHandle(ssl, "SSL_CTX_set_default_verify_paths", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        sslCtxLoadVerifyLocations = NativeUtil.methodHandle(ssl, "SSL_CTX_load_verify_locations", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         sslNewMethod = NativeUtil.methodHandle(ssl, "SSL_new", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         sslSetFdMethod = NativeUtil.methodHandle(ssl, "SSL_set_fd", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         sslConnectMethod = NativeUtil.methodHandle(ssl, "SSL_connect", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
@@ -136,6 +139,14 @@ public final class SslBinding {
     public static int setDefaultVerifyPath(MemorySegment ctx) {
         try{
             return (int) sslCtxSetDefaultVerifyPath.invokeExact(ctx);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static int loadVerifyLocations(MemorySegment ctx, MemorySegment caFile, MemorySegment caPath) {
+        try{
+            return (int) sslCtxLoadVerifyLocations.invokeExact(ctx, caFile, caPath);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
@@ -281,6 +292,16 @@ public final class SslBinding {
             MemorySegment buf = arena.allocateArray(ValueLayout.JAVA_BYTE, Constants.KB);
             MemorySegment ptr = errString(errGet(), buf).reinterpret(Long.MAX_VALUE);
             return NativeUtil.getStr(ptr);
+        }
+    }
+
+    public static int throwException(int err, String operation) {
+        if(err == Constants.SSL_ERROR_SSL){
+            throw new FrameworkException(ExceptionType.NETWORK, STR."\{operation} failed with SSL_ERROR_SSL, message : \{SslBinding.getErrDescription()}");
+        }else if(err == Constants.SSL_ERROR_SYSCALL) {
+            throw new FrameworkException(ExceptionType.NETWORK, STR."\{operation} failed with SSL_ERROR_SYSCALL, message : \{SslBinding.getErrDescription()}, errno : \{OsNetworkLibrary.CURRENT.errno()}");
+        }else {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 }

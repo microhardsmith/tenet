@@ -25,6 +25,8 @@ public record SslProtocol(
      */
     private static final int SEND_WANT_READ = 1 << 4;
     private static final int SEND_WANT_WRITE = 1 << 8;
+    private static final int LOCAL_INITIATED_SHUTDOWN = 1 << 12;
+    private static final int REMOTE_INITIATED_SHUTDOWN = 1 << 16;
 
     @Override
     public int onReadableEvent(MemorySegment reserved, int len) {
@@ -40,9 +42,12 @@ public record SslProtocol(
                 }else if(err == Constants.SSL_ERROR_WANT_WRITE) {
                     return Constants.NET_W;
                 }else if(err == Constants.SSL_ERROR_ZERO_RETURN) {
+                    if(!sslState.unregister(LOCAL_INITIATED_SHUTDOWN)) {
+                        sslState.register(REMOTE_INITIATED_SHUTDOWN);
+                    }
                     return 0;
                 }else {
-                    throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform SSL_read(), err code : \{err}");
+                    return SslBinding.throwException(err, "SSL_read()");
                 }
             }else {
                 return received;
@@ -73,7 +78,7 @@ public record SslProtocol(
                     sslState.register(SEND_WANT_WRITE);
                     return Constants.NET_PW;
                 }else {
-                    throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform SSL_write(), err code : \{err}");
+                    return SslBinding.throwException(err, "SSL_write()");
                 }
             }else {
                 return written;
@@ -84,6 +89,7 @@ public record SslProtocol(
     @Override
     public void doShutdown() {
         try(Mutex _ = sslState.withMutex()) {
+            sslState.register(LOCAL_INITIATED_SHUTDOWN);
             int r = SslBinding.sslShutdown(ssl);
             if(r < 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform SSL_shutdown(), err code : \{SslBinding.sslGetErr(ssl, r)}");
@@ -93,9 +99,14 @@ public record SslProtocol(
 
     @Override
     public void doClose() {
-        SslBinding.sslFree(ssl);
-        if(osNetworkLibrary.closeSocket(channel.socket()) != 0) {
-            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to close socket, errno : \{osNetworkLibrary.errno()}");
+        try(Mutex _ = sslState.withMutex()) {
+            if(sslState.unregister(REMOTE_INITIATED_SHUTDOWN)) {
+                SslBinding.sslShutdown(ssl);
+            }
+            SslBinding.sslFree(ssl);
+            if(osNetworkLibrary.closeSocket(channel.socket()) != 0) {
+                throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to close socket, errno : \{osNetworkLibrary.errno()}");
+            }
         }
     }
 }

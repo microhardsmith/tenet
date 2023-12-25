@@ -16,8 +16,26 @@ public record SslProvider(
         MemorySegment ctx
 ) implements Provider {
 
-    public static SslProvider newClientProvider() {
+    public static SslProvider newClientProvider(String caFiles, String caPaths) {
         MemorySegment ctx = createCtx();
+        try (Arena arena = Arena.ofConfined()) {
+            if(caFiles != null && !caFiles.isBlank()) {
+                for (String caFile : caFiles.split(",")) {
+                    MemorySegment file = NativeUtil.allocateStr(arena, caFile);
+                    if(SslBinding.loadVerifyLocations(ctx, file, NativeUtil.NULL_POINTER) != 1) {
+                        throw new FrameworkException(ExceptionType.NETWORK, STR."Can't load verify file : \{caFile}");
+                    }
+                }
+            }
+            if(caPaths != null && !caPaths.isBlank()) {
+                for (String caPath : caPaths.split(",")) {
+                    MemorySegment path = NativeUtil.allocateStr(arena, caPath);
+                    if(SslBinding.loadVerifyLocations(ctx, NativeUtil.NULL_POINTER, path) != 1) {
+                        throw new FrameworkException(ExceptionType.NETWORK, STR."Can't load verify dir : \{caPath}");
+                    }
+                }
+            }
+        }
         if(SslBinding.setDefaultVerifyPath(ctx) != 1) {
             throw new FrameworkException(ExceptionType.NETWORK, "Can't set default verify path");
         }

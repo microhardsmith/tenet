@@ -240,10 +240,8 @@ public final class ProtocolPollerNode implements PollerNode {
                 }
                 channelState.set(state | Constants.NET_PC);
                 if((state & Constants.NET_WC) == Constants.NET_WC) {
-                    log.info("Poller close finally");
                     closeProtocol();
                 }else {
-                    log.info("Poller tell writer to close now");
                     channel.writer().submit(new WriterTask(WriterTaskType.CLOSE, channel, null, null));
                 }
             }

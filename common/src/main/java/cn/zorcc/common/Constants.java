@@ -25,6 +25,8 @@ public final class Constants {
     public static final String SQLITE = "sqlite";
     public static final String DUCKDB = "duckdb";
     public static final String TENET_LIBRARY_PATH = "TENET_LIBRARY_PATH";
+    public static final String CA_FILE = "CA_FILE";
+    public static final String CA_DIR = "CA_DIR";
     public static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
     public static final String GET = "get";
     public static final String SET = "set";
@@ -324,8 +326,10 @@ public final class Constants {
      *   Ssl library
      */
     public static final int SSL_FILETYPE_PEM = 1;
+    public static final int SSL_ERROR_SSL = 1;
     public static final int SSL_ERROR_WANT_READ = 2;
     public static final int SSL_ERROR_WANT_WRITE = 3;
+    public static final int SSL_ERROR_SYSCALL = 5;
     public static final int SSL_ERROR_ZERO_RETURN = 6;
     public static final long SSL_MODE_ENABLE_PARTIAL_WRITE = 1L;
     public static final long SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER = 2L;
