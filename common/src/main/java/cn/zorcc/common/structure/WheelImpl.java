@@ -120,6 +120,7 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
                     }else if(task.period() == CANCEL_PERIOD_MISSION) {
                         cancelPeriodJob(job);
                     }else {
+                        registerPeriodJobIfNeeded(job);
                         insertJob(job, pos, delayMillis);
                     }
                 }
@@ -134,6 +135,7 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
                     int pos = calculatePos(currentSlot, delayMillis);
                     if(delayMillis < bound) {
                         iterator.remove();
+                        registerPeriodJobIfNeeded(job);
                         insertJob(job, pos, delayMillis);
                     }else {
                         // if current task is not for scheduling, then the following tasks won't be available
@@ -145,6 +147,7 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
             // processing wheel's current mission
             Job current = wheel[currentSlot];
             while (current != null) {
+                Job next = current.next;
                 if(current.pos == currentSlot) {
                     Thread.ofVirtual().name("job").start(current.mission);
                     long period = current.period;
@@ -152,10 +155,12 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
                         current.execMilli = current.execMilli + period;
                         int pos = calculatePos(currentSlot, period);
                         insertJob(current, pos, period);
+                    }else {
+                        current.next = null;
                     }
+                }else {
+                    current.next = null;
                 }
-                Job next = current.next;
-                current.next = null;
                 current = next;
             }
             wheel[currentSlot] = null;
@@ -203,10 +208,13 @@ public final class WheelImpl extends AbstractLifeCycle implements Wheel {
         }
     }
 
-    private void insertJob(Job job, int pos, long delayMillis) {
+    private void registerPeriodJobIfNeeded(Job job) {
         if(job.period != ONE_TIME_MISSION) {
             jobMap.put(job.mission, job);
         }
+    }
+
+    private void insertJob(Job job, int pos, long delayMillis) {
         if(delayMillis >= bound) {
             job.pos = -1;
             waitSet.add(job);

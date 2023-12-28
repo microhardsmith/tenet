@@ -49,11 +49,11 @@ public final class NativeUtil {
     private static final Arena autoArena = Arena.ofAuto();
     private static final ByteOrder byteOrder = ByteOrder.nativeOrder();
     private static final VarHandle byteHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_BYTE);
-    private static final VarHandle shortHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_SHORT);
-    private static final VarHandle intHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_INT);
-    private static final VarHandle longHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_LONG);
-    private static final VarHandle floatHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_FLOAT);
-    private static final VarHandle doubleHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_DOUBLE);
+    private static final VarHandle shortHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_SHORT_UNALIGNED);
+    private static final VarHandle intHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_INT_UNALIGNED);
+    private static final VarHandle longHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_LONG_UNALIGNED);
+    private static final VarHandle floatHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_FLOAT_UNALIGNED);
+    private static final VarHandle doubleHandle = MethodHandles.memorySegmentViewVarHandle(ValueLayout.JAVA_DOUBLE_UNALIGNED);
     private static final VarHandle shortArrayHandle = MethodHandles.byteArrayViewVarHandle(short[].class, byteOrder);
     private static final VarHandle intArrayHandle = MethodHandles.byteArrayViewVarHandle(int[].class, byteOrder);
     private static final VarHandle longArrayHandle = MethodHandles.byteArrayViewVarHandle(long[].class, byteOrder);

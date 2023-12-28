@@ -19,6 +19,7 @@ import java.util.zip.*;
  *   In general, JDK's implementation is a little faster when dataset is small, could be twice slower if the dataset was larger
  *   The compression and decompression speed of gzip and deflate algorithm are quite slow compared to other technic like zstd
  */
+@SuppressWarnings("unused")
 public final class CompressUtil {
     private static final Arena autoArena = NativeUtil.autoArena();
     private static final int CHUNK_SIZE = 4 * Constants.KB;
@@ -28,11 +29,12 @@ public final class CompressUtil {
         throw new UnsupportedOperationException();
     }
 
+    /**
+     *   When using libdeflate, level should between DeflateBinding.LIBDEFLATE_SLOWEST_LEVEL and DeflateBinding.LIBDEFLATE_FASTEST_LEVEL
+     */
     public static MemorySegment compressUsingDeflate(MemorySegment input, int level) {
         MemorySegment in = NativeUtil.toNativeSegment(input);
-        if(level < DeflateBinding.LIBDEFLATE_FASTEST_LEVEL || level > DeflateBinding.LIBDEFLATE_SLOWEST_LEVEL) {
-            throw new FrameworkException(ExceptionType.COMPRESS, "Unsupported level");
-        }
+        level = level >= DeflateBinding.LIBDEFLATE_FASTEST_LEVEL && level <= DeflateBinding.LIBDEFLATE_SLOWEST_LEVEL ? level : DeflateBinding.LIBDEFLATE_DEFAULT_LEVEL;
         long inBytes = in.byteSize();
         MemorySegment compressor = DeflateBinding.allocCompressor(level);
         try{
@@ -50,9 +52,7 @@ public final class CompressUtil {
 
     public static MemorySegment compressUsingGzip(MemorySegment input, int level) {
         MemorySegment in = NativeUtil.toNativeSegment(input);
-        if(level < DeflateBinding.LIBDEFLATE_FASTEST_LEVEL || level > DeflateBinding.LIBDEFLATE_SLOWEST_LEVEL) {
-            throw new FrameworkException(ExceptionType.COMPRESS, "Unsupported level");
-        }
+        level = level >= DeflateBinding.LIBDEFLATE_FASTEST_LEVEL && level <= DeflateBinding.LIBDEFLATE_SLOWEST_LEVEL ? level : DeflateBinding.LIBDEFLATE_DEFAULT_LEVEL;
         long inBytes = in.byteSize();
         MemorySegment compressor = DeflateBinding.allocCompressor(level);
         try{
@@ -135,7 +135,9 @@ public final class CompressUtil {
     }
 
 
-    @SuppressWarnings("unused")
+    /**
+     *   When using gzip and deflate implemented by JDK, level should between Deflater.BEST_SPEED and Deflater.BEST_COMPRESSION
+     */
     public static byte[] compressUsingJdkGzip(final byte[] rawData) {
         return compressUsingJdkGzip(rawData, Deflater.DEFAULT_COMPRESSION);
     }
@@ -165,7 +167,7 @@ public final class CompressUtil {
         }
     }
 
-    @SuppressWarnings("unused")
+
     public static byte[] compressUsingJdkDeflate(final byte[] rawData) {
         return compressUsingJdkDeflate(rawData, Deflater.DEFAULT_COMPRESSION);
     }

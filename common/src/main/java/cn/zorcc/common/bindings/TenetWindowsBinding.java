@@ -5,10 +5,7 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
 
-import java.lang.foreign.FunctionDescriptor;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SymbolLookup;
-import java.lang.foreign.ValueLayout;
+import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 
 public final class TenetWindowsBinding {
@@ -51,14 +48,14 @@ public final class TenetWindowsBinding {
 
     static {
         SymbolLookup symbolLookup = NativeUtil.loadLibrary(Constants.TENET);
-        connectBlockCodeMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_connect_block_code", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        sendBlockCodeMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_send_block_code", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        interruptCodeMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_interrupt_code", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        invalidSocketMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_invalid_socket", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
-        ipv4AddressLenMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv4_address_len", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        ipv6AddressLenMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv6_address_len", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        ipv4AddressSizeMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv4_address_size", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        ipv6AddressSizeMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv6_address_size", FunctionDescriptor.of(ValueLayout.JAVA_INT));
+        connectBlockCodeMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_connect_block_code", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+        sendBlockCodeMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_send_block_code", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+        interruptCodeMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_interrupt_code", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+        invalidSocketMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_invalid_socket", FunctionDescriptor.of(ValueLayout.JAVA_LONG), Linker.Option.isTrivial());
+        ipv4AddressLenMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv4_address_len", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+        ipv6AddressLenMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv6_address_len", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+        ipv4AddressSizeMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv4_address_size", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+        ipv6AddressSizeMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv6_address_size", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
         epollCreateMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_epoll_create", FunctionDescriptor.of(ValueLayout.ADDRESS));
         epollCtlMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_epoll_ctl", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
         epollWaitMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_epoll_wait", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));

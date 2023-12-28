@@ -5,10 +5,7 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
 
-import java.lang.foreign.FunctionDescriptor;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SymbolLookup;
-import java.lang.foreign.ValueLayout;
+import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 
 public final class TenetMacosBinding {
@@ -48,38 +45,29 @@ public final class TenetMacosBinding {
 
     static {
         SymbolLookup symbolLookup = NativeUtil.loadLibrary(Constants.TENET);
-        connectBlockCodeMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_connect_block_code", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        sendBlockCodeMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_send_block_code", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-
-        interruptCodeMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_interrupt_code", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        ipv4AddressLenMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_ipv4_address_len", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        ipv6AddressLenMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_ipv6_address_len", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        ipv4AddressSizeMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_ipv4_address_size", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        ipv6AddressSizeMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_ipv6_address_size", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-
-
+        connectBlockCodeMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_connect_block_code", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+        sendBlockCodeMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_send_block_code", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+        interruptCodeMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_interrupt_code", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+        ipv4AddressLenMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_ipv4_address_len", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+        ipv6AddressLenMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_ipv6_address_len", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+        ipv4AddressSizeMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_ipv4_address_size", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+        ipv6AddressSizeMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_ipv6_address_size", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
         kqueueMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_kqueue", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         keventCtlMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_kevent_ctl", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_SHORT, ValueLayout.JAVA_SHORT));
         keventWaitMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_kevent_wait", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-
         getIpv4AddressMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_get_ipv4_address", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         getIpv6AddressMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_get_ipv6_address", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
         ipv4PortMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_ipv4_port", FunctionDescriptor.of(ValueLayout.JAVA_SHORT, ValueLayout.ADDRESS));
         ipv6PortMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_ipv6_port", FunctionDescriptor.of(ValueLayout.JAVA_SHORT, ValueLayout.ADDRESS));
         ipv4SocketCreateMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_ipv4_socket_create", FunctionDescriptor.of(ValueLayout.JAVA_INT));
         ipv6SocketCreateMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_ipv6_socket_create", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-
-
         acceptMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_accept", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-
         setIpv4SockAddrMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_set_ipv4_sock_addr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_SHORT));
         setIpv6SockAddrMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_set_ipv6_sock_addr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_SHORT));
-
         setReuseAddrMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_set_reuse_addr", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         setKeepAliveMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_set_keep_alive", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         setTcpNoDelayMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_set_tcp_no_delay", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         setIpv6OnlyMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_set_ipv6_only", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
-
         getErrOptMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_get_err_opt", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         setNonBlockingMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_set_nonblocking", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         bindMethodHandle = NativeUtil.methodHandle(symbolLookup, "m_bind", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));

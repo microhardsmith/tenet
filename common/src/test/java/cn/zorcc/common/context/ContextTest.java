@@ -1,7 +1,6 @@
 package cn.zorcc.common.context;
 
 import cn.zorcc.common.AbstractLifeCycle;
-import cn.zorcc.common.Constants;
 import cn.zorcc.common.Context;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.structure.Wheel;
@@ -36,9 +35,12 @@ public class ContextTest {
     }
 
     @Test
-    public void testConstants() {
-        System.out.println(Constants.NET_PW);
-        System.out.println(Constants.NET_W);
-        System.out.println(Constants.NET_W << 2);
+    public void testWheel() throws InterruptedException {
+        Context.init();
+        Wheel.wheel().addPeriodicJob(() -> log.debug("1"), Duration.ZERO, Duration.ofSeconds(1));
+        Wheel.wheel().addJob(() -> log.info("hello"), Duration.ofSeconds(5));
+        Wheel.wheel().addPeriodicJob(() -> log.debug("2"), Duration.ZERO, Duration.ofSeconds(3));
+        Wheel.wheel().addJob(() -> log.info("world"), Duration.ofSeconds(10));
+        Thread.sleep(Long.MAX_VALUE);
     }
 }

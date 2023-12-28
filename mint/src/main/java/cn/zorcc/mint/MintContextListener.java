@@ -21,7 +21,7 @@ public final class MintContextListener implements ContextListener {
     }
 
     @Override
-    public void onStarted() {
-        // TODO
+    public void afterStarted() {
+
     }
 }

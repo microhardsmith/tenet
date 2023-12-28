@@ -3,6 +3,8 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.Context;
 import cn.zorcc.common.ExceptionType;
+import cn.zorcc.common.TestConstants;
+import cn.zorcc.common.bindings.DeflateBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.http.*;
 import cn.zorcc.common.log.Logger;
@@ -18,14 +20,9 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
-import java.util.zip.Deflater;
 
-public class HttpServerTest {
-    private static final Logger log = new Logger(HttpServerTest.class);
-    private static final Loc HTTP_LOC = new Loc(IpType.IPV4, "0.0.0.0", 80);
-    private static final Loc HTTPS_LOC = new Loc(IpType.IPV6, "0.0.0.0", 443);
-    private static final String PUBLIC_KEY_FILE = "C:/workspace/ca/server.crt";
-    private static final String PRIVATE_KEY_FILE = "C:/workspace/ca/server.key";
+public class HttpTest {
+    private static final Logger log = new Logger(HttpTest.class);
     @Test
     public void testHttpServer() throws InterruptedException {
         Context.load(Wheel.wheel(), Wheel.class);
@@ -59,7 +56,7 @@ public class HttpServerTest {
         httpListenerConfig.setDecoderSupplier(HttpServerDecoder::new);
         httpListenerConfig.setHandlerSupplier(HttpTestHandler::new);
         httpListenerConfig.setProvider(Net.tcpProvider());
-        httpListenerConfig.setLoc(HTTP_LOC);
+        httpListenerConfig.setLoc(TestConstants.HTTP_LOC);
         Net net = new Net();
         net.addServerListener(httpListenerConfig);
         return net;
@@ -70,8 +67,8 @@ public class HttpServerTest {
         httpsListenerConfig.setEncoderSupplier(HttpServerEncoder::new);
         httpsListenerConfig.setDecoderSupplier(HttpServerDecoder::new);
         httpsListenerConfig.setHandlerSupplier(HttpTestHandler::new);
-        httpsListenerConfig.setProvider(SslProvider.newServerProvider(PUBLIC_KEY_FILE, PRIVATE_KEY_FILE));
-        httpsListenerConfig.setLoc(HTTPS_LOC);
+        httpsListenerConfig.setProvider(SslProvider.newServerProvider(TestConstants.SERVER_PUBLIC_KEY_FILE, TestConstants.SERVER_PRIVATE_KEY_FILE));
+        httpsListenerConfig.setLoc(TestConstants.HTTPS_LOC);
         Net net = new Net();
         net.addServerListener(httpsListenerConfig);
         return net;
@@ -83,13 +80,13 @@ public class HttpServerTest {
         httpListenerConfig.setDecoderSupplier(HttpServerDecoder::new);
         httpListenerConfig.setHandlerSupplier(HttpTestHandler::new);
         httpListenerConfig.setProvider(Net.tcpProvider());
-        httpListenerConfig.setLoc(HTTP_LOC);
+        httpListenerConfig.setLoc(TestConstants.HTTP_LOC);
         ListenerConfig httpsListenerConfig = new ListenerConfig();
         httpsListenerConfig.setEncoderSupplier(HttpServerEncoder::new);
         httpsListenerConfig.setDecoderSupplier(HttpServerDecoder::new);
         httpsListenerConfig.setHandlerSupplier(HttpTestHandler::new);
-        httpsListenerConfig.setProvider(SslProvider.newServerProvider(PUBLIC_KEY_FILE, PRIVATE_KEY_FILE));
-        httpsListenerConfig.setLoc(HTTPS_LOC);
+        httpsListenerConfig.setProvider(SslProvider.newServerProvider(TestConstants.SERVER_PUBLIC_KEY_FILE, TestConstants.SERVER_PRIVATE_KEY_FILE));
+        httpsListenerConfig.setLoc(TestConstants.HTTPS_LOC);
         Net net = new Net();
         net.addServerListener(httpListenerConfig);
         net.addServerListener(httpsListenerConfig);
@@ -128,7 +125,7 @@ public class HttpServerTest {
             String acceptEncoding = httpRequest.getHttpHeader().get(HttpHeader.K_ACCEPT_ENCODING);
             if(acceptEncoding != null && acceptEncoding.contains(HttpHeader.V_GZIP)) {
                 headers.put(HttpHeader.K_CONTENT_ENCODING, HttpHeader.V_GZIP);
-                httpResponse.setData(CompressUtil.compressUsingGzip(body, Deflater.BEST_COMPRESSION));
+                httpResponse.setData(CompressUtil.compressUsingGzip(body, DeflateBinding.LIBDEFLATE_FASTEST_LEVEL));
             }else {
                 httpResponse.setData(body);
             }

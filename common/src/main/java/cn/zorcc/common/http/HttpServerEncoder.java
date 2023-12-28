@@ -22,15 +22,12 @@ public final class HttpServerEncoder implements Encoder {
     private void encodeHttpResponse(WriteBuffer writeBuffer, HttpResponse httpResponse) {
         writeBuffer.writeBytes(httpResponse.getVersion().getBytes(StandardCharsets.UTF_8));
         writeBuffer.writeByte(Constants.SPACE);
-        HttpStatus status = httpResponse.getStatus();
-        writeBuffer.writeBytes(status.code().getBytes(StandardCharsets.UTF_8));
-        writeBuffer.writeByte(Constants.SPACE);
-        writeBuffer.writeBytes(status.description().getBytes(StandardCharsets.UTF_8));
+        writeBuffer.writeSegment(HttpStatus.getHttpStatusSegment(httpResponse.getStatus()));
         writeBuffer.writeBytes(Constants.CR, Constants.LF);
         HttpHeader headers = httpResponse.getHeaders();
         MemorySegment data = httpResponse.getData();
         if(data == null || data.byteSize() == 0) {
-            throw new FrameworkException(ExceptionType.HTTP, "Http response without a request body is meaningless");
+            throw new FrameworkException(ExceptionType.HTTP, "Http response without body is meaningless");
         }
         headers.put(HttpHeader.K_CONTENT_LENGTH, String.valueOf(data.byteSize()));
         headers.encode(writeBuffer);

@@ -20,5 +20,5 @@ public interface ContextListener {
     /**
      *   After all the container was initialized successfully, this function would be invoked
      */
-    void onStarted();
+    void afterStarted();
 }

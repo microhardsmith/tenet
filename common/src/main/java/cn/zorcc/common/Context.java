@@ -53,6 +53,7 @@ public final class Context {
                 contextListener.onLoaded(target, type);
             }
             initializeCycles(cycles);
+            contextListener.afterStarted();
             RuntimeMXBean runtimeMXBean = ManagementFactory.getRuntimeMXBean();
             String[] pidAndDevice = runtimeMXBean.getName().split("@");
             log.info(STR."Process running with Pid: \{pidAndDevice[0]} on Device: \{pidAndDevice[1]}");
