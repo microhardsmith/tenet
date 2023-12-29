@@ -36,8 +36,9 @@ public record TcpSentry(
 
     @Override
     public void doClose() {
-        if(osNetworkLibrary.closeSocket(channel.socket()) != 0) {
-            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to close socket, errno : \{osNetworkLibrary.errno()}");
+        int r = osNetworkLibrary.closeSocket(channel.socket());
+        if(r < 0) {
+            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to close socket, errno : \{Math.abs(r)}");
         }
     }
 }

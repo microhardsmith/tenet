@@ -98,7 +98,7 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
 
     @Override
     public Mux createMux() {
-        int epfd = checkInt(TenetLinuxBinding.epollCreate(), "epoll create");
+        int epfd = check(TenetLinuxBinding.epollCreate(), "epoll create");
         return Mux.linux(epfd);
     }
 
@@ -109,39 +109,39 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
 
     @Override
     public Socket createIpv4Socket() {
-        int fd = checkInt(TenetLinuxBinding.ipv4SocketCreate(), "ipv4 socket create");
+        int fd = check(TenetLinuxBinding.ipv4SocketCreate(), "ipv4 socket create");
         return new Socket(fd);
     }
 
     @Override
     public Socket createIpv6Socket() {
-        int fd = checkInt(TenetLinuxBinding.ipv6SocketCreate(), "ipv6 socket create");
+        int fd = check(TenetLinuxBinding.ipv6SocketCreate(), "ipv6 socket create");
         return new Socket(fd);
     }
 
     @Override
-    public void setReuseAddr(Socket socket, boolean b) {
-        checkInt(TenetLinuxBinding.setReuseAddr(socket.intValue(), b ? 1 : 0), "set SO_REUSE_ADDR");
+    public int setReuseAddr(Socket socket, boolean b) {
+        return TenetLinuxBinding.setReuseAddr(socket.intValue(), b ? 1 : 0);
     }
 
     @Override
-    public void setKeepAlive(Socket socket, boolean b) {
-        checkInt(TenetLinuxBinding.setKeepAlive(socket.intValue(), b ? 1 : 0), "set SO_KEEPALIVE");
+    public int setKeepAlive(Socket socket, boolean b) {
+        return TenetLinuxBinding.setKeepAlive(socket.intValue(), b ? 1 : 0);
     }
 
     @Override
-    public void setTcpNoDelay(Socket socket, boolean b) {
-        checkInt(TenetLinuxBinding.setTcpNoDelay(socket.intValue(), b ? 1 : 0), "set TCP_NODELAY");
+    public int setTcpNoDelay(Socket socket, boolean b) {
+        return TenetLinuxBinding.setTcpNoDelay(socket.intValue(), b ? 1 : 0);
     }
 
     @Override
-    public void setIpv6Only(Socket socket, boolean b) {
-        checkInt(TenetLinuxBinding.setIpv6Only(socket.intValue(), b ? 1 : 0), "set IPV6_V6ONLY");
+    public int setIpv6Only(Socket socket, boolean b) {
+        return TenetLinuxBinding.setIpv6Only(socket.intValue(), b ? 1 : 0);
     }
 
     @Override
-    public void setNonBlocking(Socket socket) {
-        checkInt(TenetLinuxBinding.setNonBlocking(socket.intValue()), "set NON_BLOCKING");
+    public int setNonBlocking(Socket socket) {
+        return TenetLinuxBinding.setNonBlocking(socket.intValue());
     }
 
     @Override
@@ -155,14 +155,14 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public void ctl(Mux mux, Socket socket, int from, int to) {
+    public int ctl(Mux mux, Socket socket, int from, int to) {
         if(from == to) {
-            return ;
+            return 0;
         }
         int epfd = mux.epfd();
         int fd = socket.intValue();
         if(to == Constants.NET_NONE) {
-            checkInt(TenetLinuxBinding.epollCtl(epfd, Constants.EPOLL_CTL_DEL, fd, NativeUtil.NULL_POINTER), "epoll_ctl");
+            return TenetLinuxBinding.epollCtl(epfd, Constants.EPOLL_CTL_DEL, fd, NativeUtil.NULL_POINTER);
         }else {
             int target = ((to & Constants.NET_R) != Constants.NET_NONE ? (Constants.EPOLL_IN | Constants.EPOLL_RDHUP) : 0) |
                     ((to & Constants.NET_W) != Constants.NET_NONE ? Constants.EPOLL_OUT : 0);
@@ -170,7 +170,7 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
                 MemorySegment ev = arena.allocate(epollEventLayout);
                 NativeUtil.setInt(ev, eventsOffset, target);
                 NativeUtil.setInt(ev, dataOffset + fdOffset, fd);
-                checkInt(TenetLinuxBinding.epollCtl(epfd, from == Constants.NET_NONE ? Constants.EPOLL_CTL_ADD : Constants.EPOLL_CTL_MOD, fd, ev), "epoll_ctl");
+                return TenetLinuxBinding.epollCtl(epfd, from == Constants.NET_NONE ? Constants.EPOLL_CTL_ADD : Constants.EPOLL_CTL_MOD, fd, ev);
             }
         }
     }
@@ -210,7 +210,7 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
 
     @Override
     public Socket accept(Socket socket, MemorySegment addr) {
-        int fd = checkInt(TenetLinuxBinding.accept(socket.intValue(), addr, (int) addr.byteSize()), "accept");
+        int fd = check(TenetLinuxBinding.accept(socket.intValue(), addr, (int) addr.byteSize()), "accept");
         return new Socket(fd);
     }
 
@@ -238,7 +238,7 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
     public int getErrOpt(Socket socket) {
         try(Arena arena = Arena.ofConfined()) {
             MemorySegment ptr = arena.allocate(ValueLayout.JAVA_INT, Integer.MIN_VALUE);
-            checkInt(TenetLinuxBinding.getErrOpt(socket.intValue(), ptr), "get socket err opt");
+            check(TenetLinuxBinding.getErrOpt(socket.intValue(), ptr), "get socket err opt");
             return NativeUtil.getInt(ptr, 0);
         }
     }
@@ -254,13 +254,8 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public int errno() {
-        return TenetLinuxBinding.errno();
-    }
-
-    @Override
-    public void exitMux(Mux mux) {
-        checkInt(TenetLinuxBinding.close(mux.epfd()), "close epoll fd");
+    public int closeMux(Mux mux) {
+        return TenetLinuxBinding.close(mux.epfd());
     }
 
     @Override

@@ -58,16 +58,6 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     int ipv6AddressSize();
 
     /**
-     *   Modifying ipv4 sockAddr to target ip and port
-     */
-    int setIpv4SockAddr(MemorySegment sockAddr, MemorySegment address, short port);
-
-    /**
-     *   Modifying ipv6 sockAddr to target ip and port
-     */
-    int setIpv6SockAddr(MemorySegment sockAddr, MemorySegment address, short port);
-
-    /**
      *   Create a multiplexing object corresponding to the target operating system
      */
     Mux createMux();
@@ -76,6 +66,36 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
      *   Return the target multiplexing struct memoryLayout corresponding to the target operating system
      */
     MemoryLayout eventLayout();
+
+    /**
+     *   Modifying the multiplexing wait status of the socket
+     */
+    int ctl(Mux mux, Socket socket, int from, int to);
+
+    /**
+     *   Start multiplexing waiting for events, return the event count that triggered
+     */
+    int muxWait(Mux mux, MemorySegment events, int maxEvents, Timeout timeout);
+
+    /**
+     *   For poller to access the events array, the first return value represents the socket, the second value represents the event type
+     */
+    IntPair access(MemorySegment events, int index);
+
+    /**
+     *   Exit a multiplexing object
+     */
+    int closeMux(Mux mux);
+
+    /**
+     *   Modifying ipv4 sockAddr to target ip and port
+     */
+    int setIpv4SockAddr(MemorySegment sockAddr, MemorySegment address, short port);
+
+    /**
+     *   Modifying ipv6 sockAddr to target ip and port
+     */
+    int setIpv6SockAddr(MemorySegment sockAddr, MemorySegment address, short port);
 
     /**
      *   Create an ipv4 socket object
@@ -90,52 +110,27 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     /**
      *   Set socket's SO_REUSE_ADDR option
      */
-    void setReuseAddr(Socket socket, boolean b);
+    int setReuseAddr(Socket socket, boolean b);
 
     /**
      *   Set socket's SO_KEEPALIVE option
      */
-    void setKeepAlive(Socket socket, boolean b);
+    int setKeepAlive(Socket socket, boolean b);
 
     /**
      *   Set socket's TCP_NODELAY option
      */
-    void setTcpNoDelay(Socket socket, boolean b);
+    int setTcpNoDelay(Socket socket, boolean b);
 
     /**
      *   Set socket's IPV6_V6ONLY option
      */
-    void setIpv6Only(Socket socket, boolean b);
+    int setIpv6Only(Socket socket, boolean b);
 
     /**
      *   Set socket's non-blocking option
      */
-    void setNonBlocking(Socket socket);
-
-    /**
-     *   Bind a server socket to target address
-     */
-    int bind(Socket socket, MemorySegment addr);
-
-    /**
-     *   Let a server socket start listening
-     */
-    int listen(Socket socket, int backlog);
-
-    /**
-     *   Modifying the multiplexing wait status of the socket
-     */
-    void ctl(Mux mux, Socket socket, int from, int to);
-
-    /**
-     *   Start multiplexing waiting for events, return the event count that triggered
-     */
-    int muxWait(Mux mux, MemorySegment events, int maxEvents, Timeout timeout);
-
-    /**
-     *   For poller to access the events array, the first return value represents the socket, the second value represents the event type
-     */
-    IntPair access(MemorySegment events, int index);
+    int setNonBlocking(Socket socket);
 
     /**
      *   Retrieve an ipv4 port from the target addr
@@ -148,16 +143,6 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     short getIpv6Port(MemorySegment addr);
 
     /**
-     *   Connect to the remote sockAddr
-     */
-    int connect(Socket socket, MemorySegment sockAddr);
-
-    /**
-     *   Accept from a server socket
-     */
-    Socket accept(Socket socket, MemorySegment addr);
-
-    /**
      *   Retrieve an ipv4 address string from the clientAddr
      */
     int getIpv4Address(MemorySegment clientAddr, MemorySegment address);
@@ -166,6 +151,26 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
      *   Retrieve an ipv6 address string from the clientAddr
      */
     int getIpv6Address(MemorySegment clientAddr, MemorySegment address);
+
+    /**
+     *   Bind a server socket to target address
+     */
+    int bind(Socket socket, MemorySegment addr);
+
+    /**
+     *   Let a server socket start listening
+     */
+    int listen(Socket socket, int backlog);
+
+    /**
+     *   Connect to the remote sockAddr
+     */
+    int connect(Socket socket, MemorySegment sockAddr);
+
+    /**
+     *   Accept from a server socket
+     */
+    Socket accept(Socket socket, MemorySegment addr);
 
     /**
      *   Recv from target socket, len should be the exact byteSize of data, return the actual bytes received
@@ -193,38 +198,27 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     int closeSocket(Socket socket);
 
     /**
-     *   Return the errno of current thread
-     */
-    int errno();
-
-    /**
-     *   Exit a multiplexing object
-     */
-    void exitMux(Mux mux);
-
-    /**
      *   Exit the whole application
      */
     void exit();
 
     /**
-     *   Check the return value of a native function, throw an exception if it's -1
+     *   Check the return value of a native function, the errno will be represented as a negative form to avoid conflict
      */
-    default int checkInt(int value, String errMsg) {
-        if(value == -1) {
-            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to \{errMsg} with err code : \{errno()}");
+    default int check(int value, String errMsg) {
+        if(value < 0) {
+            int errno = Math.abs(value);
+            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to \{errMsg} with err code : \{errno}");
         }
         return value;
     }
 
-    /**
-     *   Check the return value of a native function, throw an exception if it's NULL pointer
-     */
-    default MemorySegment checkPtr(MemorySegment ptr, String errMsg) {
-        if(NativeUtil.checkNullPointer(ptr)) {
-            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to \{errMsg} with err code : \{errno()}");
-        }
-        return ptr;
+    default void ctlMux(Mux mux, Socket socket, int from, int to) {
+        check(ctl(mux, socket, from, to), "ctl mux");
+    }
+
+    default void exitMux(Mux mux) {
+        check(closeMux(mux), "close Mux");
     }
 
     /**
@@ -243,7 +237,7 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     private MemorySegment createIpv4SockAddr(Loc loc, Arena arena) {
         MemorySegment r = arena.allocate(ipv4AddressSize());
         MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? NativeUtil.NULL_POINTER : NativeUtil.allocateStr(arena, loc.ip(), ipv4AddressLen());
-        if(checkInt(setIpv4SockAddr(r, ip, loc.shortPort()), "set ipv4 address") == 0) {
+        if(check(setIpv4SockAddr(r, ip, loc.shortPort()), "set ipv4 address") == 0) {
             throw new FrameworkException(ExceptionType.NETWORK, STR."Ipv4 address is not valid : \{loc.ip()}");
         }
         return r;
@@ -252,7 +246,7 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     private MemorySegment createIpv6SockAddr(Loc loc, Arena arena) {
         MemorySegment r = arena.allocate(ipv6AddressSize());
         MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? NativeUtil.NULL_POINTER : NativeUtil.allocateStr(arena, loc.ip(), ipv6AddressLen());
-        if(checkInt(setIpv6SockAddr(r, ip, loc.shortPort()), "set ipv6 address") == 0) {
+        if(check(setIpv6SockAddr(r, ip, loc.shortPort()), "set ipv6 address") == 0) {
             throw new FrameworkException(ExceptionType.NETWORK, STR."Ipv6 address is not valid : \{loc.ip()}");
         }
         return r;
@@ -273,22 +267,22 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
      *   Configure a socket for the client side
      */
     default void configureClientSocket(Socket socket, SocketConfig socketConfig) {
-        setKeepAlive(socket, socketConfig.isKeepAlive());
-        setTcpNoDelay(socket, socketConfig.isTcpNoDelay());
-        setNonBlocking(socket);
+        check(setKeepAlive(socket, socketConfig.isKeepAlive()), "set client SO_REUSE_ADDR");
+        check(setTcpNoDelay(socket, socketConfig.isTcpNoDelay()), "set client TCP_NODELAY");
+        check(setNonBlocking(socket), "set client non-blocking");
     }
 
     /**
      *   Configure a socket for the server side
      */
     default void configureServerSocket(Socket socket, Loc loc, SocketConfig socketConfig) {
-        setReuseAddr(socket, socketConfig.isReuseAddr());
-        setKeepAlive(socket, socketConfig.isKeepAlive());
-        setTcpNoDelay(socket, socketConfig.isTcpNoDelay());
+        check(setReuseAddr(socket, socketConfig.isReuseAddr()), "set server SO_REUSE_ADDR");
+        check(setKeepAlive(socket, socketConfig.isKeepAlive()), "set server SO_KEEPALIVE");
+        check(setTcpNoDelay(socket, socketConfig.isTcpNoDelay()), "set server TCP_NODELAY");
         if(loc.ipType() == IpType.IPV6) {
-            setIpv6Only(socket, socketConfig.isIpv6Only());
+            check(setIpv6Only(socket, socketConfig.isIpv6Only()), "set server IPV6_V6ONLY");
         }
-        setNonBlocking(socket);
+        check(setNonBlocking(socket), "set server non-blocking");
     }
 
     /**
@@ -297,8 +291,8 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     default void bindAndListen(Socket socket, Loc loc, int backlog) {
         try(Arena arena = Arena.ofConfined()) {
             MemorySegment addr = createSockAddr(loc, arena);
-            checkInt(bind(socket, addr), "bind");
-            checkInt(listen(socket, backlog), "listen");
+            check(bind(socket, addr), "bind");
+            check(listen(socket, backlog), "listen");
         }
     }
 
@@ -323,9 +317,7 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
             MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, ipv6AddressLen);
             Socket clientSocket = accept(socket, clientAddr);
             configureClientSocket(clientSocket, socketConfig);
-            if(getIpv6Address(clientAddr, address) < 0) {
-                throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to get client's ipv6 address, errno : \{errno()}");
-            }
+            check(getIpv6Address(clientAddr, address), "get client's ipv6 address");
             String ip = NativeUtil.getStr(address, ipv6AddressLen);
             int port = 0xFFFF & getIpv6Port(clientAddr);
             if(ip.startsWith(IPV4_MAPPED_FORMAT)) {
@@ -344,9 +336,7 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
             MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, ipv4AddressLen);
             Socket clientSocket = accept(socket, clientAddr);
             configureClientSocket(clientSocket, socketConfig);
-            if(getIpv4Address(clientAddr, address) < 0) {
-                throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to get client's ipv4 address, errno : \{errno()}");
-            }
+            check(getIpv4Address(clientAddr, address), "get client's ipv4 address");
             String ip = NativeUtil.getStr(address, ipv4AddressLen);
             int port = 0xFFFF & getIpv4Port(clientAddr);
             Loc clientLoc = new Loc(IpType.IPV4, ip, port);

@@ -3,7 +3,6 @@ package cn.zorcc.common.bindings;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.network.lib.OsNetworkLibrary;
 import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.*;
@@ -299,7 +298,7 @@ public final class SslBinding {
         if(err == Constants.SSL_ERROR_SSL){
             throw new FrameworkException(ExceptionType.NETWORK, STR."\{operation} failed with SSL_ERROR_SSL, message : \{SslBinding.getErrDescription()}");
         }else if(err == Constants.SSL_ERROR_SYSCALL) {
-            throw new FrameworkException(ExceptionType.NETWORK, STR."\{operation} failed with SSL_ERROR_SYSCALL, message : \{SslBinding.getErrDescription()}, errno : \{OsNetworkLibrary.CURRENT.errno()}");
+            throw new FrameworkException(ExceptionType.NETWORK, STR."\{operation} failed with SSL_ERROR_SYSCALL, message : \{SslBinding.getErrDescription()}");
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }

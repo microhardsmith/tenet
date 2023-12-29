@@ -15,11 +15,11 @@ public record TcpProtocol(
 
     @Override
     public int onReadableEvent(MemorySegment reserved, int len) {
-        int received = osNetworkLibrary.recv(channel.socket(), reserved, len);
-        if(received < 0) {
-            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform recv(), errno : \{osNetworkLibrary.errno()}");
+        int r = osNetworkLibrary.recv(channel.socket(), reserved, len);
+        if(r < 0) {
+            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform recv(), errno : \{Math.abs(r)}");
         }else {
-            return received;
+            return r;
         }
     }
 
@@ -33,8 +33,8 @@ public record TcpProtocol(
     public int doWrite(MemorySegment data, int len) {
         Socket socket = channel.socket();
         int r = osNetworkLibrary.send(socket, data, len);
-        if(r == -1) {
-            int errno = osNetworkLibrary.errno();
+        if(r < 0) {
+            int errno = Math.abs(r);
             if(errno == osNetworkLibrary.sendBlockCode()) {
                 return Constants.NET_PW;
             }else {
@@ -47,16 +47,18 @@ public record TcpProtocol(
 
     @Override
     public void doShutdown() {
-        if(osNetworkLibrary.shutdownWrite(channel.socket()) != 0) {
-            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform shutdown(), errno : \{osNetworkLibrary.errno()}");
+        int r = osNetworkLibrary.shutdownWrite(channel.socket());
+        if(r < 0) {
+            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform shutdown(), errno : \{Math.abs(r)}");
         }
     }
 
 
     @Override
     public void doClose() {
-        if(osNetworkLibrary.closeSocket(channel.socket()) != 0) {
-            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to close socket, errno : \{osNetworkLibrary.errno()}");
+        int r = osNetworkLibrary.closeSocket(channel.socket());
+        if(r < 0) {
+            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to close socket, errno : \{Math.abs(r)}");
         }
     }
 

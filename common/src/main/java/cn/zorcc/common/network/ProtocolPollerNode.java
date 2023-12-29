@@ -139,7 +139,7 @@ public final class ProtocolPollerNode implements PollerNode {
             int state = channelState.get();
             int current = state & Constants.NET_RW;
             if(current != expected) {
-                osNetworkLibrary.ctl(channel.poller().mux(), channel.socket(), current, expected);
+                osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), current, expected);
                 channelState.set((expected - current) + state);
             }
         }
@@ -235,7 +235,7 @@ public final class ProtocolPollerNode implements PollerNode {
                 int state = channelState.get();
                 int current = state & Constants.NET_RW;
                 if(current != Constants.NET_NONE) {
-                    osNetworkLibrary.ctl(channel.poller().mux(), channel.socket(), current, Constants.NET_NONE);
+                    osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), current, Constants.NET_NONE);
                     state -= (current - Constants.NET_NONE);
                 }
                 channelState.set(state | Constants.NET_PC);

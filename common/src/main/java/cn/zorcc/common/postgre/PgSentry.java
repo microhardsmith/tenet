@@ -68,8 +68,10 @@ public final class PgSentry implements Sentry {
                 MemorySegment segment = writeBuffer.toSegment();
                 int len = (int) segment.byteSize();
                 int sent = osNetworkLibrary.send(channel.socket(), segment, len);
-                if(sent != len) {
-                    throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+                if(sent < 0) {
+                    throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to send SSL request, errno : \{Math.abs(sent)}");
+                }else if(sent < len) {
+                    throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to send SSL request, only \{sent} bytes got written, consider this connection unfunctionally");
                 }
                 sslState.register(WAITING_SSL);
                 return Constants.NET_IGNORED;
@@ -91,8 +93,9 @@ public final class PgSentry implements Sentry {
         if(ssl != null) {
             SslBinding.sslFree(ssl);
         }
-        if(osNetworkLibrary.closeSocket(channel.socket()) != 0) {
-            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to close socket, errno : \{osNetworkLibrary.errno()}");
+        int r = osNetworkLibrary.closeSocket(channel.socket());
+        if(r < 0) {
+            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to close socket, errno : \{Math.abs(r)}");
         }
     }
 

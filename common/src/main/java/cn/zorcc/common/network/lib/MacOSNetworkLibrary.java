@@ -35,6 +35,7 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
     private static final long keventSize = keventLayout.byteSize();
     private static final long identOffset = keventLayout.byteOffset(MemoryLayout.PathElement.groupElement("ident"));
     private static final long filterOffset = keventLayout.byteOffset(MemoryLayout.PathElement.groupElement("filter"));
+    private static final long flagsOffset = keventLayout.byteOffset(MemoryLayout.PathElement.groupElement("flags"));
 
     private final int connectBlockCode;
     private final int sendBlockCode;
@@ -102,7 +103,7 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
 
     @Override
     public Mux createMux() {
-        int kqfd = checkInt(TenetMacosBinding.kqueue(), "kqueue create");
+        int kqfd = check(TenetMacosBinding.kqueue(), "kqueue create");
         return Mux.mac(kqfd);
     }
 
@@ -113,39 +114,39 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
 
     @Override
     public Socket createIpv4Socket() {
-        int fd = checkInt(TenetMacosBinding.ipv4SocketCreate(), "ipv4 socket create");
+        int fd = check(TenetMacosBinding.ipv4SocketCreate(), "ipv4 socket create");
         return new Socket(fd);
     }
 
     @Override
     public Socket createIpv6Socket() {
-        int fd = checkInt(TenetMacosBinding.ipv6SocketCreate(), "ipv6 socket create");
+        int fd = check(TenetMacosBinding.ipv6SocketCreate(), "ipv6 socket create");
         return new Socket(fd);
     }
 
     @Override
-    public void setReuseAddr(Socket socket, boolean b) {
-        checkInt(TenetMacosBinding.setReuseAddr(socket.intValue(), b ? 1 : 0), "set SO_REUSE_ADDR");
+    public int setReuseAddr(Socket socket, boolean b) {
+        return TenetMacosBinding.setReuseAddr(socket.intValue(), b ? 1 : 0);
     }
 
     @Override
-    public void setKeepAlive(Socket socket, boolean b) {
-        checkInt(TenetMacosBinding.setKeepAlive(socket.intValue(), b ? 1 : 0), "set SO_KEEPALIVE");
+    public int setKeepAlive(Socket socket, boolean b) {
+        return TenetMacosBinding.setKeepAlive(socket.intValue(), b ? 1 : 0);
     }
 
     @Override
-    public void setTcpNoDelay(Socket socket, boolean b) {
-        checkInt(TenetMacosBinding.setTcpNoDelay(socket.intValue(), b ? 1 : 0), "set TCP_NODELAY");
+    public int setTcpNoDelay(Socket socket, boolean b) {
+        return TenetMacosBinding.setTcpNoDelay(socket.intValue(), b ? 1 : 0);
     }
 
     @Override
-    public void setIpv6Only(Socket socket, boolean b) {
-        checkInt(TenetMacosBinding.setIpv6Only(socket.intValue(), b ? 1 : 0), "set IPV6_V6ONLY");
+    public int setIpv6Only(Socket socket, boolean b) {
+        return TenetMacosBinding.setIpv6Only(socket.intValue(), b ? 1 : 0);
     }
 
     @Override
-    public void setNonBlocking(Socket socket) {
-        checkInt(TenetMacosBinding.setNonBlocking(socket.intValue()), "set NON_BLOCKING");
+    public int setNonBlocking(Socket socket) {
+        return TenetMacosBinding.setNonBlocking(socket.intValue());
     }
 
     @Override
@@ -159,20 +160,32 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public void ctl(Mux mux, Socket socket, int from, int to) {
+    public int ctl(Mux mux, Socket socket, int from, int to) {
         if(from == to) {
-            return ;
+            return 0;
         }
         int kqfd = mux.kqfd();
-        int fd = socket.intValue();
-        int r1 = from & Constants.NET_R, r2 = to & Constants.NET_R;
-        if(r1 != r2) {
-            checkInt(TenetMacosBinding.keventCtl(kqfd, fd, Constants.EVFILT_READ, r1 > r2 ? Constants.EV_DELETE : Constants.EV_ADD), "kevent_ctl");
+        long fd = socket.longValue();
+        int index = 0;
+        try(Arena arena = Arena.ofConfined()) {
+            MemorySegment ptr = arena.allocate(MemoryLayout.sequenceLayout(2, keventLayout));
+            int r1 = from & Constants.NET_R, r2 = to & Constants.NET_R;
+            if(r1 != r2) {
+                NativeUtil.setLong(ptr, identOffset, fd);
+                NativeUtil.setShort(ptr, filterOffset, Constants.EVFILT_READ);
+                NativeUtil.setShort(ptr, flagsOffset, r1 > r2 ? Constants.EV_DELETE : Constants.EV_ADD);
+                index++;
+            }
+            int w1 = from & Constants.NET_W, w2 = to & Constants.NET_W;
+            if(w1 != w2) {
+                NativeUtil.setLong(ptr, index * keventSize + identOffset, fd);
+                NativeUtil.setShort(ptr, index * keventSize + filterOffset, Constants.EVFILT_WRITE);
+                NativeUtil.setShort(ptr, index * keventSize + flagsOffset, w1 > w2 ? Constants.EV_DELETE : Constants.EV_ADD);
+                index++;
+            }
+            return TenetMacosBinding.keventCtl(kqfd, ptr, index);
         }
-        int w1 = from & Constants.NET_W, w2 = to & Constants.NET_W;
-        if(w1 != w2) {
-            checkInt(TenetMacosBinding.keventCtl(kqfd, fd, Constants.EVFILT_WRITE, w1 > w2 ? Constants.EV_DELETE : Constants.EV_ADD), "kevent_ctl");
-        }
+
     }
 
     @Override
@@ -210,7 +223,7 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
 
     @Override
     public Socket accept(Socket socket, MemorySegment addr) {
-        int fd = checkInt(TenetMacosBinding.accept(socket.intValue(), addr, (int) addr.byteSize()), "accept");
+        int fd = check(TenetMacosBinding.accept(socket.intValue(), addr, (int) addr.byteSize()), "accept");
         return new Socket(fd);
     }
 
@@ -238,7 +251,7 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
     public int getErrOpt(Socket socket) {
         try(Arena arena = Arena.ofConfined()) {
             MemorySegment ptr = arena.allocate(ValueLayout.JAVA_INT, Integer.MIN_VALUE);
-            checkInt(TenetMacosBinding.getErrOpt(socket.intValue(), ptr), "get socket err opt");
+            check(TenetMacosBinding.getErrOpt(socket.intValue(), ptr), "get socket err opt");
             return NativeUtil.getInt(ptr, 0);
         }
     }
@@ -254,13 +267,8 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public int errno() {
-        return TenetMacosBinding.errno();
-    }
-
-    @Override
-    public void exitMux(Mux mux) {
-        checkInt(TenetMacosBinding.close(mux.kqfd()), "close kqueue fd");
+    public int closeMux(Mux mux) {
+        return TenetMacosBinding.close(mux.kqfd());
     }
 
     @Override

@@ -59,9 +59,9 @@ public final class Poller {
                 }
                 int state = Constants.RUNNING;
                 for( ; ; ) {
-                    int count = osNetworkLibrary.muxWait(mux, events, maxEvents, timeout);
-                    if(count < 0) {
-                        int errno = osNetworkLibrary.errno();
+                    int r = osNetworkLibrary.muxWait(mux, events, maxEvents, timeout);
+                    if(r < 0) {
+                        int errno = Math.abs(r);
                         if(errno == osNetworkLibrary.interruptCode()) {
                             return ;
                         }else {
@@ -72,7 +72,7 @@ public final class Poller {
                     if(state == Constants.STOPPED) {
                         break ;
                     }
-                    for(int index = 0; index < count; index++) {
+                    for(int index = 0; index < r; index++) {
                         MemorySegment reserved = reservedArray[index];
                         IntPair pair = osNetworkLibrary.access(events, index);
                         PollerNode pollerNode = nodeMap.get(pair.first());

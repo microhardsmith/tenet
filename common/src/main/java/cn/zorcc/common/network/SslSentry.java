@@ -5,7 +5,6 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.State;
 import cn.zorcc.common.bindings.SslBinding;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.api.Protocol;
 import cn.zorcc.common.network.api.Sentry;
 import cn.zorcc.common.network.lib.OsNetworkLibrary;
@@ -63,8 +62,9 @@ public record SslSentry(
     @Override
     public void doClose() {
         SslBinding.sslFree(ssl);
-        if(osNetworkLibrary.closeSocket(channel.socket()) != 0) {
-            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to close socket, errno : \{osNetworkLibrary.errno()}");
+        int r = osNetworkLibrary.closeSocket(channel.socket());
+        if(r < 0) {
+            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to close socket, errno : \{Math.abs(r)}");
         }
     }
 

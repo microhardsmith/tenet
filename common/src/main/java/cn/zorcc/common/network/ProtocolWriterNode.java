@@ -233,7 +233,7 @@ public final class ProtocolWriterNode implements WriterNode {
             int current = state & Constants.NET_RW;
             int to = current | expected;
             if(to != current) {
-                osNetworkLibrary.ctl(channel.poller().mux(), channel.socket(), current, to);
+                osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), current, to);
                 channelState.set(state + (to - current));
             }
             return false;

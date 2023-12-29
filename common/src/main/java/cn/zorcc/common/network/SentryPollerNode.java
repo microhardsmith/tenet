@@ -84,7 +84,7 @@ public final class SentryPollerNode implements PollerNode {
     private void ctl(int expected) {
         int current = channelState.get();
         if(current != expected) {
-            osNetworkLibrary.ctl(channel.poller().mux(), channel.socket(), current, expected);
+            osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), current, expected);
             channelState.set(expected);
         }
     }
