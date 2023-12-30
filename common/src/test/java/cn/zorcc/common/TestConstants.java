@@ -6,7 +6,7 @@ import cn.zorcc.common.network.Loc;
 import cn.zorcc.common.util.NativeUtil;
 
 public class TestConstants {
-    public static final int PORT = 8002;
+    public static final int PORT = port();
     public static final Loc SERVER_IPV4_LOC = new Loc(IpType.IPV4, PORT);
     public static final Loc SERVER_IPV6_LOC = new Loc(IpType.IPV6, PORT);
     public static final Loc CLIENT_IPV4_LOC = new Loc(IpType.IPV4, "127.0.0.1", PORT);
@@ -17,6 +17,22 @@ public class TestConstants {
     public static final String SELF_PRIVATE_KEY_FILE = selfPrivateKeyFile();
     public static final String SERVER_PUBLIC_KEY_FILE = serverPublicKeyFile();
     public static final String SERVER_PRIVATE_KEY_FILE = serverPrivateKeyFile();
+
+    /**
+     *   Rerunning program in the same operating system would be fine, but wsl would share the same port between Windows and Linux, so we might want to differ them
+     */
+    private static int port() {
+        OsType ostype = NativeUtil.ostype();
+        if(ostype == OsType.Windows) {
+            return 8001;
+        }else if(ostype == OsType.MacOS) {
+            return 8002;
+        }else if(ostype == OsType.Linux) {
+            return 8003;
+        }else {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        }
+    }
 
     private static String selfPublicKeyFile() {
         OsType ostype = NativeUtil.ostype();

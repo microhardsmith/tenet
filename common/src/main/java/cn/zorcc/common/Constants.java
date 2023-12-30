@@ -321,6 +321,7 @@ public final class Constants {
     public static final int NET_PRW = NET_PR | NET_PW; // register read and write if possible
     public static final int NET_PC = Integer.MIN_VALUE | (1 << 12);
     public static final int NET_WC = Integer.MIN_VALUE | (1 << 16);
+    public static final int NET_OTHER = Integer.MIN_VALUE | (1 << 20);
 
     /**
      *   Ssl library

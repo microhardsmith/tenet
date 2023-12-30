@@ -198,10 +198,12 @@ public final class WindowsNetworkLibrary implements OsNetworkLibrary {
     public IntPair access(MemorySegment events, int index) {
         int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
         long socket = NativeUtil.getLong(events, index * eventSize + dataOffset + sockOffset);
-        if((event & (Constants.EPOLL_IN | Constants.EPOLL_ERR | Constants.EPOLL_HUP | Constants.EPOLL_RDHUP)) != 0) {
+        if((event & (Constants.EPOLL_IN | Constants.EPOLL_RDHUP)) != 0) {
             return new IntPair((int) socket, Constants.NET_R);
         }else if((event & Constants.EPOLL_OUT) != 0) {
             return new IntPair((int) socket, Constants.NET_W);
+        }else if((event & (Constants.EPOLL_ERR | Constants.EPOLL_HUP)) != 0) {
+            return new IntPair((int) socket, Constants.NET_OTHER);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }

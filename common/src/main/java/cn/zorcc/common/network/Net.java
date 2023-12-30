@@ -37,6 +37,7 @@ public final class Net extends AbstractLifeCycle {
      *   Default client connect timeout, could be modified according to your scenario
      */
     private static final DurationWithCallback defaultDurationWithCallback = new DurationWithCallback(Duration.ofSeconds(5), null);
+    private final NetConfig config;
     private final State state = new State(Constants.INITIAL);
     private final Mux mux = osNetworkLibrary.createMux();
     private final Set<Provider> providers = new HashSet<>(List.of(tcpProvider, sslProvider));
@@ -46,12 +47,11 @@ public final class Net extends AbstractLifeCycle {
     private final Thread netThread;
     private final Queue<Listener> netQueue = new MpscLinkedAtomicQueue<>();
 
-    private Thread createNetThread(NetConfig netConfig) {
+    private Thread createNetThread() {
         return Thread.ofPlatform().unstarted(() -> {
-            int maxEvents = netConfig.getMaxEvents();
-            int muxTimeout = netConfig.getMuxTimeout();
-            int backlog = netConfig.getBacklog();
-            IntMap<Listener> listenerMap = new IntMap<>(netConfig.getMapSize());
+            int maxEvents = config.getMaxEvents();
+            int muxTimeout = config.getMuxTimeout();
+            IntMap<Listener> listenerMap = new IntMap<>(config.getMapSize());
             try(Arena arena = Arena.ofConfined()) {
                 Timeout timeout = Timeout.of(arena, muxTimeout);
                 MemorySegment events = arena.allocate(MemoryLayout.sequenceLayout(maxEvents, osNetworkLibrary.eventLayout()));
@@ -77,40 +77,40 @@ public final class Net extends AbstractLifeCycle {
                             Loc loc = listener.loc();
                             log.info(STR."Server listener registered for \{loc}");
                             listenerMap.put(socket.intValue(), listener);
-                            osNetworkLibrary.bindAndListen(socket, loc, backlog);
                         }
                     }
                     for(int index = 0; index < r; ++index) {
                         IntPair pair = osNetworkLibrary.access(events, index);
                         int eventType = pair.second();
-                        if(eventType != Constants.NET_R) {
+                        if(eventType == Constants.NET_R) {
+                            Listener listener = listenerMap.get(pair.first());
+                            if(listener == null) {
+                                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+                            }
+                            Socket serverSocket = listener.socket();
+                            Loc serverLoc = listener.loc();
+                            SocketAndLoc socketAndLoc;
+                            try{
+                                socketAndLoc = osNetworkLibrary.accept(serverLoc, serverSocket, listener.socketConfig());
+                            }catch (RuntimeException e) {
+                                log.error(STR."Failed to accept connection on \{ serverLoc }", e);
+                                continue ;
+                            }
+                            Socket clientSocket = socketAndLoc.socket();
+                            Loc clientLoc = socketAndLoc.loc();
+                            int seq = listener.counter().getAndIncrement();
+                            Poller poller = pollers.get(seq % pollers.size());
+                            Writer writer = writers.get(seq % writers.size());
+                            Encoder encoder = listener.encoderSupplier().get();
+                            Decoder decoder = listener.decoderSupplier().get();
+                            Handler handler = listener.handlerSupplier().get();
+                            Channel channel = new ChannelImpl(clientSocket, encoder, decoder, handler, poller, writer, clientLoc);
+                            Sentry sentry = listener.provider().create(channel);
+                            poller.submit(new PollerTask(PollerTaskType.BIND, channel, sentry));
+                            osNetworkLibrary.ctlMux(poller.mux(), clientSocket, Constants.NET_NONE, Constants.NET_W);
+                        }else {
                             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
                         }
-                        Listener listener = listenerMap.get(pair.first());
-                        if(listener == null) {
-                            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-                        }
-                        Socket serverSocket = listener.socket();
-                        Loc serverLoc = listener.loc();
-                        SocketAndLoc socketAndLoc;
-                        try{
-                            socketAndLoc = osNetworkLibrary.accept(serverLoc, serverSocket, listener.socketConfig());
-                        }catch (RuntimeException e) {
-                            log.error(STR."Failed to accept connection on \{ serverLoc }", e);
-                            continue ;
-                        }
-                        Socket clientSocket = socketAndLoc.socket();
-                        Loc clientLoc = socketAndLoc.loc();
-                        int seq = listener.counter().getAndIncrement();
-                        Poller poller = pollers.get(seq % pollers.size());
-                        Writer writer = writers.get(seq % writers.size());
-                        Encoder encoder = listener.encoderSupplier().get();
-                        Decoder decoder = listener.decoderSupplier().get();
-                        Handler handler = listener.handlerSupplier().get();
-                        Channel channel = new ChannelImpl(clientSocket, encoder, decoder, handler, poller, writer, clientLoc);
-                        Sentry sentry = listener.provider().create(channel);
-                        poller.submit(new PollerTask(PollerTaskType.BIND, channel, sentry));
-                        osNetworkLibrary.ctlMux(poller.mux(), clientSocket, Constants.NET_NONE, Constants.NET_W);
                     }
                 }
             }
@@ -157,10 +157,11 @@ public final class Net extends AbstractLifeCycle {
         if(writerCount <= 0) {
             throw new FrameworkException(ExceptionType.NETWORK, "Writer instances cannot be zero");
         }
+        this.config = netConfig;
         this.pollers = IntStream.range(0, pollerCount).mapToObj(_ -> new Poller(pollerConfig)).toList();
         this.writers = IntStream.range(0, writerCount).mapToObj(_ -> new Writer(writerConfig)).toList();
         this.shutdownTimeout = Duration.ofSeconds(netConfig.getGracefulShutdownTimeout());
-        this.netThread = createNetThread(netConfig);
+        this.netThread = createNetThread();
     }
 
     public void addServerListener(ListenerConfig listenerConfig) {
@@ -181,6 +182,7 @@ public final class Net extends AbstractLifeCycle {
             if (!netQueue.offer(listener)) {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
+            osNetworkLibrary.bindAndListen(socket, loc, config.getBacklog());
             osNetworkLibrary.ctlMux(mux, socket, Constants.NET_NONE, Constants.NET_R);
         }
     }

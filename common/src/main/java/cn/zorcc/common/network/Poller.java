@@ -80,7 +80,7 @@ public final class Poller {
                             int event = pair.second();
                             if(event == Constants.NET_W) {
                                 pollerNode.onWritableEvent();
-                            }else if(event == Constants.NET_R) {
+                            }else if(event == Constants.NET_R || event == Constants.NET_OTHER) {
                                 pollerNode.onReadableEvent(reserved, readBufferSize);
                             }else {
                                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
