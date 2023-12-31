@@ -241,7 +241,7 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
         try(Arena arena = Arena.ofConfined()) {
             MemorySegment ptr = arena.allocate(ValueLayout.JAVA_INT, Integer.MIN_VALUE);
             check(TenetLinuxBinding.getErrOpt(socket.intValue(), ptr), "get socket err opt");
-            return NativeUtil.getInt(ptr, 0);
+            return NativeUtil.getInt(ptr, 0L);
         }
     }
 

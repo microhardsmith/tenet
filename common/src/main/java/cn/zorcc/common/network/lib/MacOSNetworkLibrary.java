@@ -17,8 +17,9 @@ import java.lang.foreign.ValueLayout;
 
 /**
  *   Native implementation under macOS, using kqueue
- *   Note that the .dylib library is only suitable for ARM-based chips since I only tested on M1 series MacBook
- *   If developer needs to run it on X86 processors, recompile a new .dylib would work, it should be working on freebsd or openbsd operating system too since they are quite similar to macOS
+ *   Note that the prebuilt .dylib library is only suitable for ARM-based chips since I only tested on M1 series MacBook
+ *   If developer needs to run it on X86 processors, recompile a new .dylib would work
+ *   It should be working on freebsd or openbsd operating system too since they are quite similar to macOS, but further tests are needed
  */
 public final class MacOSNetworkLibrary implements OsNetworkLibrary {
     /**
@@ -173,14 +174,14 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
             if(r1 != r2) {
                 NativeUtil.setLong(ptr, identOffset, fd);
                 NativeUtil.setShort(ptr, filterOffset, Constants.EVFILT_READ);
-                NativeUtil.setShort(ptr, flagsOffset, r1 > r2 ? Constants.EV_DELETE : Constants.EV_ADD);
+                NativeUtil.setShort(ptr, flagsOffset, r1 == Constants.NET_NONE ? Constants.EV_ADD : Constants.EV_DELETE);
                 index++;
             }
             int w1 = from & Constants.NET_W, w2 = to & Constants.NET_W;
             if(w1 != w2) {
                 NativeUtil.setLong(ptr, index * keventSize + identOffset, fd);
                 NativeUtil.setShort(ptr, index * keventSize + filterOffset, Constants.EVFILT_WRITE);
-                NativeUtil.setShort(ptr, index * keventSize + flagsOffset, w1 > w2 ? Constants.EV_DELETE : Constants.EV_ADD);
+                NativeUtil.setShort(ptr, index * keventSize + flagsOffset, w1 == Constants.NET_NONE ? Constants.EV_ADD : Constants.EV_DELETE);
                 index++;
             }
             return TenetMacosBinding.keventCtl(kqfd, ptr, index);
@@ -252,7 +253,7 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
         try(Arena arena = Arena.ofConfined()) {
             MemorySegment ptr = arena.allocate(ValueLayout.JAVA_INT, Integer.MIN_VALUE);
             check(TenetMacosBinding.getErrOpt(socket.intValue(), ptr), "get socket err opt");
-            return NativeUtil.getInt(ptr, 0);
+            return NativeUtil.getInt(ptr, 0L);
         }
     }
 

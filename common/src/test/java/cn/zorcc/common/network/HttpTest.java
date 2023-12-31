@@ -25,8 +25,6 @@ public class HttpTest {
     private static final Logger log = new Logger(HttpTest.class);
     @Test
     public void testHttpServer() throws InterruptedException {
-        Context.load(Wheel.wheel(), Wheel.class);
-        Context.load(new LoggerConsumer(), LoggerConsumer.class);
         Context.load(createHttpNet(), Net.class);
         Context.init();
         Thread.sleep(Long.MAX_VALUE);
@@ -34,8 +32,6 @@ public class HttpTest {
 
     @Test
     public void testHttpsServer() throws InterruptedException {
-        Context.load(Wheel.wheel(), Wheel.class);
-        Context.load(new LoggerConsumer(), LoggerConsumer.class);
         Context.load(createHttpsNet(), Net.class);
         Context.init();
         Thread.sleep(Long.MAX_VALUE);
@@ -43,8 +39,6 @@ public class HttpTest {
 
     @Test
     public void testHttpAndHttpsServer() throws InterruptedException {
-        Context.load(Wheel.wheel(), Wheel.class);
-        Context.load(new LoggerConsumer(), LoggerConsumer.class);
         Context.load(createHttpAndHttpsNet(), Net.class);
         Context.init();
         Thread.sleep(Long.MAX_VALUE);
