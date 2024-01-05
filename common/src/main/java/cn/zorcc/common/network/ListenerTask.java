@@ -8,7 +8,7 @@ import cn.zorcc.common.network.api.Provider;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
-public record Listener (
+public record ListenerTask(
         Supplier<Encoder> encoderSupplier,
         Supplier<Decoder> decoderSupplier,
         Supplier<Handler> handlerSupplier,

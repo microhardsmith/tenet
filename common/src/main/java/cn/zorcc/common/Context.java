@@ -34,7 +34,6 @@ public final class Context {
             if(!contextState.cas(Constants.INITIAL, Constants.STARTING)) {
                 throw new FrameworkException(ExceptionType.CONTEXT, "Context has been initialized");
             }
-            contextState.set(Constants.STARTING);
             List<Container> tempContainers = new ArrayList<>(pendingContainers);
             pendingContainers.clear();
             contextListener.beforeStarted();
@@ -58,7 +57,9 @@ public final class Context {
             String[] pidAndDevice = runtimeMXBean.getName().split("@");
             log.info(STR."Process running with Pid: \{pidAndDevice[0]} on Device: \{pidAndDevice[1]}");
             log.info(STR."Tenet application started in \{ Duration.ofNanos(Clock.elapsed(nano)).toMillis()} ms, JVM running for \{runtimeMXBean.getUptime()} ms");
-            contextState.set(Constants.RUNNING);
+            if(!contextState.cas(Constants.STARTING, Constants.RUNNING)) {
+                throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
+            }
         }
     }
 

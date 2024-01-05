@@ -245,13 +245,13 @@ public final class ProtocolPollerNode implements PollerNode {
                     channel.writer().submit(new WriterTask(WriterTaskType.CLOSE, channel, null, null));
                 }
             }
-            if(nodeMap.isEmpty()) {
-                channel.poller().submit(new PollerTask(PollerTaskType.POTENTIAL_EXIT, null, null));
-            }
             try{
                 channel.handler().onRemoved(channel);
             }catch (RuntimeException e) {
                 log.error("Err occurred in onRemoved()", e);
+            }
+            if(nodeMap.isEmpty()) {
+                channel.poller().submit(new PollerTask(PollerTaskType.POTENTIAL_EXIT, null, null));
             }
         }
     }

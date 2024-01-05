@@ -12,7 +12,7 @@ public final class JsonReaderObjectNode extends JsonReaderNode {
 
     public JsonReaderObjectNode(ReadBuffer readBuffer, Class<?> type) {
         this.readBuffer = readBuffer;
-        this.meta = Meta.of(type);
+        this.meta = JsonParser.getMeta(type);
         this.target = meta.constructor().get();
     }
 

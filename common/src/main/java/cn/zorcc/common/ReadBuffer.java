@@ -30,7 +30,7 @@ public final class ReadBuffer {
     public ReadBuffer(MemorySegment segment) {
         this.segment = segment;
         this.size = segment.byteSize();
-        this.readIndex = 0;
+        this.readIndex = 0L;
     }
 
 
@@ -130,6 +130,26 @@ public final class ReadBuffer {
         long l = NativeUtil.getLong(segment, readIndex);
         readIndex = nextIndex;
         return l;
+    }
+
+    public float readFloat() {
+        long nextIndex = readIndex + NativeUtil.getFloatSize();
+        if(nextIndex > size) {
+            throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
+        }
+        float f = NativeUtil.getFloat(segment, readIndex);
+        readIndex = nextIndex;
+        return f;
+    }
+
+    public double readDouble() {
+        long nextIndex = readIndex + NativeUtil.getDoubleSize();
+        if(nextIndex > size) {
+            throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
+        }
+        double d = NativeUtil.getDouble(segment, readIndex);
+        readIndex = nextIndex;
+        return d;
     }
 
     /**

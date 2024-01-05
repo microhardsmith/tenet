@@ -5,14 +5,14 @@ import cn.zorcc.common.network.IpType;
 import cn.zorcc.common.network.Loc;
 import cn.zorcc.common.util.NativeUtil;
 
-public class TestConstants {
+public final class TestConstants {
     public static final int PORT = port();
     public static final Loc SERVER_IPV4_LOC = new Loc(IpType.IPV4, PORT);
     public static final Loc SERVER_IPV6_LOC = new Loc(IpType.IPV6, PORT);
     public static final Loc CLIENT_IPV4_LOC = new Loc(IpType.IPV4, "127.0.0.1", PORT);
     public static final Loc CLIENT_IPV6_LOC = new Loc(IpType.IPV6, "::1", PORT);
-    public static final Loc HTTP_LOC = new Loc(IpType.IPV4, "0.0.0.0", 80);
-    public static final Loc HTTPS_LOC = new Loc(IpType.IPV6, "0.0.0.0", 443);
+    public static final Loc HTTP_LOC = new Loc(IpType.IPV4, 80);
+    public static final Loc HTTPS_LOC = new Loc(IpType.IPV6, 443);
     public static final String SELF_PUBLIC_KEY_FILE = selfPublicKeyFile();
     public static final String SELF_PRIVATE_KEY_FILE = selfPrivateKeyFile();
     public static final String SERVER_PUBLIC_KEY_FILE = serverPublicKeyFile();

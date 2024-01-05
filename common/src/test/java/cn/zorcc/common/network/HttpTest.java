@@ -8,9 +8,7 @@ import cn.zorcc.common.bindings.DeflateBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.http.*;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.log.LoggerConsumer;
 import cn.zorcc.common.network.api.Handler;
-import cn.zorcc.common.structure.Wheel;
 import cn.zorcc.common.util.CompressUtil;
 import org.junit.jupiter.api.Test;
 

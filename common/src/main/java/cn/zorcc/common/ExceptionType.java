@@ -1,8 +1,5 @@
 package cn.zorcc.common;
 
-/**
- * 定义FrameworkException类型
- */
 public enum ExceptionType {
     NATIVE,
     WHEEL,

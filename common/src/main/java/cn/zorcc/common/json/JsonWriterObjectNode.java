@@ -15,7 +15,7 @@ public final class JsonWriterObjectNode extends JsonWriterNode {
 
     public JsonWriterObjectNode(WriteBuffer writeBuffer, Object obj, Class<?> type) {
         this.writeBuffer = writeBuffer;
-        this.meta = Meta.of(type);
+        this.meta = JsonParser.getMeta(type);
         this.obj = obj;
         writeBuffer.writeByte(Constants.LCB);
     }

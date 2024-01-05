@@ -1,7 +1,6 @@
 package cn.zorcc.common.json;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.Meta;
 import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.exception.JsonParseException;
@@ -268,7 +267,7 @@ public abstract class JsonReaderNode {
         }else if(type == OffsetDateTime.class) {
             return OffsetDateTime.parse(str);
         }else if(type.isEnum()) {
-            return Meta.of(type).enumMap().get(str);
+            return JsonParser.getMeta(type).enumMap().get(str);
         }else {
             throw new JsonParseException("Unsupported string type : %s".formatted(type.getName()));
         }

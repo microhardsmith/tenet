@@ -15,6 +15,7 @@ import java.util.List;
  *   Other SSL library or other operating system were not tested, you are welcome to test it on your own
  */
 public final class SslBinding {
+    private static final int ERR_STRING_LENGTH = Constants.KB;
     private static final SymbolLookup crypto;
     private static final SymbolLookup ssl;
     /**
@@ -73,7 +74,7 @@ public final class SslBinding {
         sslGetPeerCertificate = NativeUtil.methodHandle(ssl, List.of("SSL_get_peer_certificate", "SSL_get1_peer_certificate"), FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         x509Free = NativeUtil.methodHandle(crypto, "X509_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         errGet = NativeUtil.methodHandle(crypto, "ERR_get_error", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
-        errString = NativeUtil.methodHandle(crypto, "ERR_error_string", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+        errString = NativeUtil.methodHandle(crypto, "ERR_error_string_n", FunctionDescriptor.ofVoid(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
     }
 
     private SslBinding() {
@@ -263,9 +264,9 @@ public final class SslBinding {
         }
     }
 
-    public static MemorySegment errString(long err, MemorySegment buf) {
+    public static void errString(long err, MemorySegment buf, long len) {
         try{
-            return (MemorySegment) errString.invokeExact(err, buf);
+            errString.invokeExact(err, buf, len);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
@@ -288,9 +289,9 @@ public final class SslBinding {
 
     public static String getErrDescription() {
         try(Arena arena = Arena.ofConfined()) {
-            MemorySegment buf = arena.allocateArray(ValueLayout.JAVA_BYTE, Constants.KB);
-            MemorySegment ptr = errString(errGet(), buf).reinterpret(Long.MAX_VALUE);
-            return NativeUtil.getStr(ptr);
+            MemorySegment buf = arena.allocateArray(ValueLayout.JAVA_BYTE, ERR_STRING_LENGTH);
+            errString(errGet(), buf, buf.byteSize());
+            return NativeUtil.getStr(buf, ERR_STRING_LENGTH);
         }
     }
 

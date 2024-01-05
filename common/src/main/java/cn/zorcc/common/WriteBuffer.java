@@ -110,6 +110,20 @@ public final class WriteBuffer implements AutoCloseable {
         writeIndex = nextIndex;
     }
 
+    public void writeFloat(float f) {
+        long nextIndex = writeIndex + NativeUtil.getFloatSize();
+        resize(nextIndex);
+        NativeUtil.setFloat(segment, writeIndex, f);
+        writeIndex = nextIndex;
+    }
+
+    public void writeDouble(double d) {
+        long nextIndex = writeIndex + NativeUtil.getDoubleSize();
+        resize(nextIndex);
+        NativeUtil.setDouble(segment, writeIndex, d);
+        writeIndex = nextIndex;
+    }
+
     public void writeCStr(String str) {
         MemorySegment m = MemorySegment.ofArray(str.getBytes(StandardCharsets.UTF_8));
         long len = m.byteSize();
@@ -182,6 +196,20 @@ public final class WriteBuffer implements AutoCloseable {
         NativeUtil.setLong(segment, index, value);
     }
 
+    public void setFloat(long index, float value) {
+        if(index + NativeUtil.getFloatSize() > writeIndex) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
+        }
+        NativeUtil.setFloat(segment, index, value);
+    }
+
+    public void setDouble(long index, double value) {
+        if(index + NativeUtil.getDoubleSize() > writeIndex) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
+        }
+        NativeUtil.setDouble(segment, index, value);
+    }
+
     /**
      *   Return current written segment, from 0 ~ writeIndex, calling content() will not modify current writeBuffer's writeIndex
      */
@@ -245,13 +273,7 @@ public final class WriteBuffer implements AutoCloseable {
     /**
      *   Default writeBufferPolicy, double the memory allocated to contain the grown bytes
      */
-    static final class DefaultWriteBufferPolicy implements WriteBufferPolicy {
-        private final Arena arena;
-
-        public DefaultWriteBufferPolicy(Arena arena) {
-            this.arena = arena;
-        }
-
+    record DefaultWriteBufferPolicy(Arena arena) implements WriteBufferPolicy {
         @Override
         public void resize(WriteBuffer writeBuffer, long nextIndex) {
             long newLen = Math.max(nextIndex, writeBuffer.size() << 1);
@@ -273,12 +295,7 @@ public final class WriteBuffer implements AutoCloseable {
     /**
      *   Ignore writeBufferPolicy, throw an exception if current WriteBuffer wants to resize
      */
-    static final class FixedWriteBufferPolicy implements WriteBufferPolicy {
-        private final Arena arena;
-
-        public FixedWriteBufferPolicy(Arena arena) {
-            this.arena = arena;
-        }
+    record FixedWriteBufferPolicy(Arena arena) implements WriteBufferPolicy {
 
         @Override
         public void resize(WriteBuffer writeBuffer, long nextIndex) {

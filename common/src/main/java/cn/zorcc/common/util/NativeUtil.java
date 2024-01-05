@@ -83,7 +83,7 @@ public final class NativeUtil {
      */
     private static boolean runningFromJar() {
         String className = NativeUtil.class.getName().replace('.', '/');
-        String classJar = Objects.requireNonNull(NativeUtil.class.getResource("/" + className + ".class")).toString();
+        String classJar = Objects.requireNonNull(NativeUtil.class.getResource(STR."/\{className}.class")).toString();
         return classJar.startsWith("jar:");
     }
 
@@ -204,7 +204,7 @@ public final class NativeUtil {
         if(libPath == null) {
             throw new FrameworkException(ExceptionType.NATIVE, "Global libPath not found");
         }
-        return libraryCache.computeIfAbsent(identifier, i -> SymbolLookup.libraryLookup(libPath + Constants.SEPARATOR + getDynamicLibraryName(i), Arena.global()));
+        return libraryCache.computeIfAbsent(identifier, i -> SymbolLookup.libraryLookup(libPath + Constants.SEPARATOR + getDynamicLibraryName(i), globalArena));
     }
 
     public static MethodHandle nativeMethodHandle(String methodName, FunctionDescriptor functionDescriptor) {
