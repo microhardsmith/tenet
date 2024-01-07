@@ -45,6 +45,8 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
     private final int ipv6AddressLen;
     private final int ipv4AddressSize;
     private final int ipv6AddressSize;
+    private final int ipv4AddressAlign;
+    private final int ipv6AddressAlign;
 
     public MacOSNetworkLibrary() {
         connectBlockCode = TenetMacosBinding.connectBlockCode();
@@ -54,6 +56,8 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
         ipv6AddressLen = TenetMacosBinding.ipv6AddressLen();
         ipv4AddressSize = TenetMacosBinding.ipv4AddressSize();
         ipv6AddressSize = TenetMacosBinding.ipv6AddressSize();
+        ipv4AddressAlign = TenetMacosBinding.ipv4AddressAlign();
+        ipv6AddressAlign = TenetMacosBinding.ipv6AddressAlign();
     }
 
 
@@ -90,6 +94,16 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
     @Override
     public int ipv6AddressSize() {
         return ipv6AddressSize;
+    }
+
+    @Override
+    public int ipv4AddressAlign() {
+        return ipv4AddressAlign;
+    }
+
+    @Override
+    public int ipv6AddressAlign() {
+        return ipv6AddressAlign;
     }
 
     @Override

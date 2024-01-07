@@ -44,6 +44,8 @@ public final class WindowsNetworkLibrary implements OsNetworkLibrary {
     private final int ipv6AddressLen;
     private final int ipv4AddressSize;
     private final int ipv6AddressSize;
+    private final int ipv4AddressAlign;
+    private final int ipv6AddressAlign;
 
     public WindowsNetworkLibrary() {
         connectBlockCode = TenetWindowsBinding.connectBlockCode();
@@ -53,6 +55,8 @@ public final class WindowsNetworkLibrary implements OsNetworkLibrary {
         ipv6AddressLen = TenetWindowsBinding.ipv6AddressLen();
         ipv4AddressSize = TenetWindowsBinding.ipv4AddressSize();
         ipv6AddressSize = TenetWindowsBinding.ipv6AddressSize();
+        ipv4AddressAlign = TenetWindowsBinding.ipv4AddressAlign();
+        ipv6AddressAlign = TenetWindowsBinding.ipv6AddressAlign();
     }
 
     @Override
@@ -88,6 +92,16 @@ public final class WindowsNetworkLibrary implements OsNetworkLibrary {
     @Override
     public int ipv6AddressSize() {
         return ipv6AddressSize;
+    }
+
+    @Override
+    public int ipv4AddressAlign() {
+        return ipv4AddressAlign;
+    }
+
+    @Override
+    public int ipv6AddressAlign() {
+        return ipv6AddressAlign;
     }
 
     @Override

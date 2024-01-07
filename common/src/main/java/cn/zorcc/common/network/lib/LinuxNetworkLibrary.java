@@ -40,6 +40,8 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
     private final int ipv6AddressLen;
     private final int ipv4AddressSize;
     private final int ipv6AddressSize;
+    private final int ipv4AddressAlign;
+    private final int ipv6AddressAlign;
 
     public LinuxNetworkLibrary() {
         connectBlockCode = TenetLinuxBinding.connectBlockCode();
@@ -49,6 +51,8 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
         ipv6AddressLen = TenetLinuxBinding.ipv6AddressLen();
         ipv4AddressSize = TenetLinuxBinding.ipv4AddressSize();
         ipv6AddressSize = TenetLinuxBinding.ipv6AddressSize();
+        ipv4AddressAlign = TenetLinuxBinding.ipv4AddressAlign();
+        ipv6AddressAlign = TenetLinuxBinding.ipv6AddressAlign();
     }
 
     @Override
@@ -84,6 +88,16 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
     @Override
     public int ipv6AddressSize() {
         return ipv6AddressSize;
+    }
+
+    @Override
+    public int ipv4AddressAlign() {
+        return ipv4AddressAlign;
+    }
+
+    @Override
+    public int ipv6AddressAlign() {
+        return ipv6AddressAlign;
     }
 
     @Override

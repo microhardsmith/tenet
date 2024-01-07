@@ -16,6 +16,8 @@ public final class TenetWindowsBinding {
     private static final MethodHandle ipv6AddressLenMethodHandle;
     private static final MethodHandle ipv4AddressSizeMethodHandle;
     private static final MethodHandle ipv6AddressSizeMethodHandle;
+    private static final MethodHandle ipv4AddressAlignMethodHandle;
+    private static final MethodHandle ipv6AddressAlignMethodHandle;
     private static final MethodHandle epollCreateMethodHandle;
     private static final MethodHandle epollCtlMethodHandle;
     private static final MethodHandle epollWaitMethodHandle;
@@ -59,6 +61,10 @@ public final class TenetWindowsBinding {
         ipv4AddressSizeMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv4_address_size",
                 FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
         ipv6AddressSizeMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv6_address_size",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+        ipv4AddressAlignMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv4_address_align",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+        ipv6AddressAlignMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv6_address_align",
                 FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
         epollCreateMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_epoll_create",
                 FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
@@ -167,6 +173,22 @@ public final class TenetWindowsBinding {
     public static int ipv6AddressSize() {
         try{
             return (int) ipv6AddressSizeMethodHandle.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static int ipv4AddressAlign() {
+        try{
+            return (int) ipv4AddressAlignMethodHandle.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static int ipv6AddressAlign() {
+        try{
+            return (int) ipv6AddressAlignMethodHandle.invokeExact();
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }

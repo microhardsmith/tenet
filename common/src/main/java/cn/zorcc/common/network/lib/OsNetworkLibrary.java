@@ -58,6 +58,16 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     int ipv6AddressSize();
 
     /**
+     *   Return the default ipv4 address struct align of the underlying operating system
+     */
+    int ipv4AddressAlign();
+
+    /**
+     *   Return the default ipv6 address struct align of the underlying operating system
+     */
+    int ipv6AddressAlign();
+
+    /**
      *   Create a multiplexing object corresponding to the target operating system
      */
     Mux createMux();
@@ -235,7 +245,7 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     }
 
     private MemorySegment createIpv4SockAddr(Loc loc, Arena arena) {
-        MemorySegment r = arena.allocate(ipv4AddressSize());
+        MemorySegment r = arena.allocate(ipv4AddressSize(), ipv4AddressAlign());
         MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? NativeUtil.NULL_POINTER : NativeUtil.allocateStr(arena, loc.ip(), ipv4AddressLen());
         if(check(setIpv4SockAddr(r, ip, loc.shortPort()), "set ipv4 address") == 0) {
             throw new FrameworkException(ExceptionType.NETWORK, STR."Ipv4 address is not valid : \{loc.ip()}");
@@ -244,7 +254,7 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     }
 
     private MemorySegment createIpv6SockAddr(Loc loc, Arena arena) {
-        MemorySegment r = arena.allocate(ipv6AddressSize());
+        MemorySegment r = arena.allocate(ipv6AddressSize(), ipv6AddressAlign());
         MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? NativeUtil.NULL_POINTER : NativeUtil.allocateStr(arena, loc.ip(), ipv6AddressLen());
         if(check(setIpv6SockAddr(r, ip, loc.shortPort()), "set ipv6 address") == 0) {
             throw new FrameworkException(ExceptionType.NETWORK, STR."Ipv6 address is not valid : \{loc.ip()}");
@@ -310,10 +320,9 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     String IPV4_MAPPED_FORMAT = "::ffff:";
     int IPV4_PREFIX_LENGTH = IPV4_MAPPED_FORMAT.length();
     private SocketAndLoc acceptIpv6Connection(Socket socket, SocketConfig socketConfig) {
-        final int ipv6AddressSize = ipv6AddressSize();
         final int ipv6AddressLen = ipv6AddressLen();
         try(Arena arena = Arena.ofConfined()) {
-            MemorySegment clientAddr = arena.allocate(ipv6AddressSize);
+            MemorySegment clientAddr = arena.allocate(ipv6AddressSize(), ipv6AddressAlign());
             MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, ipv6AddressLen);
             Socket clientSocket = accept(socket, clientAddr);
             configureClientSocket(clientSocket, socketConfig);
@@ -329,10 +338,9 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     }
 
     private SocketAndLoc acceptIpv4Connection(Socket socket, SocketConfig socketConfig) {
-        final int ipv4AddressSize = ipv4AddressSize();
         final int ipv4AddressLen = ipv4AddressLen();
         try(Arena arena = Arena.ofConfined()) {
-            MemorySegment clientAddr = arena.allocate(ipv4AddressSize);
+            MemorySegment clientAddr = arena.allocate(ipv4AddressSize(), ipv4AddressAlign());
             MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, ipv4AddressLen);
             Socket clientSocket = accept(socket, clientAddr);
             configureClientSocket(clientSocket, socketConfig);

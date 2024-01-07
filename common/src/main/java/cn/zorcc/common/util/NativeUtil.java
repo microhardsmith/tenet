@@ -24,7 +24,7 @@ public final class NativeUtil {
     /**
      *   Global NULL pointer, don't use it if the application would modify the actual address of this pointer
      */
-    public static final MemorySegment NULL_POINTER = MemorySegment.ofAddress(0);
+    public static final MemorySegment NULL_POINTER = MemorySegment.ofAddress(0L);
     /**
      *   Current operating system name
      */
