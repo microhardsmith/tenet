@@ -25,8 +25,8 @@ public final class Poller {
     private final Mux mux = osNetworkLibrary.createMux();
     private final Thread pollerThread;
     private final Queue<PollerTask> readerTaskQueue = new MpscUnboundedAtomicArrayQueue<>(Constants.KB);
-    public Poller(PollerConfig pollerConfig) {
-        this.pollerThread = createPollerThread(pollerConfig);
+    public Poller(NetConfig config) {
+        this.pollerThread = createPollerThread(config);
     }
 
     public Mux mux() {
@@ -43,15 +43,15 @@ public final class Poller {
         }
     }
 
-    private Thread createPollerThread(PollerConfig pollerConfig) {
+    private Thread createPollerThread(NetConfig config) {
         int sequence = counter.getAndIncrement();
         return Thread.ofPlatform().name(STR."poller-\{sequence}").unstarted(() -> {
             log.info(STR."Initializing poller thread, sequence : \{sequence}");
-            IntMap<PollerNode> nodeMap = new IntMap<>(pollerConfig.getMapSize());
+            IntMap<PollerNode> nodeMap = new IntMap<>(config.getPollerMapSize());
             try(Arena arena = Arena.ofConfined()) {
-                Timeout timeout = Timeout.of(arena, pollerConfig.getMuxTimeout());
-                int maxEvents = pollerConfig.getMaxEvents();
-                int readBufferSize = pollerConfig.getReadBufferSize();
+                Timeout timeout = Timeout.of(arena, config.getPollerMuxTimeout());
+                int maxEvents = config.getPollerMaxEvents();
+                int readBufferSize = config.getPollerReadBufferSize();
                 MemorySegment events = arena.allocate(MemoryLayout.sequenceLayout(maxEvents, osNetworkLibrary.eventLayout()));
                 MemorySegment[] reservedArray = new MemorySegment[maxEvents];
                 for(int i = 0; i < reservedArray.length; i++) {
@@ -128,7 +128,7 @@ public final class Poller {
         }
     }
 
-    private static void handleBindMsg(IntMap<PollerNode> nodeMap, PollerTask pollerTask) {
+    private void handleBindMsg(IntMap<PollerNode> nodeMap, PollerTask pollerTask) {
         Channel channel = pollerTask.channel();
         SentryPollerNode sentryPollerNode = switch (pollerTask.msg()) {
             case Sentry sentry -> new SentryPollerNode(nodeMap, channel, sentry, null);

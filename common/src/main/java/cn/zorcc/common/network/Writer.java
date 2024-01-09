@@ -18,8 +18,8 @@ public final class Writer {
     private static final AtomicInteger counter = new AtomicInteger(0);
     private final BlockingQueue<WriterTask> queue = new LinkedTransferQueue<>();
     private final Thread writerThread;
-    public Writer(WriterConfig writerConfig) {
-        this.writerThread = createWriterThread(writerConfig);
+    public Writer(NetConfig config) {
+        this.writerThread = createWriterThread(config);
     }
 
     public void submit(WriterTask writerTask) {
@@ -32,13 +32,13 @@ public final class Writer {
         return writerThread;
     }
 
-    private Thread createWriterThread(WriterConfig writerConfig) {
+    private Thread createWriterThread(NetConfig config) {
         int sequence = counter.getAndIncrement();
         return Thread.ofPlatform().name(STR."writer-\{sequence}").unstarted(() -> {
             log.info(STR."Initializing writer thread, sequence : \{sequence}");
             try(Arena arena = Arena.ofConfined()){
-                IntMap<WriterNode> nodeMap = new IntMap<>(writerConfig.getMapSize());
-                MemorySegment reservedSegment = arena.allocateArray(ValueLayout.JAVA_BYTE, writerConfig.getWriteBufferSize());
+                IntMap<WriterNode> nodeMap = new IntMap<>(config.getWriterMapSize());
+                MemorySegment reservedSegment = arena.allocateArray(ValueLayout.JAVA_BYTE, config.getWriterWriteBufferSize());
                 processWriterTasks(nodeMap, reservedSegment);
             }catch (InterruptedException i) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Writer thread interrupted", i);

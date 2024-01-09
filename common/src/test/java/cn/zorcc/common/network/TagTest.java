@@ -87,10 +87,6 @@ public class TagTest {
     }
 
     private static Net createTagNetClient() {
-        PollerConfig pollerConfig = new PollerConfig();
-        pollerConfig.setPollerCount(1);
-        WriterConfig writerConfig = new WriterConfig();
-        writerConfig.setWriterCount(1);
         return new Net();
     }
 
@@ -105,11 +101,10 @@ public class TagTest {
             listenerConfig.setProvider(Net.tcpProvider());
         }
         listenerConfig.setLoc(usingIpv6 ? TestConstants.SERVER_IPV6_LOC : TestConstants.SERVER_IPV4_LOC);
-        PollerConfig pollerConfig = new PollerConfig();
-        pollerConfig.setPollerCount(1);
-        WriterConfig writerConfig = new WriterConfig();
-        writerConfig.setWriterCount(1);
-        Net net = new Net(pollerConfig, writerConfig);
+        NetConfig netConfig = new NetConfig();
+        netConfig.setPollerCount(1);
+        netConfig.setWriterCount(1);
+        Net net = new Net(netConfig);
         net.addServerListener(listenerConfig);
         return net;
     }

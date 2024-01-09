@@ -30,8 +30,6 @@ public final class Net extends AbstractLifeCycle {
     private static final Provider sslProvider = SslProvider.newClientProvider(System.getProperty(Constants.CA_FILE), System.getProperty(Constants.CA_DIR));
     private static final ListenerTask EXIT_TASK = new ListenerTask(null, null, null, null, null, null, null, null);
     private static final NetConfig defaultNetConfig = new NetConfig();
-    private static final PollerConfig defaultPollerConfig = new PollerConfig();
-    private static final WriterConfig defaultWriterConfig = new WriterConfig();
     private static final SocketConfig defaultSocketConfig = new SocketConfig();
     /**
      *   Default client connect timeout, could be modified according to your scenario
@@ -127,40 +125,28 @@ public final class Net extends AbstractLifeCycle {
     }
 
     public Net() {
-        this(defaultNetConfig, defaultPollerConfig, defaultWriterConfig);
+        this(defaultNetConfig);
     }
 
-    public Net(PollerConfig pollerConfig) {
-        this(defaultNetConfig, pollerConfig, defaultWriterConfig);
-    }
-
-    public Net(WriterConfig writerConfig) {
-        this(defaultNetConfig, defaultPollerConfig, writerConfig);
-    }
-
-    public Net(PollerConfig pollerConfig, WriterConfig writerConfig) {
-        this(defaultNetConfig, pollerConfig, writerConfig);
-    }
-
-    public Net(NetConfig netConfig, PollerConfig pollerConfig, WriterConfig writerConfig) {
-        if(netConfig == null || pollerConfig == null || writerConfig == null) {
+    public Net(NetConfig config) {
+        if(config == null) {
             throw new NullPointerException();
         }
         if(!instanceFlag.compareAndSet(false, true)) {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
-        int pollerCount = pollerConfig.getPollerCount();
+        int pollerCount = config.getPollerCount();
         if(pollerCount <= 0) {
             throw new FrameworkException(ExceptionType.NETWORK, "Poller instances cannot be zero");
         }
-        int writerCount = writerConfig.getWriterCount();
+        int writerCount = config.getWriterCount();
         if(writerCount <= 0) {
             throw new FrameworkException(ExceptionType.NETWORK, "Writer instances cannot be zero");
         }
-        this.config = netConfig;
-        this.pollers = IntStream.range(0, pollerCount).mapToObj(_ -> new Poller(pollerConfig)).toList();
-        this.writers = IntStream.range(0, writerCount).mapToObj(_ -> new Writer(writerConfig)).toList();
-        this.shutdownTimeout = Duration.ofSeconds(netConfig.getGracefulShutdownTimeout());
+        this.config = config;
+        this.pollers = IntStream.range(0, pollerCount).mapToObj(_ -> new Poller(config)).toList();
+        this.writers = IntStream.range(0, writerCount).mapToObj(_ -> new Writer(config)).toList();
+        this.shutdownTimeout = Duration.ofSeconds(config.getGracefulShutdownTimeout());
         this.netThread = createNetThread();
     }
 
