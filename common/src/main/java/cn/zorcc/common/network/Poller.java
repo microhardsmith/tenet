@@ -6,11 +6,10 @@ import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.api.Sentry;
 import cn.zorcc.common.network.lib.OsNetworkLibrary;
+import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.structure.IntMap;
-import cn.zorcc.common.structure.IntPair;
 import org.jctools.queues.atomic.MpscUnboundedAtomicArrayQueue;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -48,14 +47,14 @@ public final class Poller {
         return Thread.ofPlatform().name(STR."poller-\{sequence}").unstarted(() -> {
             log.info(STR."Initializing poller thread, sequence : \{sequence}");
             IntMap<PollerNode> nodeMap = new IntMap<>(config.getPollerMapSize());
-            try(Arena arena = Arena.ofConfined()) {
-                Timeout timeout = Timeout.of(arena, config.getPollerMuxTimeout());
+            try(Allocator allocator = Allocator.newDirectAllocator()) {
+                Timeout timeout = Timeout.of(allocator, config.getPollerMuxTimeout());
                 int maxEvents = config.getPollerMaxEvents();
                 int readBufferSize = config.getPollerReadBufferSize();
-                MemorySegment events = arena.allocate(MemoryLayout.sequenceLayout(maxEvents, osNetworkLibrary.eventLayout()));
+                MemorySegment events = allocator.allocate(MemoryLayout.sequenceLayout(maxEvents, osNetworkLibrary.eventLayout()));
                 MemorySegment[] reservedArray = new MemorySegment[maxEvents];
                 for(int i = 0; i < reservedArray.length; i++) {
-                    reservedArray[i] = arena.allocateArray(ValueLayout.JAVA_BYTE, readBufferSize);
+                    reservedArray[i] = allocator.allocate(ValueLayout.JAVA_BYTE, readBufferSize);
                 }
                 int state = Constants.RUNNING;
                 for( ; ; ) {
@@ -74,10 +73,10 @@ public final class Poller {
                     }
                     for(int index = 0; index < r; index++) {
                         MemorySegment reserved = reservedArray[index];
-                        IntPair pair = osNetworkLibrary.access(events, index);
-                        PollerNode pollerNode = nodeMap.get(pair.first());
+                        MuxEvent muxEvent = osNetworkLibrary.access(events, index);
+                        PollerNode pollerNode = nodeMap.get(muxEvent.socket());
                         if(pollerNode != null) {
-                            int event = pair.second();
+                            long event = muxEvent.event();
                             if(event == Constants.NET_W) {
                                 pollerNode.onWritableEvent();
                             }else if(event == Constants.NET_R || event == Constants.NET_OTHER) {

@@ -1,7 +1,7 @@
 package cn.zorcc.common.json;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.WriteBuffer;
+import cn.zorcc.common.structure.WriteBuffer;
 
 import java.util.Iterator;
 import java.util.Map;

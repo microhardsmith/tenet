@@ -5,12 +5,11 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.bindings.TenetMacosBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Mux;
+import cn.zorcc.common.network.MuxEvent;
 import cn.zorcc.common.network.Socket;
 import cn.zorcc.common.network.Timeout;
-import cn.zorcc.common.structure.IntPair;
-import cn.zorcc.common.util.NativeUtil;
+import cn.zorcc.common.structure.Allocator;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -175,32 +174,29 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public int ctl(Mux mux, Socket socket, int from, int to) {
+    public int ctl(Mux mux, Socket socket, long from, long to) {
         if(from == to) {
             return 0;
         }
         int kqfd = mux.kqfd();
         long fd = socket.longValue();
         int index = 0;
-        try(Arena arena = Arena.ofConfined()) {
-            MemorySegment ptr = arena.allocate(MemoryLayout.sequenceLayout(2, keventLayout));
-            int r1 = from & Constants.NET_R, r2 = to & Constants.NET_R;
-            if(r1 != r2) {
-                NativeUtil.setLong(ptr, identOffset, fd);
-                NativeUtil.setShort(ptr, filterOffset, Constants.EVFILT_READ);
-                NativeUtil.setShort(ptr, flagsOffset, r1 == Constants.NET_NONE ? Constants.EV_ADD : Constants.EV_DELETE);
-                index++;
-            }
-            int w1 = from & Constants.NET_W, w2 = to & Constants.NET_W;
-            if(w1 != w2) {
-                NativeUtil.setLong(ptr, index * keventSize + identOffset, fd);
-                NativeUtil.setShort(ptr, index * keventSize + filterOffset, Constants.EVFILT_WRITE);
-                NativeUtil.setShort(ptr, index * keventSize + flagsOffset, w1 == Constants.NET_NONE ? Constants.EV_ADD : Constants.EV_DELETE);
-                index++;
-            }
-            return TenetMacosBinding.keventCtl(kqfd, ptr, index);
+        MemorySegment ptr = Allocator.HEAP.allocate(MemoryLayout.sequenceLayout(2, keventLayout));
+        long r1 = from & Constants.NET_R, r2 = to & Constants.NET_R;
+        if(r1 != r2) {
+            ptr.set(ValueLayout.JAVA_LONG_UNALIGNED, identOffset, fd);
+            ptr.set(ValueLayout.JAVA_SHORT_UNALIGNED, filterOffset, Constants.EVFILT_READ);
+            ptr.set(ValueLayout.JAVA_SHORT_UNALIGNED, flagsOffset, r1 == Constants.NET_NONE ? Constants.EV_ADD : Constants.EV_DELETE);
+            index++;
         }
-
+        long w1 = from & Constants.NET_W, w2 = to & Constants.NET_W;
+        if(w1 != w2) {
+            ptr.set(ValueLayout.JAVA_LONG_UNALIGNED, index * keventSize + identOffset, fd);
+            ptr.set(ValueLayout.JAVA_SHORT_UNALIGNED, index * keventSize + filterOffset, Constants.EVFILT_WRITE);
+            ptr.set(ValueLayout.JAVA_SHORT_UNALIGNED, index * keventSize + flagsOffset, w1 == Constants.NET_NONE ? Constants.EV_ADD : Constants.EV_DELETE);
+            index++;
+        }
+        return TenetMacosBinding.keventCtl(kqfd, ptr, index);
     }
 
     @Override
@@ -209,13 +205,13 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public IntPair access(MemorySegment events, int index) {
-        short filter = NativeUtil.getShort(events, index * keventSize + filterOffset);
-        long socket = NativeUtil.getLong(events, index * keventSize + identOffset);
+    public MuxEvent access(MemorySegment events, int index) {
+        short filter = events.get(ValueLayout.JAVA_SHORT_UNALIGNED, index * keventSize + filterOffset);
+        int socket = Math.toIntExact(events.get(ValueLayout.JAVA_LONG_UNALIGNED, index * keventSize + identOffset));
         if(filter == Constants.EVFILT_READ) {
-            return new IntPair((int) socket, Constants.NET_R);
+            return new MuxEvent(socket, Constants.NET_R);
         }else if(filter == Constants.EVFILT_WRITE) {
-            return new IntPair((int) socket, Constants.NET_W);
+            return new MuxEvent(socket, Constants.NET_W);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
@@ -253,22 +249,21 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public int recv(Socket socket, MemorySegment data, int len) {
+    public long recv(Socket socket, MemorySegment data, long len) {
         return TenetMacosBinding.recv(socket.intValue(), data, len);
     }
 
     @Override
-    public int send(Socket socket, MemorySegment data, int len) {
+    public long send(Socket socket, MemorySegment data, long len) {
         return TenetMacosBinding.send(socket.intValue(), data, len);
     }
 
     @Override
     public int getErrOpt(Socket socket) {
-        try(Arena arena = Arena.ofConfined()) {
-            MemorySegment ptr = arena.allocate(ValueLayout.JAVA_INT, Integer.MIN_VALUE);
-            check(TenetMacosBinding.getErrOpt(socket.intValue(), ptr), "get socket err opt");
-            return NativeUtil.getInt(ptr, 0L);
-        }
+        MemorySegment ptr = Allocator.HEAP.allocate(ValueLayout.JAVA_INT);
+        ptr.set(ValueLayout.JAVA_INT_UNALIGNED, 0L, -1);
+        check(TenetMacosBinding.getErrOpt(socket.intValue(), ptr), "get socket err opt");
+        return ptr.get(ValueLayout.JAVA_INT_UNALIGNED, 0L);
     }
 
     @Override

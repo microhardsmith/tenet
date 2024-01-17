@@ -8,6 +8,9 @@ import cn.zorcc.common.util.NativeUtil;
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 
+/**
+ *   Binding for Windows operating system, using wepoll library for IO multiplexing
+ */
 public final class TenetWindowsBinding {
     private static final MethodHandle connectBlockCodeMethodHandle;
     private static final MethodHandle sendBlockCodeMethodHandle;
@@ -49,77 +52,81 @@ public final class TenetWindowsBinding {
     static {
         SymbolLookup symbolLookup = NativeUtil.loadLibrary(Constants.TENET);
         connectBlockCodeMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_connect_block_code",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.critical(false));
         sendBlockCodeMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_send_block_code",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.critical(false));
         interruptCodeMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_interrupt_code",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.critical(false));
         ipv4AddressLenMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv4_address_len",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.critical(false));
         ipv6AddressLenMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv6_address_len",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.critical(false));
         ipv4AddressSizeMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv4_address_size",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.critical(false));
         ipv6AddressSizeMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv6_address_size",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.critical(false));
         ipv4AddressAlignMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv4_address_align",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.critical(false));
         ipv6AddressAlignMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv6_address_align",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+                FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.critical(false));
         epollCreateMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_epoll_create",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS), Linker.Option.critical(true));
         epollCtlMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_epoll_ctl",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS), Linker.Option.critical(true));
         epollWaitMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_epoll_wait",
                 FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         epollCloseMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_epoll_close",
                 FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         getIpv4AddressMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_get_ipv4_address",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT), Linker.Option.critical(true));
         getIpv6AddressMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_get_ipv6_address",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT), Linker.Option.critical(true));
         ipv4PortMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv4_port",
-                FunctionDescriptor.of(ValueLayout.JAVA_SHORT, ValueLayout.ADDRESS));
+                FunctionDescriptor.of(ValueLayout.JAVA_SHORT, ValueLayout.ADDRESS), Linker.Option.critical(true));
         ipv6PortMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv6_port",
-                FunctionDescriptor.of(ValueLayout.JAVA_SHORT, ValueLayout.ADDRESS));
+                FunctionDescriptor.of(ValueLayout.JAVA_SHORT, ValueLayout.ADDRESS), Linker.Option.critical(true));
         ipv4SocketCreateMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv4_socket_create",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS), Linker.Option.critical(true));
         ipv6SocketCreateMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_ipv6_socket_create",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS), Linker.Option.critical(true));
         setIpv4SockAddrMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_set_ipv4_sock_addr",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_SHORT));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_SHORT), Linker.Option.critical(true));
         setIpv6SockAddrMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_set_ipv6_sock_addr",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_SHORT));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_SHORT), Linker.Option.critical(true));
         setReuseAddrMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_set_reuse_addr",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT), Linker.Option.critical(false));
         setKeepAliveMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_set_keep_alive",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT), Linker.Option.critical(false));
         setTcpNoDelayMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_set_tcp_no_delay",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT), Linker.Option.critical(false));
         setIpv6OnlyMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_set_ipv6_only",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT), Linker.Option.critical(false));
         getErrOptMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_get_err_opt",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS), Linker.Option.critical(true));
         setNonBlockingMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_set_nonblocking",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG), Linker.Option.critical(false));
         bindMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_bind",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT), Linker.Option.critical(true));
         listenMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_listen",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT), Linker.Option.critical(false));
         connectMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_connect",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT), Linker.Option.critical(true));
         acceptMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_accept",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT), Linker.Option.critical(true));
         recvMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_recv",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT), Linker.Option.critical(false));
         sendMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_send",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT), Linker.Option.critical(true));
         shutdownWriteMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_shutdown_write",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG), Linker.Option.critical(false));
         closeSocketMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_close_socket",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG), Linker.Option.critical(false));
         wsaCleanUpMethodHandle = NativeUtil.methodHandle(symbolLookup, "w_clean_up",
                 FunctionDescriptor.of(ValueLayout.JAVA_INT));
+    }
+
+    private TenetWindowsBinding() {
+        throw new UnsupportedOperationException();
     }
 
     public static int connectBlockCode() {

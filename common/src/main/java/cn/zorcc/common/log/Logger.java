@@ -4,7 +4,6 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.ConfigUtil;
-import cn.zorcc.common.util.NativeUtil;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -192,7 +191,7 @@ public final class Logger {
      */
     private static long searchBytes(MemorySegment data, byte expected, long startIndex, Consumer<MemorySegment> consumer) {
         for(long index = startIndex; index < data.byteSize(); index++) {
-            if(NativeUtil.getByte(data, index) == expected) {
+            if(data.get(ValueLayout.JAVA_BYTE, index) == expected) {
                 if(index > startIndex) {
                     consumer.accept(data.asSlice(startIndex, index - startIndex));
                 }

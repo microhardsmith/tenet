@@ -5,9 +5,9 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.time.Duration;
 
@@ -27,16 +27,16 @@ public record Timeout(
     private static final long secOffset = timespecLayout.byteOffset(MemoryLayout.PathElement.groupElement("tv_sec"));
     private static final long nsecOffset = timespecLayout.byteOffset(MemoryLayout.PathElement.groupElement("tv_nsec"));
 
-    public static Timeout of(Arena arena, int milliseconds) {
+    public static Timeout of(SegmentAllocator allocator, int milliseconds) {
         switch (NativeUtil.ostype()) {
             case Windows, Linux -> {
                 return new Timeout(milliseconds, null);
             }
             case MacOS -> {
-                MemorySegment ptr = arena.allocate(timespecLayout);
+                MemorySegment ptr = allocator.allocate(timespecLayout);
                 Duration duration = Duration.ofMillis(milliseconds);
-                NativeUtil.setLong(ptr, secOffset, duration.getSeconds());
-                NativeUtil.setLong(ptr, nsecOffset, duration.getNano());
+                ptr.set(ValueLayout.JAVA_LONG_UNALIGNED, secOffset, duration.getSeconds());
+                ptr.set(ValueLayout.JAVA_LONG_UNALIGNED, nsecOffset, duration.getNano());
                 return new Timeout(Integer.MIN_VALUE, ptr);
             }
             case null, default -> throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED);

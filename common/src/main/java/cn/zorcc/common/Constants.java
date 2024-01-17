@@ -4,6 +4,7 @@ import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandles;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -34,13 +35,22 @@ public final class Constants {
     public static final String APPLY = "apply";
     public static final String ACCEPT = "accept";
     public static final int INITIAL = 0;
-    public static final int STARTING = 1;
-    public static final int RUNNING = 2;
-    public static final int CLOSING = 3;
-    public static final int STOPPED = 4;
+    public static final int RUNNING = 1;
+    public static final int CLOSING = 2;
+    public static final int STOPPED = 3;
     public static final String DEFAULT_TIME_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS";
     public static final Clock SYSTEM_CLOCK = Clock.systemDefaultZone();
     public static final ZoneOffset LOCAL_ZONE_OFFSET = OffsetTime.now().getOffset();
+
+    /**
+     *   Byte size for basic value types
+     */
+    public static final long BYTE_SIZE = ValueLayout.JAVA_BYTE.byteSize();
+    public static final long SHORT_SIZE = ValueLayout.JAVA_SHORT.byteSize();
+    public static final long INT_SIZE = ValueLayout.JAVA_INT.byteSize();
+    public static final long LONG_SIZE = ValueLayout.JAVA_LONG.byteSize();
+    public static final long FLOAT_SIZE = ValueLayout.JAVA_FLOAT.byteSize();
+    public static final long DOUBLE_SIZE = ValueLayout.JAVA_DOUBLE.byteSize();
 
     /**
      *   Ascii byte value
@@ -72,7 +82,17 @@ public final class Constants {
     public static final byte UNICODE_CODE = (byte) 'u';
     public static final byte SLASH = (byte) '/';
     public static final byte DEL = (byte) 0x7F;
+
+    /**
+     *   HTTP
+     */
     public static final String DEFAULT_HTTP_VERSION = "HTTP/1.1";
+    public static final byte[] HTTP_LINE_SEP = new byte[]{CR, LF};
+    public static final byte[] HTTP_PAIR_SEP = new byte[]{COLON, SPACE};
+
+    /**
+     *   LOG
+     */
 
     public static final int TRACE = 0;
     public static final int DEBUG = 10;
@@ -310,18 +330,18 @@ public final class Constants {
     /**
      *   Net
      */
-    public static final int NET_NONE = Integer.MIN_VALUE;
-    public static final int NET_IGNORED = Integer.MIN_VALUE | 1;
-    public static final int NET_UPDATE = Integer.MIN_VALUE | (1 << 2);
-    public static final int NET_W = Integer.MIN_VALUE | (1 << 4); // register write only
-    public static final int NET_PW = Integer.MIN_VALUE | (1 << 6); // register write if possible
-    public static final int NET_R = Integer.MIN_VALUE | (1 << 8); // register read only
-    public static final int NET_PR = Integer.MIN_VALUE | (1 << 10); // register read if possible
-    public static final int NET_RW = NET_R | NET_W; // register read and write
-    public static final int NET_PRW = NET_PR | NET_PW; // register read and write if possible
-    public static final int NET_PC = Integer.MIN_VALUE | (1 << 12);
-    public static final int NET_WC = Integer.MIN_VALUE | (1 << 16);
-    public static final int NET_OTHER = Integer.MIN_VALUE | (1 << 20);
+    public static final long NET_NONE = Long.MIN_VALUE;
+    public static final long NET_IGNORED = Long.MIN_VALUE | 1;
+    public static final long NET_UPDATE = Long.MIN_VALUE | (1 << 2);
+    public static final long NET_W = Long.MIN_VALUE | (1 << 4); // register write only
+    public static final long NET_PW = Long.MIN_VALUE | (1 << 6); // register write if possible
+    public static final long NET_R = Long.MIN_VALUE | (1 << 8); // register read only
+    public static final long NET_PR = Long.MIN_VALUE | (1 << 10); // register read if possible
+    public static final long NET_RW = NET_R | NET_W; // register read and write
+    public static final long NET_PRW = NET_PR | NET_PW; // register read and write if possible
+    public static final long NET_PC = Long.MIN_VALUE | (1 << 12);
+    public static final long NET_WC = Long.MIN_VALUE | (1 << 16);
+    public static final long NET_OTHER = Long.MIN_VALUE | (1 << 20);
 
     /**
      *   Ssl library

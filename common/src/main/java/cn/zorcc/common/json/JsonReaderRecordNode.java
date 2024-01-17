@@ -1,8 +1,11 @@
 package cn.zorcc.common.json;
 
+import cn.zorcc.common.Constants;
 import cn.zorcc.common.Record;
-import cn.zorcc.common.*;
+import cn.zorcc.common.RecordInfo;
 import cn.zorcc.common.exception.JsonParseException;
+import cn.zorcc.common.structure.ReadBuffer;
+import cn.zorcc.common.structure.WriteBuffer;
 
 public final class JsonReaderRecordNode extends JsonReaderNode {
     private final ReadBuffer readBuffer;

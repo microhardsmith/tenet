@@ -18,7 +18,6 @@ import java.lang.foreign.ValueLayout;
 
 
 public class CompressionJmhTest extends JmhTest {
-    private static final Arena globalArena = Arena.global();
     @Param({"/small.json", "medium.json", "/large.json"})
     private String jsonFile;
     @Param({"1", "5", "9"})
@@ -31,9 +30,9 @@ public class CompressionJmhTest extends JmhTest {
         try(InputStream stream = CompressionJmhTest.class.getResourceAsStream(jsonFile)) {
             assert stream != null;
             this.original = stream.readAllBytes();
-            this.originalSegment = globalArena.allocateArray(ValueLayout.JAVA_BYTE, original.length);
+            this.originalSegment = NativeUtil.globalArena.allocate(ValueLayout.JAVA_BYTE, original.length);
             for(int i = 0; i < original.length; i++) {
-                NativeUtil.setByte(originalSegment, i, original[i]);
+                originalSegment.set(ValueLayout.JAVA_BYTE, i, original[i]);
             }
         } catch (IOException e) {
             throw new FrameworkException(ExceptionType.JSON, "Json file not found", e);
@@ -48,8 +47,10 @@ public class CompressionJmhTest extends JmhTest {
 
     @Benchmark
     public void libDeflateTest(Blackhole bh) {
-        MemorySegment m1 = CompressUtil.compressUsingDeflate(originalSegment, level);
-        bh.consume(CompressUtil.decompressUsingDeflate(m1));
+        try(Arena arena = Arena.ofConfined()) {
+            MemorySegment m1 = CompressUtil.compressUsingDeflate(originalSegment, level, arena);
+            bh.consume(CompressUtil.decompressUsingDeflate(m1, arena));
+        }
     }
 
     @Benchmark
@@ -60,8 +61,10 @@ public class CompressionJmhTest extends JmhTest {
 
     @Benchmark
     public void libGzipTest(Blackhole bh) {
-        MemorySegment m1 = CompressUtil.compressUsingGzip(originalSegment, level);
-        bh.consume(CompressUtil.decompressUsingGzip(m1));
+        try(Arena arena = Arena.ofConfined()) {
+            MemorySegment m1 = CompressUtil.compressUsingGzip(originalSegment, level, arena);
+            bh.consume(CompressUtil.decompressUsingGzip(m1, arena));
+        }
     }
 
     public static void main(String[] args) throws RunnerException {

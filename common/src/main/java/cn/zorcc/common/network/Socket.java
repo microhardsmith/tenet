@@ -1,7 +1,5 @@
 package cn.zorcc.common.network;
 
-import cn.zorcc.common.util.NativeUtil;
-
 /**
  *  Socket abstraction, using long in windows, using int in Linux and macOS
  */
@@ -14,7 +12,7 @@ public record Socket(
     }
 
     public Socket(long socket) {
-        this(NativeUtil.castInt(socket), socket);
+        this(Math.toIntExact(socket), socket);
     }
 
     @Override

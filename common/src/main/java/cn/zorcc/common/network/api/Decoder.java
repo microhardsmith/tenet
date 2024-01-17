@@ -1,6 +1,6 @@
 package cn.zorcc.common.network.api;
 
-import cn.zorcc.common.ReadBuffer;
+import cn.zorcc.common.structure.ReadBuffer;
 
 import java.util.List;
 

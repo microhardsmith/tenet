@@ -3,7 +3,6 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.MemorySegment;
 
@@ -28,19 +27,19 @@ public record Mux (
      *   Create a Linux mux
      */
     public static Mux linux(int epfd) {
-        return new Mux(NativeUtil.NULL_POINTER, epfd, Integer.MIN_VALUE);
+        return new Mux(MemorySegment.NULL, epfd, Integer.MIN_VALUE);
     }
 
     /**
      *   Create a macOS mux
      */
     public static Mux mac(int kqfd) {
-        return new Mux(NativeUtil.NULL_POINTER, Integer.MIN_VALUE, kqfd);
+        return new Mux(MemorySegment.NULL, Integer.MIN_VALUE, kqfd);
     }
 
     @Override
     public String toString() {
-        if(winHandle != NativeUtil.NULL_POINTER) {
+        if(winHandle != MemorySegment.NULL) {
             return String.valueOf(winHandle.address());
         }else if(epfd != Integer.MIN_VALUE) {
             return String.valueOf(epfd);

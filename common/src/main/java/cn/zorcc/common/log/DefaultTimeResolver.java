@@ -1,7 +1,7 @@
 package cn.zorcc.common.log;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.WriteBuffer;
+import cn.zorcc.common.structure.WriteBuffer;
 import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.MemorySegment;

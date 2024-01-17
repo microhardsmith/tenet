@@ -1,7 +1,7 @@
 package cn.zorcc.common.postgre;
 
-import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.network.api.Decoder;
+import cn.zorcc.common.structure.ReadBuffer;
 
 import java.lang.foreign.MemorySegment;
 import java.util.List;

@@ -1,6 +1,7 @@
 package cn.zorcc.common.sqlite;
 
-import java.lang.foreign.Arena;
+import cn.zorcc.common.structure.Allocator;
+
 import java.lang.foreign.MemorySegment;
 import java.util.function.Consumer;
 
@@ -12,12 +13,12 @@ public final class DiscoveryWriteMsgHandler implements Consumer<SqliteMsg> {
     private final MemorySegment deleteStmt;
     public DiscoveryWriteMsgHandler(SqliteConn conn) {
         this.conn = conn;
-        try(Arena arena = Arena.ofConfined()) {
-            conn.exec(arena.allocateUtf8String(SqliteConstants.CREATE_DISCOVERY_TABLE_SQL));
-            this.insertStmt = conn.preparePersistentStatement(arena.allocateUtf8String(SqliteConstants.INSERT_DISCOVERY_SQL));
-            this.selectIdStmt = conn.preparePersistentStatement(arena.allocateUtf8String(SqliteConstants.SELECT_ID_DISCOVERY_SQL));
-            this.updateStmt = conn.preparePersistentStatement(arena.allocateUtf8String(SqliteConstants.UPDATE_DISCOVERY_SQL));
-            this.deleteStmt = conn.preparePersistentStatement(arena.allocateUtf8String(SqliteConstants.DELETE_DISCOVERY_SQL));
+        try(Allocator allocator = Allocator.newDirectAllocator()) {
+            conn.exec(allocator.allocateFrom(SqliteConstants.CREATE_DISCOVERY_TABLE_SQL));
+            this.insertStmt = conn.preparePersistentStatement(allocator.allocateFrom(SqliteConstants.INSERT_DISCOVERY_SQL));
+            this.selectIdStmt = conn.preparePersistentStatement(allocator.allocateFrom(SqliteConstants.SELECT_ID_DISCOVERY_SQL));
+            this.updateStmt = conn.preparePersistentStatement(allocator.allocateFrom(SqliteConstants.UPDATE_DISCOVERY_SQL));
+            this.deleteStmt = conn.preparePersistentStatement(allocator.allocateFrom(SqliteConstants.DELETE_DISCOVERY_SQL));
         }
     }
 

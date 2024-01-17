@@ -30,12 +30,6 @@ hs_err_pid*
 #vscode
 */.vscode/*
 
-#rocksdb cache dir
-*-cache/
-
-#jmh text
-*.text
-
 #log files
 *.log
 *.db

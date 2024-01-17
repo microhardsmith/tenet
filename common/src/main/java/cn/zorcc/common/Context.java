@@ -25,13 +25,13 @@ public final class Context {
     private static final Logger log = new Logger(Context.class);
     private static final Map<Class<?>, Object> containerMap = new HashMap<>();
     private static final Deque<Container> pendingContainers = new ArrayDeque<>();
-    private static final State contextState = new State(Constants.INITIAL);
+    private static final State contextState = new State(0L);
     private static final ContextListener contextListener = ServiceLoader.load(ContextListener.class).findFirst().orElse(new DefaultContextListener());
 
     public static void init() {
         long nano = Clock.nano();
         try(Mutex _ = contextState.withMutex()) {
-            if(!contextState.cas(Constants.INITIAL, Constants.STARTING)) {
+            if(contextState.get() != Constants.INITIAL) {
                 throw new FrameworkException(ExceptionType.CONTEXT, "Context has been initialized");
             }
             List<Container> tempContainers = new ArrayList<>(pendingContainers);
@@ -57,9 +57,7 @@ public final class Context {
             String[] pidAndDevice = runtimeMXBean.getName().split("@");
             log.info(STR."Process running with Pid: \{pidAndDevice[0]} on Device: \{pidAndDevice[1]}");
             log.info(STR."Tenet application started in \{ Duration.ofNanos(Clock.elapsed(nano)).toMillis()} ms, JVM running for \{runtimeMXBean.getUptime()} ms");
-            if(!contextState.cas(Constants.STARTING, Constants.RUNNING)) {
-                throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
-            }
+            contextState.set(Constants.RUNNING);
         }
     }
 
@@ -75,7 +73,14 @@ public final class Context {
             }
             finishedCycles.addLast(cycle);
         }
-        Runtime.getRuntime().addShutdownHook(Thread.ofPlatform().unstarted(() -> finishedCycles.reversed().forEach(LifeCycle::UninterruptibleExit)));
+        Runtime.getRuntime().addShutdownHook(Thread.ofPlatform().unstarted(() -> {
+            try(Mutex _ = contextState.withMutex()) {
+                if(contextState.get() != Constants.RUNNING) {
+                    return ;
+                }
+                finishedCycles.reversed().forEach(LifeCycle::UninterruptibleExit);
+            }
+        }));
     }
 
     public static <T> void load(T target, Class<T> type) {
@@ -86,8 +91,7 @@ public final class Context {
             throw new FrameworkException(ExceptionType.CONTEXT, STR."Container doesn't match its class : \{type.getSimpleName()}");
         }
         try (Mutex _ = contextState.withMutex()) {
-            int currentState = contextState.get();
-            if(currentState <= Constants.STARTING) {
+            if(contextState.get() <= Constants.RUNNING) {
                 pendingContainers.addLast(new Container(target, type));
             }else {
                 throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
@@ -99,8 +103,7 @@ public final class Context {
     @SuppressWarnings("unchecked")
     public static <T> T get(Class<T> type) {
         try(Mutex _ = contextState.withMutex()) {
-            int currentState = contextState.get();
-            if(currentState <= Constants.STARTING) {
+            if(contextState.get() <= Constants.RUNNING) {
                 Object o = containerMap.computeIfAbsent(type, contextListener::onRequested);
                 if(o == null) {
                     throw new FrameworkException(ExceptionType.CONTEXT, STR."Unable to retrieve target container : \{type.getName()}");

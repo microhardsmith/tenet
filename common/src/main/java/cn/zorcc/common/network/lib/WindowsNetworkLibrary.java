@@ -5,12 +5,11 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.bindings.TenetWindowsBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Mux;
+import cn.zorcc.common.network.MuxEvent;
 import cn.zorcc.common.network.Socket;
 import cn.zorcc.common.network.Timeout;
-import cn.zorcc.common.structure.IntPair;
-import cn.zorcc.common.util.NativeUtil;
+import cn.zorcc.common.structure.Allocator;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -116,12 +115,10 @@ public final class WindowsNetworkLibrary implements OsNetworkLibrary {
 
     @Override
     public Mux createMux() {
-        try(Arena arena = Arena.ofConfined()) {
-            MemorySegment ptr = arena.allocate(ValueLayout.ADDRESS);
-            check(TenetWindowsBinding.epollCreate(ptr), "wepoll_create");
-            MemorySegment winHandle = ptr.get(ValueLayout.ADDRESS, 0L);
-            return Mux.win(winHandle);
-        }
+        MemorySegment ptr = Allocator.HEAP.allocate(ValueLayout.ADDRESS);
+        check(TenetWindowsBinding.epollCreate(ptr), "wepoll_create");
+        MemorySegment winHandle = ptr.get(ValueLayout.ADDRESS, 0L);
+        return Mux.win(winHandle);
     }
 
     @Override
@@ -131,20 +128,16 @@ public final class WindowsNetworkLibrary implements OsNetworkLibrary {
 
     @Override
     public Socket createIpv4Socket() {
-        try(Arena arena = Arena.ofConfined()) {
-            MemorySegment ptr = arena.allocate(ValueLayout.JAVA_LONG);
-            check(TenetWindowsBinding.ipv4SocketCreate(ptr), "ipv4 socket create");
-            return new Socket(NativeUtil.getInt(ptr, 0L));
-        }
+        MemorySegment ptr = Allocator.HEAP.allocate(ValueLayout.JAVA_LONG);
+        check(TenetWindowsBinding.ipv4SocketCreate(ptr), "ipv4 socket create");
+        return new Socket(ptr.get(ValueLayout.JAVA_LONG_UNALIGNED, 0L));
     }
 
     @Override
     public Socket createIpv6Socket() {
-        try(Arena arena = Arena.ofConfined()) {
-            MemorySegment ptr = arena.allocate(ValueLayout.JAVA_LONG);
-            check(TenetWindowsBinding.ipv6SocketCreate(ptr), "ipv6 socket create");
-            return new Socket(NativeUtil.getInt(ptr, 0L));
-        }
+        MemorySegment ptr = Allocator.HEAP.allocate(ValueLayout.JAVA_LONG);
+        check(TenetWindowsBinding.ipv6SocketCreate(ptr), "ipv6 socket create");
+        return new Socket(ptr.get(ValueLayout.JAVA_LONG_UNALIGNED, 0L));
     }
 
     @Override
@@ -183,23 +176,21 @@ public final class WindowsNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public int ctl(Mux mux, Socket socket, int from, int to) {
+    public int ctl(Mux mux, Socket socket, long from, long to) {
         if(from == to) {
             return 0;
         }
         MemorySegment winHandle = mux.winHandle();
         long fd = socket.longValue();
         if(to == Constants.NET_NONE) {
-            return TenetWindowsBinding.epollCtl(winHandle, Constants.EPOLL_CTL_DEL, fd, NativeUtil.NULL_POINTER);
+            return TenetWindowsBinding.epollCtl(winHandle, Constants.EPOLL_CTL_DEL, fd, MemorySegment.NULL);
         }else {
             int target = ((to & Constants.NET_R) != Constants.NET_NONE ? (Constants.EPOLL_IN | Constants.EPOLL_RDHUP) : 0) |
                     ((to & Constants.NET_W) != Constants.NET_NONE ? Constants.EPOLL_OUT : 0);
-            try(Arena arena = Arena.ofConfined()) {
-                MemorySegment ev = arena.allocate(epollEventLayout);
-                NativeUtil.setInt(ev, eventsOffset, target);
-                NativeUtil.setLong(ev, dataOffset + sockOffset, fd);
-                return TenetWindowsBinding.epollCtl(winHandle, from == Constants.NET_NONE ? Constants.EPOLL_CTL_ADD : Constants.EPOLL_CTL_MOD, fd, ev);
-            }
+            MemorySegment ev = Allocator.HEAP.allocate(epollEventLayout);
+            ev.set(ValueLayout.JAVA_INT_UNALIGNED, eventsOffset, target);
+            ev.set(ValueLayout.JAVA_LONG_UNALIGNED, dataOffset + sockOffset, fd);
+            return TenetWindowsBinding.epollCtl(winHandle, from == Constants.NET_NONE ? Constants.EPOLL_CTL_ADD : Constants.EPOLL_CTL_MOD, fd, ev);
         }
     }
 
@@ -209,15 +200,15 @@ public final class WindowsNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public IntPair access(MemorySegment events, int index) {
-        int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
-        long socket = NativeUtil.getLong(events, index * eventSize + dataOffset + sockOffset);
+    public MuxEvent access(MemorySegment events, int index) {
+        int event = events.get(ValueLayout.JAVA_INT_UNALIGNED, index * eventSize + eventsOffset);
+        int socket = Math.toIntExact(events.get(ValueLayout.JAVA_LONG_UNALIGNED, index * eventSize + dataOffset + sockOffset));
         if((event & (Constants.EPOLL_IN | Constants.EPOLL_RDHUP)) != 0) {
-            return new IntPair((int) socket, Constants.NET_R);
+            return new MuxEvent(socket, Constants.NET_R);
         }else if((event & Constants.EPOLL_OUT) != 0) {
-            return new IntPair((int) socket, Constants.NET_W);
+            return new MuxEvent(socket, Constants.NET_W);
         }else if((event & (Constants.EPOLL_ERR | Constants.EPOLL_HUP)) != 0) {
-            return new IntPair((int) socket, Constants.NET_OTHER);
+            return new MuxEvent(socket, Constants.NET_OTHER);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
@@ -240,12 +231,10 @@ public final class WindowsNetworkLibrary implements OsNetworkLibrary {
 
     @Override
     public Socket accept(Socket socket, MemorySegment addr) {
-        try(Arena arena = Arena.ofConfined()) {
-            MemorySegment ptr = arena.allocate(ValueLayout.JAVA_LONG);
-            check(TenetWindowsBinding.accept(socket.longValue(), ptr, addr, (int) addr.byteSize()), "accept");
-            long socketFd = NativeUtil.getLong(ptr, 0L);
-            return new Socket(socketFd);
-        }
+        MemorySegment ptr = Allocator.HEAP.allocate(ValueLayout.JAVA_LONG);
+        check(TenetWindowsBinding.accept(socket.longValue(), ptr, addr, (int) addr.byteSize()), "accept");
+        long socketFd = ptr.get(ValueLayout.JAVA_LONG_UNALIGNED, 0L);
+        return new Socket(socketFd);
     }
 
     @Override
@@ -259,22 +248,21 @@ public final class WindowsNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public int recv(Socket socket, MemorySegment data, int len) {
-        return TenetWindowsBinding.recv(socket.longValue(), data, len);
+    public long recv(Socket socket, MemorySegment data, long len) {
+        return TenetWindowsBinding.recv(socket.longValue(), data, Math.toIntExact(len));
     }
 
     @Override
-    public int send(Socket socket, MemorySegment data, int len) {
-        return TenetWindowsBinding.send(socket.longValue(), data, len);
+    public long send(Socket socket, MemorySegment data, long len) {
+        return TenetWindowsBinding.send(socket.longValue(), data, Math.toIntExact(len));
     }
 
     @Override
     public int getErrOpt(Socket socket) {
-        try(Arena arena = Arena.ofConfined()) {
-            MemorySegment ptr = arena.allocate(ValueLayout.JAVA_INT, Integer.MIN_VALUE);
-            check(TenetWindowsBinding.getErrOpt(socket.longValue(), ptr), "get socket err opt");
-            return NativeUtil.getInt(ptr, 0);
-        }
+        MemorySegment ptr = Allocator.HEAP.allocate(ValueLayout.JAVA_INT);
+        ptr.set(ValueLayout.JAVA_INT_UNALIGNED, 0L, -1);
+        check(TenetWindowsBinding.getErrOpt(socket.longValue(), ptr), "get socket err opt");
+        return ptr.get(ValueLayout.JAVA_INT_UNALIGNED, 0);
     }
 
     @Override

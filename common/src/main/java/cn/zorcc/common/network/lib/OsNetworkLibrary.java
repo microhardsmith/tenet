@@ -4,21 +4,16 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.*;
-import cn.zorcc.common.structure.IntPair;
+import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.util.NativeUtil;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
 /**
  *   Platform independent native interface for Network operation
- *   The error handling model in java native programming is troublesome, we want to avoid constantly throwing RuntimeExceptions since it has a great impact on performance,
- *   but we can't delegate everything, so the major idea is :
- *   1. Don't use exceptions as flow control in your protocol, unless it's unreached by default
- *   2. Throw exception when dealing with operating system to provide useful stacktrace
- *   3. Catch exception in the upper level and close the underlying channel to provide robustness
+ *
  */
 public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNetworkLibrary, MacOSNetworkLibrary {
 
@@ -80,7 +75,7 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     /**
      *   Modifying the multiplexing wait status of the socket
      */
-    int ctl(Mux mux, Socket socket, int from, int to);
+    int ctl(Mux mux, Socket socket, long from, long to);
 
     /**
      *   Start multiplexing waiting for events, return the event count that triggered
@@ -90,7 +85,7 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     /**
      *   For poller to access the events array, the first return value represents the socket, the second value represents the event type
      */
-    IntPair access(MemorySegment events, int index);
+    MuxEvent access(MemorySegment events, int index);
 
     /**
      *   Exit a multiplexing object
@@ -185,12 +180,12 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     /**
      *   Recv from target socket, len should be the exact byteSize of data, return the actual bytes received
      */
-    int recv(Socket socket, MemorySegment data, int len);
+    long recv(Socket socket, MemorySegment data, long len);
 
     /**
      *   Send using target socket, len should be the exact byteSize of data, return the actual bytes sent
      */
-    int send(Socket socket, MemorySegment data, int len);
+    long send(Socket socket, MemorySegment data, long len);
 
     /**
      *   Retrieve the err-opt from the target socket
@@ -223,7 +218,7 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
         return value;
     }
 
-    default void ctlMux(Mux mux, Socket socket, int from, int to) {
+    default void ctlMux(Mux mux, Socket socket, long from, long to) {
         check(ctl(mux, socket, from, to), "ctl mux");
     }
 
@@ -234,28 +229,28 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     /**
      *   Create a sockAddr memorySegment, could be IPV4 or IPV6
      */
-    default MemorySegment createSockAddr(Loc loc, Arena arena) {
+    default MemorySegment createSockAddr(Loc loc) {
         if(loc.ipType() == IpType.IPV4) {
-            return createIpv4SockAddr(loc, arena);
+            return createIpv4SockAddr(loc);
         }else if(loc.ipType() == IpType.IPV6) {
-            return createIpv6SockAddr(loc, arena);
+            return createIpv6SockAddr(loc);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
-    private MemorySegment createIpv4SockAddr(Loc loc, Arena arena) {
-        MemorySegment r = arena.allocate(ipv4AddressSize(), ipv4AddressAlign());
-        MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? NativeUtil.NULL_POINTER : NativeUtil.allocateStr(arena, loc.ip(), ipv4AddressLen());
+    private MemorySegment createIpv4SockAddr(Loc loc) {
+        MemorySegment r = Allocator.HEAP.allocate(ipv4AddressSize(), ipv4AddressAlign());
+        MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? MemorySegment.NULL : Allocator.HEAP.allocateFrom(loc.ip());
         if(check(setIpv4SockAddr(r, ip, loc.shortPort()), "set ipv4 address") == 0) {
             throw new FrameworkException(ExceptionType.NETWORK, STR."Ipv4 address is not valid : \{loc.ip()}");
         }
         return r;
     }
 
-    private MemorySegment createIpv6SockAddr(Loc loc, Arena arena) {
-        MemorySegment r = arena.allocate(ipv6AddressSize(), ipv6AddressAlign());
-        MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? NativeUtil.NULL_POINTER : NativeUtil.allocateStr(arena, loc.ip(), ipv6AddressLen());
+    private MemorySegment createIpv6SockAddr(Loc loc) {
+        MemorySegment r = Allocator.HEAP.allocate(ipv6AddressSize(), ipv6AddressAlign());
+        MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? MemorySegment.NULL : Allocator.HEAP.allocateFrom(loc.ip());
         if(check(setIpv6SockAddr(r, ip, loc.shortPort()), "set ipv6 address") == 0) {
             throw new FrameworkException(ExceptionType.NETWORK, STR."Ipv6 address is not valid : \{loc.ip()}");
         }
@@ -299,11 +294,9 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
      *   Let the server-side bind and listen
      */
     default void bindAndListen(Socket socket, Loc loc, int backlog) {
-        try(Arena arena = Arena.ofConfined()) {
-            MemorySegment addr = createSockAddr(loc, arena);
-            check(bind(socket, addr), "bind");
-            check(listen(socket, backlog), "listen");
-        }
+        MemorySegment addr = createSockAddr(loc);
+        check(bind(socket, addr), "bind");
+        check(listen(socket, backlog), "listen");
     }
 
     /**
@@ -320,36 +313,30 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     String IPV4_MAPPED_FORMAT = "::ffff:";
     int IPV4_PREFIX_LENGTH = IPV4_MAPPED_FORMAT.length();
     private SocketAndLoc acceptIpv6Connection(Socket socket, SocketConfig socketConfig) {
-        final int ipv6AddressLen = ipv6AddressLen();
-        try(Arena arena = Arena.ofConfined()) {
-            MemorySegment clientAddr = arena.allocate(ipv6AddressSize(), ipv6AddressAlign());
-            MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, ipv6AddressLen);
-            Socket clientSocket = accept(socket, clientAddr);
-            configureClientSocket(clientSocket, socketConfig);
-            check(getIpv6Address(clientAddr, address), "get client's ipv6 address");
-            String ip = NativeUtil.getStr(address, ipv6AddressLen);
-            int port = 0xFFFF & getIpv6Port(clientAddr);
-            if(ip.startsWith(IPV4_MAPPED_FORMAT)) {
-                return new SocketAndLoc(clientSocket, new Loc(IpType.IPV4, ip.substring(IPV4_PREFIX_LENGTH), port));
-            }else {
-                return new SocketAndLoc(clientSocket, new Loc(IpType.IPV6, ip, port));
-            }
+        MemorySegment clientAddr = Allocator.HEAP.allocate(ipv6AddressSize(), ipv6AddressAlign());
+        MemorySegment address = Allocator.HEAP.allocate(ValueLayout.JAVA_BYTE, ipv6AddressLen());
+        Socket clientSocket = accept(socket, clientAddr);
+        configureClientSocket(clientSocket, socketConfig);
+        check(getIpv6Address(clientAddr, address), "get client's ipv6 address");
+        String ip = address.getString(0L);
+        int port = 0xFFFF & getIpv6Port(clientAddr);
+        if(ip.startsWith(IPV4_MAPPED_FORMAT)) {
+            return new SocketAndLoc(clientSocket, new Loc(IpType.IPV4, ip.substring(IPV4_PREFIX_LENGTH), port));
+        }else {
+            return new SocketAndLoc(clientSocket, new Loc(IpType.IPV6, ip, port));
         }
     }
 
     private SocketAndLoc acceptIpv4Connection(Socket socket, SocketConfig socketConfig) {
-        final int ipv4AddressLen = ipv4AddressLen();
-        try(Arena arena = Arena.ofConfined()) {
-            MemorySegment clientAddr = arena.allocate(ipv4AddressSize(), ipv4AddressAlign());
-            MemorySegment address = arena.allocateArray(ValueLayout.JAVA_BYTE, ipv4AddressLen);
-            Socket clientSocket = accept(socket, clientAddr);
-            configureClientSocket(clientSocket, socketConfig);
-            check(getIpv4Address(clientAddr, address), "get client's ipv4 address");
-            String ip = NativeUtil.getStr(address, ipv4AddressLen);
-            int port = 0xFFFF & getIpv4Port(clientAddr);
-            Loc clientLoc = new Loc(IpType.IPV4, ip, port);
-            return new SocketAndLoc(clientSocket, clientLoc);
-        }
+        MemorySegment clientAddr = Allocator.HEAP.allocate(ipv4AddressSize(), ipv4AddressAlign());
+        MemorySegment address = Allocator.HEAP.allocate(ValueLayout.JAVA_BYTE, ipv4AddressLen());
+        Socket clientSocket = accept(socket, clientAddr);
+        configureClientSocket(clientSocket, socketConfig);
+        check(getIpv4Address(clientAddr, address), "get client's ipv4 address");
+        String ip = address.getString(0L);
+        int port = 0xFFFF & getIpv4Port(clientAddr);
+        Loc clientLoc = new Loc(IpType.IPV4, ip, port);
+        return new SocketAndLoc(clientSocket, clientLoc);
     }
 
     OsNetworkLibrary CURRENT = switch (NativeUtil.ostype()) {

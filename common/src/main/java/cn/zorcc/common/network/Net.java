@@ -5,13 +5,12 @@ import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.api.*;
 import cn.zorcc.common.network.lib.OsNetworkLibrary;
+import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.structure.IntMap;
-import cn.zorcc.common.structure.IntPair;
 import cn.zorcc.common.structure.Mutex;
 import cn.zorcc.common.structure.Wheel;
 import org.jctools.queues.atomic.MpscLinkedAtomicQueue;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.time.Duration;
@@ -36,7 +35,7 @@ public final class Net extends AbstractLifeCycle {
      */
     private static final DurationWithCallback defaultDurationWithCallback = new DurationWithCallback(Duration.ofSeconds(5), null);
     private final NetConfig config;
-    private final State state = new State(Constants.INITIAL);
+    private final State state = new State(0L);
     private final Mux mux = osNetworkLibrary.createMux();
     private final Set<Provider> providers = new HashSet<>(List.of(tcpProvider, sslProvider));
     private final List<Poller> pollers;
@@ -50,9 +49,9 @@ public final class Net extends AbstractLifeCycle {
             int maxEvents = config.getMaxEvents();
             int muxTimeout = config.getMuxTimeout();
             IntMap<ListenerTask> listenerMap = new IntMap<>(config.getMapSize());
-            try(Arena arena = Arena.ofConfined()) {
-                Timeout timeout = Timeout.of(arena, muxTimeout);
-                MemorySegment events = arena.allocate(MemoryLayout.sequenceLayout(maxEvents, osNetworkLibrary.eventLayout()));
+            try(Allocator allocator = Allocator.newDirectAllocator()) {
+                Timeout timeout = Timeout.of(allocator, muxTimeout);
+                MemorySegment events = allocator.allocate(MemoryLayout.sequenceLayout(maxEvents, osNetworkLibrary.eventLayout()));
                 for( ; ; ) {
                     int r = osNetworkLibrary.muxWait(mux, events, maxEvents, timeout);
                     if(r < 0) {
@@ -78,10 +77,10 @@ public final class Net extends AbstractLifeCycle {
                         }
                     }
                     for(int index = 0; index < r; ++index) {
-                        IntPair pair = osNetworkLibrary.access(events, index);
-                        int eventType = pair.second();
+                        MuxEvent muxEvent = osNetworkLibrary.access(events, index);
+                        long eventType = muxEvent.event();
                         if(eventType == Constants.NET_R) {
-                            ListenerTask listenerTask = listenerMap.get(pair.first());
+                            ListenerTask listenerTask = listenerMap.get(muxEvent.socket());
                             if(listenerTask == null) {
                                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
                             }
@@ -152,8 +151,7 @@ public final class Net extends AbstractLifeCycle {
 
     public void addServerListener(ListenerConfig listenerConfig) {
         try(Mutex _ = state.withMutex()) {
-            int current = state.get();
-            if(current > Constants.RUNNING) {
+            if(state.get() > Constants.RUNNING) {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
             Supplier<Encoder> encoderSupplier = Objects.requireNonNull(listenerConfig.getEncoderSupplier());
@@ -191,26 +189,24 @@ public final class Net extends AbstractLifeCycle {
         Channel channel = new ChannelImpl(socket, encoder, decoder, handler, poller, writer, loc);
         addProvider(provider);
         Sentry sentry = provider.create(channel);
-        try(Arena arena = Arena.ofConfined()) {
-            MemorySegment sockAddr = osNetworkLibrary.createSockAddr(loc, arena);
-            int r = osNetworkLibrary.connect(socket, sockAddr);
-            if(r == 0) {
-                poller.submit(new PollerTask(PollerTaskType.BIND, channel, sentry));
+        MemorySegment sockAddr = osNetworkLibrary.createSockAddr(loc);
+        int r = osNetworkLibrary.connect(socket, sockAddr);
+        if(r == 0) {
+            poller.submit(new PollerTask(PollerTaskType.BIND, channel, sentry));
+            osNetworkLibrary.ctlMux(poller.mux(), socket, Constants.NET_NONE, Constants.NET_W);
+        }else if(r < 0){
+            int errno = Math.abs(r);
+            if (errno == osNetworkLibrary.connectBlockCode()) {
+                Duration duration = durationWithCallback.duration();
+                Runnable callback = durationWithCallback.callback();
+                poller.submit(new PollerTask(PollerTaskType.BIND, channel, callback == null ? sentry : new SentryWithCallback(sentry, callback)));
+                Wheel.wheel().addJob(() -> poller.submit(new PollerTask(PollerTaskType.UNBIND, channel, null)), duration);
                 osNetworkLibrary.ctlMux(poller.mux(), socket, Constants.NET_NONE, Constants.NET_W);
-            }else if(r < 0){
-                int errno = Math.abs(r);
-                if (errno == osNetworkLibrary.connectBlockCode()) {
-                    Duration duration = durationWithCallback.duration();
-                    Runnable callback = durationWithCallback.callback();
-                    poller.submit(new PollerTask(PollerTaskType.BIND, channel, callback == null ? sentry : new SentryWithCallback(sentry, callback)));
-                    Wheel.wheel().addJob(() -> poller.submit(new PollerTask(PollerTaskType.UNBIND, channel, null)), duration);
-                    osNetworkLibrary.ctlMux(poller.mux(), socket, Constants.NET_NONE, Constants.NET_W);
-                }else {
-                    throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to connect, errno : \{errno}");
-                }
             }else {
-                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+                throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to connect, errno : \{errno}");
             }
+        }else {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
@@ -229,9 +225,10 @@ public final class Net extends AbstractLifeCycle {
     @Override
     protected void doInit() {
         try(Mutex _ = state.withMutex()) {
-            if (!state.cas(Constants.INITIAL, Constants.RUNNING)) {
+            if (state.get() != Constants.INITIAL) {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
+            state.set(Constants.RUNNING);
             pollers.forEach(poller -> poller.thread().start());
             writers.forEach(writer -> writer.thread().start());
             netThread.start();
@@ -242,7 +239,7 @@ public final class Net extends AbstractLifeCycle {
     protected void doExit() throws InterruptedException {
         try(Mutex _ = state.withMutex()) {
             long nano = Clock.nano();
-            if(!state.cas(Constants.RUNNING, Constants.CLOSING)){
+            if(state.get() != Constants.RUNNING) {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
             state.set(Constants.CLOSING);
@@ -260,9 +257,6 @@ public final class Net extends AbstractLifeCycle {
             }
             providers.forEach(Provider::close);
             osNetworkLibrary.exit();
-            if(!state.cas(Constants.CLOSING, Constants.STOPPED)){
-                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-            }
             log.debug(STR."Exiting Net gracefully, cost : \{Duration.ofNanos(Clock.elapsed(nano)).toMillis()} ms");
         }
     }

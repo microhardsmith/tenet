@@ -4,8 +4,8 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.Peer;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.structure.Allocator;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.util.function.Consumer;
 
@@ -15,9 +15,9 @@ public final class DiscoveryReadMsgHandler implements Consumer<SqliteMsg> {
     private final MemorySegment selectOne;
     public DiscoveryReadMsgHandler(SqliteConn conn) {
         this.conn = conn;
-        try(Arena arena = Arena.ofConfined()) {
-            this.selectMulti = conn.preparePersistentStatement(arena.allocateUtf8String(SqliteConstants.SELECT_MULTI_DISCOVERY_SQL));
-            this.selectOne = conn.preparePersistentStatement(arena.allocateUtf8String(SqliteConstants.SELECT_ONE_DISCOVERY_SQL));
+        try(Allocator allocator = Allocator.newDirectAllocator()) {
+            this.selectMulti = conn.preparePersistentStatement(allocator.allocateFrom(SqliteConstants.SELECT_MULTI_DISCOVERY_SQL));
+            this.selectOne = conn.preparePersistentStatement(allocator.allocateFrom(SqliteConstants.SELECT_ONE_DISCOVERY_SQL));
         }
     }
     @Override

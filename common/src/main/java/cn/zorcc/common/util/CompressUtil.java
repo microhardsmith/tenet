@@ -2,26 +2,25 @@ package cn.zorcc.common.util;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
-import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.bindings.DeflateBinding;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.structure.WriteBuffer;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.util.zip.*;
 
 /**
  *   This class provide easy access to gzip and deflate compression and decompression using JDK's implementation or libdeflate's implementation
- *   In general, JDK's implementation is a little faster when dataset is small, could be twice slower if the dataset was larger
+ *   In general, JDK's implementation is a little bit faster when dataset is small, could be twice slower if the dataset was larger
  *   The compression and decompression speed of gzip and deflate algorithm are quite slow compared to other technic like zstd
  */
 @SuppressWarnings("unused")
 public final class CompressUtil {
-    private static final Arena autoArena = NativeUtil.autoArena();
     private static final int CHUNK_SIZE = 4 * Constants.KB;
     private static final int ESTIMATE_RATIO = 3;
 
@@ -32,68 +31,69 @@ public final class CompressUtil {
     /**
      *   When using libdeflate, level should between DeflateBinding.LIBDEFLATE_SLOWEST_LEVEL and DeflateBinding.LIBDEFLATE_FASTEST_LEVEL
      */
-    public static MemorySegment compressUsingDeflate(MemorySegment input, int level) {
+    public static MemorySegment compressUsingDeflate(MemorySegment input, int level, SegmentAllocator allocator) {
         MemorySegment in = NativeUtil.toNativeSegment(input);
         level = level >= DeflateBinding.LIBDEFLATE_FASTEST_LEVEL && level <= DeflateBinding.LIBDEFLATE_SLOWEST_LEVEL ? level : DeflateBinding.LIBDEFLATE_DEFAULT_LEVEL;
         long inBytes = in.byteSize();
         MemorySegment compressor = DeflateBinding.allocCompressor(level);
         try{
             long outBytes = DeflateBinding.deflateCompressBound(compressor, inBytes);
-            MemorySegment out = autoArena.allocateArray(ValueLayout.JAVA_BYTE, outBytes);
+            MemorySegment out = allocator.allocate(ValueLayout.JAVA_BYTE, outBytes);
             long compressed = DeflateBinding.deflateCompress(compressor, in, inBytes, out, outBytes);
-            if(compressed <= 0) {
+            if(compressed <= 0L) {
                 throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
             }
-            return out.asSlice(0, compressed);
+            return out.asSlice(0L, compressed);
         }finally {
             DeflateBinding.freeCompressor(compressor);
         }
     }
 
-    public static MemorySegment compressUsingGzip(MemorySegment input, int level) {
+    public static MemorySegment compressUsingGzip(MemorySegment input, int level, SegmentAllocator allocator) {
         MemorySegment in = NativeUtil.toNativeSegment(input);
         level = level >= DeflateBinding.LIBDEFLATE_FASTEST_LEVEL && level <= DeflateBinding.LIBDEFLATE_SLOWEST_LEVEL ? level : DeflateBinding.LIBDEFLATE_DEFAULT_LEVEL;
         long inBytes = in.byteSize();
         MemorySegment compressor = DeflateBinding.allocCompressor(level);
         try{
             long outBytes = DeflateBinding.gzipCompressBound(compressor, inBytes);
-            MemorySegment out = autoArena.allocateArray(ValueLayout.JAVA_BYTE, outBytes);
+            MemorySegment out = allocator.allocate(ValueLayout.JAVA_BYTE, outBytes);
             long compressed = DeflateBinding.gzipCompress(compressor, in, inBytes, out, outBytes);
-            if(compressed <= 0) {
+            if(compressed <= 0L) {
                 throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
             }
-            return out.asSlice(0, compressed);
+            return out.asSlice(0L, compressed);
         }finally {
             DeflateBinding.freeCompressor(compressor);
         }
     }
 
-    public static MemorySegment decompressUsingDeflate(MemorySegment input) {
-        return decompressUsingDeflate(input, Long.MIN_VALUE);
+    public static MemorySegment decompressUsingDeflate(MemorySegment input, SegmentAllocator allocator) {
+        return decompressUsingDeflate(input, Long.MIN_VALUE, allocator);
     }
 
-    public static MemorySegment decompressUsingDeflate(MemorySegment input, long originalSize) {
+    public static MemorySegment decompressUsingDeflate(MemorySegment input, long originalSize, SegmentAllocator allocator) {
         MemorySegment in = NativeUtil.toNativeSegment(input);
         long inBytes = in.byteSize();
         MemorySegment decompressor = DeflateBinding.allocDecompressor();
         try{
-            MemorySegment out = autoArena.allocateArray(ValueLayout.JAVA_BYTE, originalSize > 0 ? originalSize : inBytes * ESTIMATE_RATIO);
-            MemorySegment actualOutBytes = originalSize > 0 ? NativeUtil.NULL_POINTER : autoArena.allocate(ValueLayout.JAVA_LONG);
+            MemorySegment out = allocator.allocate(ValueLayout.JAVA_BYTE, originalSize > 0L ? originalSize : inBytes * ESTIMATE_RATIO);
+            MemorySegment actualOutBytes = originalSize > 0L ? MemorySegment.NULL : allocator.allocate(ValueLayout.JAVA_LONG);
             for( ; ; ) {
                 switch (DeflateBinding.deflateDecompress(decompressor, in, inBytes, out, out.byteSize(), actualOutBytes)) {
                     case DeflateBinding.LIBDEFLATE_SUCCESS -> {
-                        long written = NativeUtil.getLong(actualOutBytes, 0);
-                        return out.asSlice(0, written);
+                        long written = actualOutBytes.get(ValueLayout.JAVA_LONG_UNALIGNED, 0L);
+                        return out.asSlice(0L, written);
                     }
                     case DeflateBinding.LIBDEFLATE_BAD_DATA -> throw new FrameworkException(ExceptionType.COMPRESS, "Bad data");
-                    case DeflateBinding.LIBDEFLATE_SHORT_OUTPUT -> throw new FrameworkException(ExceptionType.COMPRESS, originalSize > 0 ? "Fewer originalSize expected" : Constants.UNREACHED);
+                    case DeflateBinding.LIBDEFLATE_SHORT_OUTPUT -> throw new FrameworkException(ExceptionType.COMPRESS, originalSize > 0L ? "Fewer originalSize expected" : Constants.UNREACHED);
                     case DeflateBinding.LIBDEFLATE_INSUFFICIENT_SPACE -> {
                         if(originalSize > 0) {
                             throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
                         }else {
-                            out = autoArena.allocateArray(ValueLayout.JAVA_BYTE, out.byteSize() << 1);
+                            out = allocator.allocate(ValueLayout.JAVA_BYTE, out.byteSize() << 1);
                         }
                     }
+                    default -> throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
                 }
             }
         }finally {
@@ -101,32 +101,33 @@ public final class CompressUtil {
         }
     }
 
-    public static MemorySegment decompressUsingGzip(MemorySegment input) {
-        return decompressUsingGzip(input, Long.MIN_VALUE);
+    public static MemorySegment decompressUsingGzip(MemorySegment input, SegmentAllocator allocator) {
+        return decompressUsingGzip(input, Long.MIN_VALUE, allocator);
     }
 
-    public static MemorySegment decompressUsingGzip(MemorySegment input, long originalSize) {
+    public static MemorySegment decompressUsingGzip(MemorySegment input, long originalSize, SegmentAllocator allocator) {
         MemorySegment in = NativeUtil.toNativeSegment(input);
         long inBytes = in.byteSize();
         MemorySegment decompressor = DeflateBinding.allocDecompressor();
         try{
-            MemorySegment out = autoArena.allocateArray(ValueLayout.JAVA_BYTE, originalSize > 0 ? originalSize : inBytes * ESTIMATE_RATIO);
-            MemorySegment actualOutBytes = originalSize > 0 ? NativeUtil.NULL_POINTER : autoArena.allocate(ValueLayout.JAVA_LONG);
+            MemorySegment out = allocator.allocate(ValueLayout.JAVA_BYTE, originalSize > 0L ? originalSize : inBytes * ESTIMATE_RATIO);
+            MemorySegment actualOutBytes = originalSize > 0L ? MemorySegment.NULL : allocator.allocate(ValueLayout.JAVA_LONG);
             for( ; ; ) {
                 switch (DeflateBinding.gzipDecompress(decompressor, in, inBytes, out, out.byteSize(), actualOutBytes)) {
                     case DeflateBinding.LIBDEFLATE_SUCCESS -> {
-                        long written = NativeUtil.getLong(actualOutBytes, 0);
-                        return out.asSlice(0, written);
+                        long written = actualOutBytes.get(ValueLayout.JAVA_LONG, 0L);
+                        return out.asSlice(0L, written);
                     }
                     case DeflateBinding.LIBDEFLATE_BAD_DATA -> throw new FrameworkException(ExceptionType.COMPRESS, "Bad data");
-                    case DeflateBinding.LIBDEFLATE_SHORT_OUTPUT -> throw new FrameworkException(ExceptionType.COMPRESS, originalSize > 0 ? "Fewer originalSize expected" : Constants.UNREACHED);
+                    case DeflateBinding.LIBDEFLATE_SHORT_OUTPUT -> throw new FrameworkException(ExceptionType.COMPRESS, originalSize > 0L ? "Fewer originalSize expected" : Constants.UNREACHED);
                     case DeflateBinding.LIBDEFLATE_INSUFFICIENT_SPACE -> {
-                        if(originalSize > 0) {
+                        if(originalSize > 0L) {
                             throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
                         }else {
-                            out = autoArena.allocateArray(ValueLayout.JAVA_BYTE, out.byteSize() << 1);
+                            out = allocator.allocate(ValueLayout.JAVA_BYTE, out.byteSize() << 1);
                         }
                     }
+                    default -> throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
                 }
             }
         }finally {

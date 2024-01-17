@@ -3,9 +3,9 @@ package cn.zorcc.common.util;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.Meta;
-import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.json.JsonParser;
+import cn.zorcc.common.structure.ReadBuffer;
 
 import java.io.IOException;
 import java.io.InputStream;

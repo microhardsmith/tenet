@@ -18,11 +18,15 @@ public final class TenetBinding {
 
     static {
         SymbolLookup symbolLookup = NativeUtil.loadLibrary(Constants.TENET);
-        getStdoutHandle = NativeUtil.methodHandle(symbolLookup, "get_stdout", FunctionDescriptor.of(ValueLayout.ADDRESS), Linker.Option.isTrivial());
-        getStderrHandle = NativeUtil.methodHandle(symbolLookup, "get_stderr", FunctionDescriptor.of(ValueLayout.ADDRESS), Linker.Option.isTrivial());
-        getFbfHandle = NativeUtil.methodHandle(symbolLookup, "get_fbf", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
-        getLbfHandle = NativeUtil.methodHandle(symbolLookup, "get_lbf", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
-        getNbfHandle = NativeUtil.methodHandle(symbolLookup, "get_nbf", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.isTrivial());
+        getStdoutHandle = NativeUtil.methodHandle(symbolLookup, "get_stdout", FunctionDescriptor.of(ValueLayout.ADDRESS), Linker.Option.critical(false));
+        getStderrHandle = NativeUtil.methodHandle(symbolLookup, "get_stderr", FunctionDescriptor.of(ValueLayout.ADDRESS), Linker.Option.critical(false));
+        getFbfHandle = NativeUtil.methodHandle(symbolLookup, "get_fbf", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.critical(false));
+        getLbfHandle = NativeUtil.methodHandle(symbolLookup, "get_lbf", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.critical(false));
+        getNbfHandle = NativeUtil.methodHandle(symbolLookup, "get_nbf", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.critical(false));
+    }
+
+    private TenetBinding() {
+        throw new UnsupportedOperationException();
     }
 
     public static MemorySegment stdout() {

@@ -4,12 +4,10 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.Context;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.TestConstants;
-import cn.zorcc.common.bindings.DeflateBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.http.*;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.api.Handler;
-import cn.zorcc.common.util.CompressUtil;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.MemorySegment;
@@ -115,12 +113,14 @@ public class HttpTest {
             headers.put("Content-Type", "application/json; charset=utf-8");
             headers.put("Date", formatter.format(ZonedDateTime.now(gmt)));
             String acceptEncoding = httpRequest.getHttpHeader().get(HttpHeader.K_ACCEPT_ENCODING);
-            if(acceptEncoding != null && acceptEncoding.contains(HttpHeader.V_GZIP)) {
-                headers.put(HttpHeader.K_CONTENT_ENCODING, HttpHeader.V_GZIP);
-                httpResponse.setData(CompressUtil.compressUsingGzip(body, DeflateBinding.LIBDEFLATE_FASTEST_LEVEL));
-            }else {
-                httpResponse.setData(body);
+            if(acceptEncoding != null) {
+                if (acceptEncoding.contains(HttpHeader.V_GZIP)) {
+                    httpResponse.setCompressionStatus(HttpCompressionStatus.GZIP);
+                }else if(acceptEncoding.contains(HttpHeader.V_DEFLATE)) {
+                    httpResponse.setCompressionStatus(HttpCompressionStatus.DEFLATE);
+                }
             }
+            httpResponse.setData(body);
             channel.sendMsg(httpResponse);
         }
 

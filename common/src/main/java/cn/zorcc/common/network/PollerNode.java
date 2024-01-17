@@ -7,7 +7,7 @@ public sealed interface PollerNode permits SentryPollerNode, ProtocolPollerNode 
     /**
      *   This function would be invoked when channel become readable
      */
-    void onReadableEvent(MemorySegment reserved, int len);
+    void onReadableEvent(MemorySegment reserved, long len);
 
     /**
      *   This function would be invoked when channel become writable

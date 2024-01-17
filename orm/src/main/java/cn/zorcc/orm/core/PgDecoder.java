@@ -3,11 +3,11 @@ package cn.zorcc.orm.core;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.OldPair;
-import cn.zorcc.common.ReadBuffer;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.api.Decoder;
 import cn.zorcc.common.postgre.PgRowDescription;
 import cn.zorcc.common.postgre.PgStatus;
+import cn.zorcc.common.structure.ReadBuffer;
 import cn.zorcc.orm.backend.*;
 
 import java.util.ArrayList;
@@ -93,7 +93,7 @@ public class PgDecoder implements Decoder {
             if(b == Constants.NUT) {
                 break;
             }else {
-                items.add(OldPair.of(b, readBuffer.readCStr()));
+                items.add(OldPair.of(b, readBuffer.readStr()));
             }
         }
         checkLength(msgLength, (int) (readBuffer.readIndex() - startIndex + 4));
@@ -123,7 +123,7 @@ public class PgDecoder implements Decoder {
         short len = readBuffer.readShort();
         PgRowDescription[] pgRowDescriptions = new PgRowDescription[len];
         for(int i = 0; i < len; i++) {
-            String fieldName = readBuffer.readCStr();
+            String fieldName = readBuffer.readStr();
             int tableOid = readBuffer.readInt();
             short attr = readBuffer.readShort();
             int fieldOid = readBuffer.readInt();
@@ -138,7 +138,7 @@ public class PgDecoder implements Decoder {
 
     private Object decodeCommandCompleteMsg(ReadBuffer readBuffer, int msgLength) {
         long startIndex = readBuffer.readIndex();
-        String tag = readBuffer.readCStr();
+        String tag = readBuffer.readStr();
         checkLength(msgLength, (int) (readBuffer.readIndex() - startIndex + 4));
         return new PgCommandCompleteMsg(tag);
     }
@@ -185,7 +185,7 @@ public class PgDecoder implements Decoder {
         long startIndex = readBuffer.readIndex();
         List<String> mechanisms = new ArrayList<>();
         for( ; ;) {
-            String mechanism = readBuffer.readCStr();
+            String mechanism = readBuffer.readStr();
             if(mechanism == null) {
                 break;
             }
@@ -197,22 +197,22 @@ public class PgDecoder implements Decoder {
 
     private Object decodeSaslContinueMsg(ReadBuffer readBuffer, int msgLength) {
         long startIndex = readBuffer.readIndex();
-        String serverFirstMsg = readBuffer.readCStr();
+        String serverFirstMsg = readBuffer.readStr();
         checkLength(msgLength, (int) (readBuffer.readIndex() - startIndex + 8));
         return new PgAuthSaslContinueMsg(serverFirstMsg);
     }
 
     private Object decodeSaslFinalMsg(ReadBuffer readBuffer, int msgLength) {
         long startIndex = readBuffer.readIndex();
-        String serverFinalMsg = readBuffer.readCStr();
+        String serverFinalMsg = readBuffer.readStr();
         checkLength(msgLength, (int) (readBuffer.readIndex() - startIndex + 8));
         return new PgAuthSaslFinalMsg(serverFinalMsg);
     }
 
     private Object decodeParameterStatus(ReadBuffer readBuffer, int msgLength) {
         long startIndex = readBuffer.readIndex();
-        String key = readBuffer.readCStr();
-        String value = readBuffer.readCStr();
+        String key = readBuffer.readStr();
+        String value = readBuffer.readStr();
         checkLength(msgLength, (int) (readBuffer.readIndex() - startIndex + 4));
         return new PgParameterStatusMsg(key, value);
     }

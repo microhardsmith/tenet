@@ -1,6 +1,6 @@
 package cn.zorcc.common.log;
 
-import cn.zorcc.common.WriteBuffer;
+import cn.zorcc.common.structure.WriteBuffer;
 
 @FunctionalInterface
 public interface LogHandler {

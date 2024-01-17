@@ -4,6 +4,7 @@ import cn.zorcc.common.bindings.DeflateBinding;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
@@ -29,19 +30,23 @@ public class CompressionTest {
 
     @Test
     public void testLibDeflateCompress() {
-        byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
-        MemorySegment m = MemorySegment.ofArray(str.getBytes(StandardCharsets.UTF_8));
-        MemorySegment compressed = CompressUtil.compressUsingDeflate(m, DeflateBinding.LIBDEFLATE_FASTEST_LEVEL);
-        MemorySegment decompressed = CompressUtil.decompressUsingDeflate(compressed);
-        Assertions.assertArrayEquals(bytes, decompressed.toArray(ValueLayout.JAVA_BYTE));
+        try(Arena arena = Arena.ofConfined()) {
+            byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
+            MemorySegment m = MemorySegment.ofArray(str.getBytes(StandardCharsets.UTF_8));
+            MemorySegment compressed = CompressUtil.compressUsingDeflate(m, DeflateBinding.LIBDEFLATE_FASTEST_LEVEL, arena);
+            MemorySegment decompressed = CompressUtil.decompressUsingDeflate(compressed, arena);
+            Assertions.assertArrayEquals(bytes, decompressed.toArray(ValueLayout.JAVA_BYTE));
+        }
     }
 
     @Test
     public void testLibGzipCompress() {
-        byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
-        MemorySegment m = MemorySegment.ofArray(str.getBytes(StandardCharsets.UTF_8));
-        MemorySegment compressed = CompressUtil.compressUsingGzip(m, DeflateBinding.LIBDEFLATE_FASTEST_LEVEL);
-        MemorySegment decompressed = CompressUtil.decompressUsingGzip(compressed);
-        Assertions.assertArrayEquals(bytes, decompressed.toArray(ValueLayout.JAVA_BYTE));
+        try(Arena arena = Arena.ofConfined()) {
+            byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
+            MemorySegment m = MemorySegment.ofArray(str.getBytes(StandardCharsets.UTF_8));
+            MemorySegment compressed = CompressUtil.compressUsingGzip(m, DeflateBinding.LIBDEFLATE_FASTEST_LEVEL, arena);
+            MemorySegment decompressed = CompressUtil.decompressUsingGzip(compressed, arena);
+            Assertions.assertArrayEquals(bytes, decompressed.toArray(ValueLayout.JAVA_BYTE));
+        }
     }
 }

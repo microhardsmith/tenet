@@ -2,14 +2,13 @@ package cn.zorcc.common.log;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
-import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.bindings.TenetBinding;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.structure.Allocator;
+import cn.zorcc.common.structure.WriteBuffer;
 import cn.zorcc.common.util.FileUtil;
-import cn.zorcc.common.util.NativeUtil;
 
 import java.io.IOException;
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,7 +20,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- *   Print log to the file,
+ *   Print log to the file
  */
 public final class FileLogEventHandler implements Consumer<LogEvent> {
     private final List<LogHandler> handlers;
@@ -30,12 +29,11 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
     private final int flushThreshold;
     private final long maxFileSize;
     private final long maxRecordingTime;
-    private final Arena reservedArena = Arena.ofConfined();
     private final MemorySegment reserved;
     private long currentCreateTime;
     private long currentWrittenIndex;
     private MemorySegment fileStream;
-    public FileLogEventHandler(LogConfig logConfig) {
+    public FileLogEventHandler(LogConfig logConfig, MemorySegment m) {
         try{
             FileLogConfig config = logConfig.getFile();
             List<LogHandler> logHandlers = Logger.createLogHandlers(logConfig.getLogFormat(), s -> switch (s) {
@@ -61,7 +59,7 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
             flushThreshold = config.getFlushThreshold() <= 0 ? Integer.MIN_VALUE : config.getFlushThreshold();
             maxFileSize = config.getMaxFileSize() <= 0 ? Long.MIN_VALUE : config.getMaxFileSize();
             maxRecordingTime = config.getMaxRecordingTime() <= 0 ? Long.MIN_VALUE : config.getMaxRecordingTime();
-            reserved = reservedArena.allocate(config.getBuffer());
+            reserved = m;
             openNewLogOutputFile();
         }catch (IOException e) {
             throw new FrameworkException(ExceptionType.LOG, "Unable to create log file");
@@ -72,25 +70,24 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
         if(fileStream != null) {
             FileUtil.fclose(fileStream);
         }
-        try(Arena arena = Arena.ofConfined()) {
-            Instant instant = Constants.SYSTEM_CLOCK.instant();
-            LocalDateTime now = LocalDateTime.ofEpochSecond(instant.getEpochSecond(), instant.getNano(), Constants.LOCAL_ZONE_OFFSET);
-            String absolutePath = dir +
-                    Constants.SEPARATOR +
-                    DateTimeFormatter.ofPattern(Constants.LOG_FILE_NAME_PATTERN).format(now) +
-                    Constants.LOG_FILE_TYPE;
-            if(Files.exists(Path.of(absolutePath))) {
-                throw new FrameworkException(ExceptionType.LOG, "Target log file already exist");
-            }
-            MemorySegment path = arena.allocateUtf8String(absolutePath);
-            MemorySegment mode = arena.allocateUtf8String("a");
-            fileStream = FileUtil.fopen(path, mode);
-            if (FileUtil.setvbuf(fileStream, NativeUtil.NULL_POINTER, TenetBinding.nbf(), 0) != 0) {
-                throw new FrameworkException(ExceptionType.LOG, "Failed to set filestream to nbf mode");
-            }
-            currentCreateTime = now.toInstant(Constants.LOCAL_ZONE_OFFSET).toEpochMilli();
-            currentWrittenIndex = 0;
+        Instant instant = Constants.SYSTEM_CLOCK.instant();
+        LocalDateTime now = LocalDateTime.ofEpochSecond(instant.getEpochSecond(), instant.getNano(), Constants.LOCAL_ZONE_OFFSET);
+        String absolutePath = dir +
+                Constants.SEPARATOR +
+                DateTimeFormatter.ofPattern(Constants.LOG_FILE_NAME_PATTERN).format(now) +
+                Constants.LOG_FILE_TYPE;
+        if(Files.exists(Path.of(absolutePath))) {
+            throw new FrameworkException(ExceptionType.LOG, "Target log file already exist");
         }
+        Allocator allocator = Allocator.newSlicingAllocator(reserved);
+        MemorySegment path = allocator.allocateFrom(absolutePath);
+        MemorySegment mode = allocator.allocateFrom("a");
+        fileStream = FileUtil.fopen(path, mode);
+        if (FileUtil.setvbuf(fileStream, MemorySegment.NULL, TenetBinding.nbf(), 0) != 0) {
+            throw new FrameworkException(ExceptionType.LOG, "Failed to set filestream to nbf mode");
+        }
+        currentCreateTime = now.toInstant(Constants.LOCAL_ZONE_OFFSET).toEpochMilli();
+        currentWrittenIndex = 0;
     }
 
     @Override
@@ -114,13 +111,12 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
                     flush();
                 }
                 FileUtil.fclose(fileStream);
-                reservedArena.close();
             }
         }
     }
 
     private void flush() {
-        try(WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(reserved)) {
+        try(WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(reserved, false)) {
             for (LogEvent event : eventList) {
                 handlers.forEach(logHandler -> logHandler.process(writeBuffer, event));
             }

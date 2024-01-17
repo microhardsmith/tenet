@@ -1,14 +1,18 @@
 package cn.zorcc.common.network;
 
-import cn.zorcc.common.*;
+import cn.zorcc.common.Carrier;
+import cn.zorcc.common.Constants;
+import cn.zorcc.common.ExceptionType;
+import cn.zorcc.common.State;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.api.Protocol;
 import cn.zorcc.common.network.lib.OsNetworkLibrary;
 import cn.zorcc.common.structure.IntMap;
 import cn.zorcc.common.structure.Mutex;
+import cn.zorcc.common.structure.ReadBuffer;
+import cn.zorcc.common.structure.WriteBuffer;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -27,8 +31,8 @@ public final class ProtocolPollerNode implements PollerNode {
     private final Protocol protocol;
     private final State channelState;
     private List<Object> entityList = new ArrayList<>(MAX_LIST_SIZE);
-    private IntMap<TaggedMsg> msgMap;
     private WriteBuffer tempBuffer;
+    private IntMap<TaggedMsg> msgMap;
     private Carrier carrier;
 
     public ProtocolPollerNode(IntMap<PollerNode> nodeMap, Channel channel, Protocol protocol, State channelState) {
@@ -39,8 +43,8 @@ public final class ProtocolPollerNode implements PollerNode {
     }
 
     @Override
-    public void onReadableEvent(MemorySegment reserved, int len) {
-        int r;
+    public void onReadableEvent(MemorySegment reserved, long len) {
+        long r;
         try{
             r = protocol.onReadableEvent(reserved, len);
         }catch (RuntimeException e) {
@@ -48,7 +52,7 @@ public final class ProtocolPollerNode implements PollerNode {
             close();
             return ;
         }
-        if(r >= 0) {
+        if(r >= 0L) {
             handleReceived(reserved, len, r);
         }else {
             handleEvent(r);
@@ -57,7 +61,7 @@ public final class ProtocolPollerNode implements PollerNode {
 
     @Override
     public void onWritableEvent() {
-        int r;
+        long r;
         try{
             r = protocol.onWritableEvent();
         }catch (RuntimeException e) {
@@ -65,7 +69,7 @@ public final class ProtocolPollerNode implements PollerNode {
             close();
             return ;
         }
-        if(r < 0) {
+        if(r < 0L) {
             handleEvent(r);
         }
     }
@@ -126,7 +130,7 @@ public final class ProtocolPollerNode implements PollerNode {
         channel.shutdown(duration);
     }
 
-    private void handleEvent(int r) {
+    private void handleEvent(long r) {
         if(r == Constants.NET_W || r == Constants.NET_R || r == Constants.NET_RW) {
             ctl(r);
         }else if(r != Constants.NET_IGNORED) {
@@ -134,10 +138,10 @@ public final class ProtocolPollerNode implements PollerNode {
         }
     }
 
-    private void ctl(int expected) {
+    private void ctl(long expected) {
         try(Mutex _ = channelState.withMutex()) {
-            int state = channelState.get();
-            int current = state & Constants.NET_RW;
+            long state = channelState.get();
+            long current = state & Constants.NET_RW;
             if(current != expected) {
                 osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), current, expected);
                 channelState.set((expected - current) + state);
@@ -145,12 +149,12 @@ public final class ProtocolPollerNode implements PollerNode {
         }
     }
 
-    private void handleReceived(MemorySegment segment, int len, int received) {
+    private void handleReceived(MemorySegment segment, long len, long received) {
         if(received == len) {
             onReceive(segment);
-        }else if(received > 0) {
-            onReceive(segment.asSlice(0, received));
-        }else if(received == 0) {
+        }else if(received > 0L) {
+            onReceive(segment.asSlice(0L, received));
+        }else if(received == 0L) {
             close();
         }
     }
@@ -159,9 +163,9 @@ public final class ProtocolPollerNode implements PollerNode {
         if(tempBuffer == null) {
             long len = memorySegment.byteSize();
             long readIndex = process(memorySegment);
-            if(readIndex >= 0 && readIndex < len) {
-                tempBuffer = WriteBuffer.newDefaultWriteBuffer(Arena.ofConfined(), len);
-                tempBuffer.writeSegment(readIndex == 0 ? memorySegment : memorySegment.asSlice(readIndex, len - readIndex));
+            if(readIndex >= 0L && readIndex < len) {
+                tempBuffer = WriteBuffer.newHeapWriteBuffer(len);
+                tempBuffer.writeSegment(readIndex == 0L ? memorySegment : memorySegment.asSlice(readIndex, len - readIndex));
             }
         }else {
             tempBuffer.writeSegment(memorySegment);
@@ -170,7 +174,7 @@ public final class ProtocolPollerNode implements PollerNode {
             if(readIndex == len) {
                 tempBuffer.close();
                 tempBuffer = null;
-            }else if(readIndex > 0) {
+            }else if(readIndex > 0L) {
                 tempBuffer = tempBuffer.truncate(readIndex);
             }
         }
@@ -232,8 +236,8 @@ public final class ProtocolPollerNode implements PollerNode {
                 carrier.cas(Carrier.HOLDER, Carrier.FAILED);
             }
             try(Mutex _ = channelState.withMutex()) {
-                int state = channelState.get();
-                int current = state & Constants.NET_RW;
+                long state = channelState.get();
+                long current = state & Constants.NET_RW;
                 if(current != Constants.NET_NONE) {
                     osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), current, Constants.NET_NONE);
                     state -= (current - Constants.NET_NONE);

@@ -15,12 +15,12 @@ public record TcpSentry(
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
 
     @Override
-    public int onReadableEvent(MemorySegment reserved, int len) {
+    public long onReadableEvent(MemorySegment reserved, long len) {
         throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
     }
 
     @Override
-    public int onWritableEvent() {
+    public long onWritableEvent() {
         int errOpt = osNetworkLibrary.getErrOpt(channel.socket());
         if(errOpt == 0) {
             return Constants.NET_UPDATE;

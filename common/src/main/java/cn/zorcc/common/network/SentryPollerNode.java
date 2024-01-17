@@ -30,7 +30,7 @@ public final class SentryPollerNode implements PollerNode {
     }
 
     @Override
-    public void onReadableEvent(MemorySegment reserved, int len) {
+    public void onReadableEvent(MemorySegment reserved, long len) {
         try{
             handleEvent(sentry.onReadableEvent(reserved, len));
         }catch (RuntimeException e) {
@@ -71,7 +71,7 @@ public final class SentryPollerNode implements PollerNode {
         close();
     }
 
-    private void handleEvent(int r) {
+    private void handleEvent(long r) {
         if(r == Constants.NET_UPDATE) {
             updateToProtocol();
         }else if(r == Constants.NET_R || r == Constants.NET_W || r == Constants.NET_RW){
@@ -81,8 +81,8 @@ public final class SentryPollerNode implements PollerNode {
         }
     }
 
-    private void ctl(int expected) {
-        int current = channelState.get();
+    private void ctl(long expected) {
+        long current = channelState.get();
         if(current != expected) {
             osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), current, expected);
             channelState.set(expected);

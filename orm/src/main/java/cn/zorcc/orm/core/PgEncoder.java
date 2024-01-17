@@ -2,9 +2,9 @@ package cn.zorcc.orm.core;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
-import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.api.Encoder;
+import cn.zorcc.common.structure.WriteBuffer;
 import cn.zorcc.orm.PgConfig;
 import cn.zorcc.orm.frontend.*;
 
@@ -35,7 +35,7 @@ public class PgEncoder implements Encoder {
         long currentIndex = writeBuffer.writeIndex();
         writeBuffer.writeInt(Integer.MAX_VALUE);
         writeBuffer.writeByte(pgDescribeMsg.type());
-        writeBuffer.writeCStr(pgDescribeMsg.name());
+        writeBuffer.writeStr(pgDescribeMsg.name());
         writeBuffer.setInt(currentIndex, (int) (writeBuffer.writeIndex() - currentIndex));
     }
 
@@ -43,7 +43,7 @@ public class PgEncoder implements Encoder {
         writeBuffer.writeByte(PgConstants.EXECUTE);
         long currentIndex = writeBuffer.writeIndex();
         writeBuffer.writeInt(Integer.MAX_VALUE);
-        writeBuffer.writeCStr(pgExecuteMsg.portal());
+        writeBuffer.writeStr(pgExecuteMsg.portal());
         writeBuffer.writeInt(pgExecuteMsg.maxRowsToReturn());
         writeBuffer.setInt(currentIndex, (int) (writeBuffer.writeIndex() - currentIndex));
     }
@@ -57,8 +57,8 @@ public class PgEncoder implements Encoder {
         writeBuffer.writeByte(PgConstants.PARSE);
         long currentIndex = writeBuffer.writeIndex();
         writeBuffer.writeInt(Integer.MAX_VALUE);
-        writeBuffer.writeCStr(pgParseMsg.name());
-        writeBuffer.writeCStr(pgParseMsg.sql());
+        writeBuffer.writeStr(pgParseMsg.name());
+        writeBuffer.writeStr(pgParseMsg.sql());
         short len = pgParseMsg.len();
         writeBuffer.writeShort(len);
         if(len > 0) {
@@ -74,7 +74,7 @@ public class PgEncoder implements Encoder {
         writeBuffer.writeByte(PgConstants.PASSWORD);
         long currentIndex = writeBuffer.writeIndex();
         writeBuffer.writeInt(Integer.MAX_VALUE);
-        writeBuffer.writeCStr(password);
+        writeBuffer.writeStr(password);
         writeBuffer.setInt(currentIndex, (int) (writeBuffer.writeIndex() - currentIndex));
     }
 
@@ -83,7 +83,7 @@ public class PgEncoder implements Encoder {
         writeBuffer.writeByte(PgConstants.QUERY);
         long currentIndex = writeBuffer.writeIndex();
         writeBuffer.writeInt(Integer.MAX_VALUE);
-        writeBuffer.writeCStr(sql);
+        writeBuffer.writeStr(sql);
         writeBuffer.setInt(currentIndex, (int) (writeBuffer.writeIndex() - currentIndex));
     }
 
@@ -101,23 +101,23 @@ public class PgEncoder implements Encoder {
         long currentIndex = buffer.writeIndex();
         buffer.writeInt(Integer.MAX_VALUE);
         buffer.writeInt(3 << 16);
-        buffer.writeCStr(PgConstants.USER);
-        buffer.writeCStr(pgConfig.getUsername());
-        buffer.writeCStr(PgConstants.DATABASE);
-        buffer.writeCStr(pgConfig.getDatabaseName());
-        buffer.writeCStr(PgConstants.CLIENT_ENCODING);
-        buffer.writeCStr(PgConstants.UTF_8);
-        buffer.writeCStr(PgConstants.APPLICATION_NAME);
-        buffer.writeCStr(PgConstants.DEFAULT_APPLICATION_NAME);
-        buffer.writeCStr(PgConstants.DATE_STYLE);
-        buffer.writeCStr(PgConstants.ISO);
+        buffer.writeStr(PgConstants.USER);
+        buffer.writeStr(pgConfig.getUsername());
+        buffer.writeStr(PgConstants.DATABASE);
+        buffer.writeStr(pgConfig.getDatabaseName());
+        buffer.writeStr(PgConstants.CLIENT_ENCODING);
+        buffer.writeStr(PgConstants.UTF_8);
+        buffer.writeStr(PgConstants.APPLICATION_NAME);
+        buffer.writeStr(PgConstants.DEFAULT_APPLICATION_NAME);
+        buffer.writeStr(PgConstants.DATE_STYLE);
+        buffer.writeStr(PgConstants.ISO);
         String currentSchema = pgConfig.getCurrentSchema();
         if (currentSchema != null && !currentSchema.isBlank()) {
-            buffer.writeCStr(PgConstants.SEARCH_PATH);
-            buffer.writeCStr(currentSchema);
+            buffer.writeStr(PgConstants.SEARCH_PATH);
+            buffer.writeStr(currentSchema);
         }
-        buffer.writeCStr(PgConstants.FLOAT_PRECISION);
-        buffer.writeCStr(PgConstants.DEFAULT_FLOAT_PRECISION);
+        buffer.writeStr(PgConstants.FLOAT_PRECISION);
+        buffer.writeStr(PgConstants.DEFAULT_FLOAT_PRECISION);
         buffer.writeByte(Constants.NUT);
         buffer.setInt(currentIndex, (int) (buffer.writeIndex() - currentIndex));
     }
@@ -126,7 +126,7 @@ public class PgEncoder implements Encoder {
         writeBuffer.writeByte(PgConstants.SASL_RESPONSE);
         long currentIndex = writeBuffer.writeIndex();
         writeBuffer.writeInt(Integer.MAX_VALUE);
-        writeBuffer.writeCStr(mechanism);
+        writeBuffer.writeStr(mechanism);
         if(clientFirstMsg == null || clientFirstMsg.isEmpty()) {
             writeBuffer.writeInt(-1);
         }else {

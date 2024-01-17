@@ -1,7 +1,7 @@
 package cn.zorcc.common.exception;
 
 import cn.zorcc.common.Format;
-import cn.zorcc.common.ReadBuffer;
+import cn.zorcc.common.structure.ReadBuffer;
 
 public final class JsonParseException extends RuntimeException {
     public JsonParseException(String errMsg) {

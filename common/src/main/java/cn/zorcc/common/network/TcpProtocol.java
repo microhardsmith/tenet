@@ -14,9 +14,9 @@ public record TcpProtocol(
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
 
     @Override
-    public int onReadableEvent(MemorySegment reserved, int len) {
-        int r = osNetworkLibrary.recv(channel.socket(), reserved, len);
-        if(r < 0) {
+    public long onReadableEvent(MemorySegment reserved, long len) {
+        long r = osNetworkLibrary.recv(channel.socket(), reserved, len);
+        if(r < 0L) {
             throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform recv(), errno : \{Math.abs(r)}");
         }else {
             return r;
@@ -24,17 +24,17 @@ public record TcpProtocol(
     }
 
     @Override
-    public int onWritableEvent() {
+    public long onWritableEvent() {
         channel.writer().submit(new WriterTask(WriterTaskType.WRITABLE, channel, null, null));
         return Constants.NET_R;
     }
 
     @Override
-    public int doWrite(MemorySegment data, int len) {
+    public long doWrite(MemorySegment data, long len) {
         Socket socket = channel.socket();
-        int r = osNetworkLibrary.send(socket, data, len);
-        if(r < 0) {
-            int errno = Math.abs(r);
+        long r = osNetworkLibrary.send(socket, data, len);
+        if(r < 0L) {
+            int errno = Math.toIntExact(-r);
             if(errno == osNetworkLibrary.sendBlockCode()) {
                 return Constants.NET_PW;
             }else {

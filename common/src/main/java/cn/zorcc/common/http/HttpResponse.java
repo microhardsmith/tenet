@@ -21,6 +21,10 @@ public final class HttpResponse {
      */
     private HttpHeader headers = new HttpHeader();
     /**
+     *   Http compression status
+     */
+    private HttpCompressionStatus compressionStatus = HttpCompressionStatus.NONE;
+    /**
      *   Http content data, normally would be json UTF-8 bytes, could be null for chunked data
      */
     private MemorySegment data;
@@ -47,6 +51,14 @@ public final class HttpResponse {
 
     public void setHeaders(HttpHeader headers) {
         this.headers = headers;
+    }
+
+    public HttpCompressionStatus getCompressionStatus() {
+        return compressionStatus;
+    }
+
+    public void setCompressionStatus(HttpCompressionStatus compressionStatus) {
+        this.compressionStatus = compressionStatus;
     }
 
     public MemorySegment getData() {

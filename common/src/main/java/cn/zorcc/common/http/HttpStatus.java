@@ -1,7 +1,7 @@
 package cn.zorcc.common.http;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.WriteBuffer;
+import cn.zorcc.common.structure.WriteBuffer;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;

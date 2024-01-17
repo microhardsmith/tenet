@@ -15,14 +15,8 @@ import java.util.List;
  *   Other SSL library or other operating system were not tested, you are welcome to test it on your own
  */
 public final class SslBinding {
-    private static final int ERR_STRING_LENGTH = Constants.KB;
     private static final SymbolLookup crypto;
     private static final SymbolLookup ssl;
-    /**
-     *   These two variable are hard-coded definition from ssl.h, since SSL_CTX_set_mode and SSL_CTX_clear_mode are macros, we can't directly use it
-     */
-    private static final int SSL_CTRL_MODE = 33;
-    private static final int SSL_CTRL_CLEAR_MODE = 78;
     private static final MethodHandle tlsMethod;
     private static final MethodHandle sslCtxNewMethod;
     private static final MethodHandle sslCtxUseCertificateFileMethod;
@@ -51,30 +45,54 @@ public final class SslBinding {
     static {
         crypto = NativeUtil.loadLibrary(Constants.CRYPTO);
         ssl = NativeUtil.loadLibrary(Constants.SSL);
-        tlsMethod = NativeUtil.methodHandle(ssl, "TLS_method", FunctionDescriptor.of(ValueLayout.ADDRESS));
-        sslCtxNewMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_new", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-        sslCtxUseCertificateFileMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_use_certificate_file", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        sslCtxUsePrivateKeyFileMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_use_PrivateKey_file", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        sslCtxCheckPrivateKeyMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_check_private_key", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        sslCtxCtrlMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_ctrl", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
-        sslCtxSetVerifyMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_set_verify", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        sslCtxSetDefaultVerifyPath = NativeUtil.methodHandle(ssl, "SSL_CTX_set_default_verify_paths", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        sslCtxLoadVerifyLocations = NativeUtil.methodHandle(ssl, "SSL_CTX_load_verify_locations", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-        sslNewMethod = NativeUtil.methodHandle(ssl, "SSL_new", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-        sslSetFdMethod = NativeUtil.methodHandle(ssl, "SSL_set_fd", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        sslConnectMethod = NativeUtil.methodHandle(ssl, "SSL_connect", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        sslAcceptMethod = NativeUtil.methodHandle(ssl, "SSL_accept", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        sslReadMethod = NativeUtil.methodHandle(ssl, "SSL_read", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        sslWriteMethod = NativeUtil.methodHandle(ssl, "SSL_write", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        sslShutdownMethod = NativeUtil.methodHandle(ssl, "SSL_shutdown", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        sslFreeMethod = NativeUtil.methodHandle(ssl, "SSL_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-        sslCtxFreeMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-        sslGetErrMethod = NativeUtil.methodHandle(ssl, "SSL_get_error", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        sslGetVerifyResult = NativeUtil.methodHandle(ssl, "SSL_get_verify_result", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
-        sslGetPeerCertificate = NativeUtil.methodHandle(ssl, List.of("SSL_get_peer_certificate", "SSL_get1_peer_certificate"), FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-        x509Free = NativeUtil.methodHandle(crypto, "X509_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-        errGet = NativeUtil.methodHandle(crypto, "ERR_get_error", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
-        errString = NativeUtil.methodHandle(crypto, "ERR_error_string_n", FunctionDescriptor.ofVoid(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+        tlsMethod = NativeUtil.methodHandle(ssl, "TLS_method",
+                FunctionDescriptor.of(ValueLayout.ADDRESS));
+        sslCtxNewMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_new",
+                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+        sslCtxUseCertificateFileMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_use_certificate_file",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        sslCtxUsePrivateKeyFileMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_use_PrivateKey_file",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        sslCtxCheckPrivateKeyMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_check_private_key",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        sslCtxCtrlMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_ctrl",
+                FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+        sslCtxSetVerifyMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_set_verify",
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        sslCtxSetDefaultVerifyPath = NativeUtil.methodHandle(ssl, "SSL_CTX_set_default_verify_paths",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        sslCtxLoadVerifyLocations = NativeUtil.methodHandle(ssl, "SSL_CTX_load_verify_locations",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+        sslNewMethod = NativeUtil.methodHandle(ssl, "SSL_new",
+                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+        sslSetFdMethod = NativeUtil.methodHandle(ssl, "SSL_set_fd",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        sslConnectMethod = NativeUtil.methodHandle(ssl, "SSL_connect",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS), Linker.Option.critical(false));
+        sslAcceptMethod = NativeUtil.methodHandle(ssl, "SSL_accept",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS), Linker.Option.critical(false));
+        sslReadMethod = NativeUtil.methodHandle(ssl, "SSL_read",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT), Linker.Option.critical(false));
+        sslWriteMethod = NativeUtil.methodHandle(ssl, "SSL_write",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT), Linker.Option.critical(true));
+        sslShutdownMethod = NativeUtil.methodHandle(ssl, "SSL_shutdown",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS), Linker.Option.critical(false));
+        sslFreeMethod = NativeUtil.methodHandle(ssl, "SSL_free",
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+        sslCtxFreeMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_free",
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+        sslGetErrMethod = NativeUtil.methodHandle(ssl, "SSL_get_error",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT), Linker.Option.critical(false));
+        sslGetVerifyResult = NativeUtil.methodHandle(ssl, "SSL_get_verify_result",
+                FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+        sslGetPeerCertificate = NativeUtil.methodHandle(ssl, List.of("SSL_get_peer_certificate", "SSL_get1_peer_certificate"),
+                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+        x509Free = NativeUtil.methodHandle(crypto, "X509_free",
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+        errGet = NativeUtil.methodHandle(crypto, "ERR_get_error",
+                FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+        errString = NativeUtil.methodHandle(crypto, "ERR_error_string_n",
+                FunctionDescriptor.ofVoid(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG), Linker.Option.critical(true));
     }
 
     private SslBinding() {
@@ -269,39 +287,6 @@ public final class SslBinding {
             errString.invokeExact(err, buf, len);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
-        }
-    }
-
-    /**
-     *   configure CTX for non-blocking socket with several preassigned options
-     */
-    public static void configureCtx(MemorySegment ctx) {
-        if((ctxCtrl(ctx, SSL_CTRL_MODE, Constants.SSL_MODE_ENABLE_PARTIAL_WRITE, NativeUtil.NULL_POINTER) & Constants.SSL_MODE_ENABLE_PARTIAL_WRITE) == 0) {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-        }
-        if((ctxCtrl(ctx, SSL_CTRL_MODE, Constants.SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER, NativeUtil.NULL_POINTER) & Constants.SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER) == 0) {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-        }
-        if(((~ctxCtrl(ctx, SSL_CTRL_CLEAR_MODE, Constants.SSL_MODE_AUTO_RETRY, NativeUtil.NULL_POINTER)) & Constants.SSL_MODE_AUTO_RETRY) == 0) {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-        }
-    }
-
-    public static String getErrDescription() {
-        try(Arena arena = Arena.ofConfined()) {
-            MemorySegment buf = arena.allocateArray(ValueLayout.JAVA_BYTE, ERR_STRING_LENGTH);
-            errString(errGet(), buf, buf.byteSize());
-            return NativeUtil.getStr(buf, ERR_STRING_LENGTH);
-        }
-    }
-
-    public static int throwException(int err, String operation) {
-        if(err == Constants.SSL_ERROR_SSL){
-            throw new FrameworkException(ExceptionType.NETWORK, STR."\{operation} failed with SSL_ERROR_SSL, message : \{SslBinding.getErrDescription()}");
-        }else if(err == Constants.SSL_ERROR_SYSCALL) {
-            throw new FrameworkException(ExceptionType.NETWORK, STR."\{operation} failed with SSL_ERROR_SYSCALL, message : \{SslBinding.getErrDescription()}");
-        }else {
-            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 }

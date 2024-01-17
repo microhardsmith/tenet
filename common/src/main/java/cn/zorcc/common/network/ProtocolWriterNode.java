@@ -3,16 +3,12 @@ package cn.zorcc.common.network;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.State;
-import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.api.Protocol;
 import cn.zorcc.common.network.lib.OsNetworkLibrary;
-import cn.zorcc.common.structure.IntMap;
-import cn.zorcc.common.structure.Mutex;
-import cn.zorcc.common.structure.Wheel;
+import cn.zorcc.common.structure.*;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.time.Duration;
@@ -27,7 +23,6 @@ public final class ProtocolWriterNode implements WriterNode {
     private static final Logger log = new Logger(ProtocolWriterNode.class);
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
     private record Task(
-            Arena arena,
             MemorySegment memorySegment,
             WriterCallback writerCallback
     ) {
@@ -59,7 +54,7 @@ public final class ProtocolWriterNode implements WriterNode {
         if(writerTask.channel() == channel) {
             Object msg = writerTask.msg();
             WriterCallback writerCallback = writerTask.writerCallback();
-            try(final WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(reserved)) {
+            try(WriteBuffer writeBuffer = newWriteBuffer(reserved)) {
                 try{
                     channel.encoder().encode(writeBuffer, msg);
                 }catch (RuntimeException e) {
@@ -67,7 +62,7 @@ public final class ProtocolWriterNode implements WriterNode {
                     close();
                     return ;
                 }
-                if(writeBuffer.writeIndex() > 0) {
+                if(writeBuffer.writeIndex() > 0L) {
                     sendMsg(writeBuffer, writerCallback);
                 }else if(writerCallback != null) {
                     writerCallback.invokeOnSuccess(channel);
@@ -80,7 +75,7 @@ public final class ProtocolWriterNode implements WriterNode {
     public void onMultipleMsg(MemorySegment reserved, WriterTask writerTask) {
         if(writerTask.channel() == channel && writerTask.msg() instanceof Collection<?> msgs) {
             WriterCallback writerCallback = writerTask.writerCallback();
-            try(final WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(reserved)) {
+            try(WriteBuffer writeBuffer = newWriteBuffer(reserved)) {
                 try{
                     for (Object msg : msgs) {
                         channel.encoder().encode(writeBuffer, msg);
@@ -90,7 +85,7 @@ public final class ProtocolWriterNode implements WriterNode {
                     close();
                     return ;
                 }
-                if(writeBuffer.writeIndex() > 0) {
+                if(writeBuffer.writeIndex() > 0L) {
                     sendMsg(writeBuffer, writerCallback);
                 }else if(writerCallback != null) {
                     writerCallback.invokeOnSuccess(channel);
@@ -113,12 +108,12 @@ public final class ProtocolWriterNode implements WriterNode {
                 }
                 MemorySegment data = task.memorySegment();
                 WriterCallback writerCallback = task.writerCallback();
-                int len = (int) data.byteSize();
-                int r;
+                long len = data.byteSize();
+                long r;
                 for( ; ; ) {
                     try{
                         r = protocol.doWrite(data, len);
-                        if(r > 0 && r < len) {
+                        if(r > 0L && r < len) {
                             len = len - r;
                             data = data.asSlice(r, len);
                         }else {
@@ -135,8 +130,8 @@ public final class ProtocolWriterNode implements WriterNode {
                         writerCallback.invokeOnSuccess(channel);
                     }
                 }else {
-                    taskQueue.addFirst(new Task(task.arena(), data, writerCallback));
-                    if(r < 0) {
+                    taskQueue.addFirst(new Task(data, writerCallback));
+                    if(r < 0L) {
                         handleEvent(r);
                     }
                 }
@@ -164,13 +159,24 @@ public final class ProtocolWriterNode implements WriterNode {
     }
 
     /**
+     *   If current channel is not writable, then the message would be written into a heap buffer for more efficiency
+     */
+    private WriteBuffer newWriteBuffer(MemorySegment reserved) {
+        if(taskQueue == null) {
+            return WriteBuffer.newReservedWriteBuffer(reserved, true);
+        }else {
+            return WriteBuffer.newHeapWriteBuffer(reserved.byteSize());
+        }
+    }
+
+    /**
      *   Send msg over the channel, invoking its callback if successful, otherwise copy the data locally for channel to become writable
      */
     private void sendMsg(WriteBuffer writeBuffer, WriterCallback writerCallback) {
         MemorySegment data = writeBuffer.toSegment();
         if(taskQueue == null) {
-            int len = (int) data.byteSize();
-            int r;
+            long len = data.byteSize();
+            long r;
             for( ; ; ) {
                 try{
                     r = protocol.doWrite(data, len);
@@ -193,7 +199,7 @@ public final class ProtocolWriterNode implements WriterNode {
             }else {
                 taskQueue = new ArrayDeque<>();
                 copyLocally(data, writerCallback);
-                if(r < 0) {
+                if(r < 0L) {
                     handleEvent(r);
                 }
             }
@@ -203,50 +209,34 @@ public final class ProtocolWriterNode implements WriterNode {
     }
 
     private void copyLocally(MemorySegment segment, WriterCallback writerCallback) {
-        Arena arena = Arena.ofConfined();
         long size = segment.byteSize();
-        MemorySegment memorySegment = arena.allocateArray(ValueLayout.JAVA_BYTE, size);
+        MemorySegment memorySegment = Allocator.HEAP.allocate(ValueLayout.JAVA_BYTE, size);
         MemorySegment.copy(segment, 0, memorySegment, 0, size);
-        taskQueue.addLast(new Task(arena, memorySegment, writerCallback));
+        taskQueue.addLast(new Task(memorySegment, writerCallback));
     }
 
-    private void handleEvent(int r) {
-        if(r == Constants.NET_PW || r == Constants.NET_PR) {
+    private void handleEvent(long r) {
+        if(r == Constants.NET_W || r == Constants.NET_R || r == Constants.NET_RW) {
             ctl(r);
         }else if(r != Constants.NET_IGNORED) {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
-    private void ctl(int r) {
-        if(ctlWithStateChecked(expectedState(r))) {
-            close();
-        }
-    }
-
-    private boolean ctlWithStateChecked(int expected) {
+    private void ctl(long expected) {
         try(Mutex _ = channelState.withMutex()) {
-            int state = channelState.get();
+            long state = channelState.get();
             if((state & Constants.NET_PC) == Constants.NET_PC) {
-                return true;
+                close();
+            }else {
+                long current = state & Constants.NET_RW;
+                long to = current | expected;
+                if(to != current) {
+                    osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), current, to);
+                    channelState.set(state + (to - current));
+                }
             }
-            int current = state & Constants.NET_RW;
-            int to = current | expected;
-            if(to != current) {
-                osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), current, to);
-                channelState.set(state + (to - current));
-            }
-            return false;
         }
-    }
-
-    private int expectedState(int r) {
-        return switch (r) {
-            case Constants.NET_PW -> Constants.NET_W;
-            case Constants.NET_PR -> Constants.NET_R;
-            case Constants.NET_PRW -> Constants.NET_RW;
-            default -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-        };
     }
 
     private void conditionalShutdown(Duration duration) {
@@ -262,7 +252,7 @@ public final class ProtocolWriterNode implements WriterNode {
         if(nodeMap.remove(channel.socket().intValue(), this)) {
             assert taskQueue == null;
             try(Mutex _ = channelState.withMutex()) {
-                int current = channelState.get();
+                long current = channelState.get();
                 channelState.set(current | Constants.NET_WC);
                 if((current & Constants.NET_PC) > 0) {
                     closeProtocol();
@@ -290,7 +280,6 @@ public final class ProtocolWriterNode implements WriterNode {
         if (nodeMap.remove(channel.socket().intValue(), this)) {
             if(taskQueue != null) {
                 taskQueue.forEach(task -> {
-                    task.arena().close();
                     WriterCallback writerCallback = task.writerCallback();
                     if(writerCallback != null) {
                         writerCallback.invokeOnFailure(channel);
@@ -299,7 +288,7 @@ public final class ProtocolWriterNode implements WriterNode {
                 taskQueue = null;
             }
             try (Mutex _ = channelState.withMutex()) {
-                int current = channelState.get();
+                long current = channelState.get();
                 channelState.set(current | Constants.NET_WC);
                 if((current & Constants.NET_PC) == Constants.NET_PC) {
                     closeProtocol();

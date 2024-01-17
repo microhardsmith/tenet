@@ -1,46 +1,40 @@
 package cn.zorcc.common;
 
+import cn.zorcc.common.structure.LongHolder;
 import cn.zorcc.common.structure.Mutex;
 
 /**
- *   State represents an int that could be accessed by multiple thread
+ *   State represents a long value that could be accessed by multiple thread
  */
-public final class State {
-    private final Mutex mutex = new Mutex();
-    private int state;
+public record State(
+        Mutex mutex,
+        LongHolder holder
+) {
 
-    public State(int initialState) {
-        this.state = initialState;
+    public State(long initialState) {
+        this(new Mutex(), new LongHolder(initialState));
     }
 
     public Mutex withMutex() {
         return mutex.acquire();
     }
 
-    public int get() {
-        return state;
+    public long get() {
+        return holder.getValue();
     }
 
-    public void set(int state) {
-        this.state = state;
+    public void set(long state) {
+        holder.setValue(state);
     }
 
-    public void register(int mask) {
-        this.state |= mask;
+    public void register(long mask) {
+        holder.setValue(holder.getValue() | mask);
     }
 
-    public boolean unregister(int mask) {
-        boolean r = (state & mask) != 0;
-        state &= ~mask;
+    public boolean unregister(long mask) {
+        long current = holder.getValue();
+        boolean r = (current & mask) != 0L;
+        holder.setValue(current & ~mask);
         return r;
-    }
-
-    public boolean cas(int expectedValue, int newValue) {
-        if(state == expectedValue) {
-            state = newValue;
-            return true;
-        }else {
-            return false;
-        }
     }
 }

@@ -5,12 +5,11 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.bindings.TenetLinuxBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Mux;
+import cn.zorcc.common.network.MuxEvent;
 import cn.zorcc.common.network.Socket;
 import cn.zorcc.common.network.Timeout;
-import cn.zorcc.common.structure.IntPair;
-import cn.zorcc.common.util.NativeUtil;
+import cn.zorcc.common.structure.Allocator;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -169,23 +168,21 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public int ctl(Mux mux, Socket socket, int from, int to) {
+    public int ctl(Mux mux, Socket socket, long from, long to) {
         if(from == to) {
             return 0;
         }
         int epfd = mux.epfd();
         int fd = socket.intValue();
         if(to == Constants.NET_NONE) {
-            return TenetLinuxBinding.epollCtl(epfd, Constants.EPOLL_CTL_DEL, fd, NativeUtil.NULL_POINTER);
+            return TenetLinuxBinding.epollCtl(epfd, Constants.EPOLL_CTL_DEL, fd, MemorySegment.NULL);
         }else {
             int target = ((to & Constants.NET_R) != Constants.NET_NONE ? (Constants.EPOLL_IN | Constants.EPOLL_RDHUP) : 0) |
                     ((to & Constants.NET_W) != Constants.NET_NONE ? Constants.EPOLL_OUT : 0);
-            try(Arena arena = Arena.ofConfined()) {
-                MemorySegment ev = arena.allocate(epollEventLayout);
-                NativeUtil.setInt(ev, eventsOffset, target);
-                NativeUtil.setInt(ev, dataOffset + fdOffset, fd);
-                return TenetLinuxBinding.epollCtl(epfd, from == Constants.NET_NONE ? Constants.EPOLL_CTL_ADD : Constants.EPOLL_CTL_MOD, fd, ev);
-            }
+            MemorySegment ev = Allocator.HEAP.allocate(epollEventLayout);
+            ev.set(ValueLayout.JAVA_INT_UNALIGNED, eventsOffset, target);
+            ev.set(ValueLayout.JAVA_INT_UNALIGNED, dataOffset + fdOffset, fd);
+            return TenetLinuxBinding.epollCtl(epfd, from == Constants.NET_NONE ? Constants.EPOLL_CTL_ADD : Constants.EPOLL_CTL_MOD, fd, ev);
         }
     }
 
@@ -195,15 +192,15 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public IntPair access(MemorySegment events, int index) {
-        int event = NativeUtil.getInt(events, index * eventSize + eventsOffset);
-        int socket = NativeUtil.getInt(events, index * eventSize + dataOffset + fdOffset);
+    public MuxEvent access(MemorySegment events, int index) {
+        int event = events.get(ValueLayout.JAVA_INT_UNALIGNED, index * eventSize + eventsOffset);
+        int socket = events.get(ValueLayout.JAVA_INT_UNALIGNED, index * eventSize + dataOffset + fdOffset);
         if((event & (Constants.EPOLL_IN | Constants.EPOLL_RDHUP)) != 0) {
-            return new IntPair(socket, Constants.NET_R);
+            return new MuxEvent(socket, Constants.NET_R);
         }else if((event & Constants.EPOLL_OUT) != 0) {
-            return new IntPair(socket, Constants.NET_W);
+            return new MuxEvent(socket, Constants.NET_W);
         }else if((event & (Constants.EPOLL_ERR | Constants.EPOLL_HUP)) != 0) {
-            return new IntPair(socket, Constants.NET_OTHER);
+            return new MuxEvent(socket, Constants.NET_OTHER);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
@@ -241,22 +238,21 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public int recv(Socket socket, MemorySegment data, int len) {
+    public long recv(Socket socket, MemorySegment data, long len) {
         return TenetLinuxBinding.recv(socket.intValue(), data, len);
     }
 
     @Override
-    public int send(Socket socket, MemorySegment data, int len) {
+    public long send(Socket socket, MemorySegment data, long len) {
         return TenetLinuxBinding.send(socket.intValue(), data, len);
     }
 
     @Override
     public int getErrOpt(Socket socket) {
-        try(Arena arena = Arena.ofConfined()) {
-            MemorySegment ptr = arena.allocate(ValueLayout.JAVA_INT, Integer.MIN_VALUE);
-            check(TenetLinuxBinding.getErrOpt(socket.intValue(), ptr), "get socket err opt");
-            return NativeUtil.getInt(ptr, 0L);
-        }
+        MemorySegment ptr = Allocator.HEAP.allocate(ValueLayout.JAVA_INT);
+        ptr.set(ValueLayout.JAVA_INT_UNALIGNED, 0L, -1);
+        check(TenetLinuxBinding.getErrOpt(socket.intValue(), ptr), "get socket err opt");
+        return ptr.get(ValueLayout.JAVA_INT_UNALIGNED, 0L);
     }
 
     @Override

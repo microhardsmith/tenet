@@ -1,9 +1,9 @@
 package cn.zorcc.common.json;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.ReadBuffer;
-import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.exception.JsonParseException;
+import cn.zorcc.common.structure.ReadBuffer;
+import cn.zorcc.common.structure.WriteBuffer;
 import cn.zorcc.common.util.ReflectUtil;
 
 import java.lang.reflect.ParameterizedType;

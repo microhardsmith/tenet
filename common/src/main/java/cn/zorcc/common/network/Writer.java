@@ -4,9 +4,9 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
+import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.structure.IntMap;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.util.concurrent.BlockingQueue;
@@ -36,9 +36,9 @@ public final class Writer {
         int sequence = counter.getAndIncrement();
         return Thread.ofPlatform().name(STR."writer-\{sequence}").unstarted(() -> {
             log.info(STR."Initializing writer thread, sequence : \{sequence}");
-            try(Arena arena = Arena.ofConfined()){
+            try(Allocator allocator = Allocator.newDirectAllocator()){
                 IntMap<WriterNode> nodeMap = new IntMap<>(config.getWriterMapSize());
-                MemorySegment reservedSegment = arena.allocateArray(ValueLayout.JAVA_BYTE, config.getWriterWriteBufferSize());
+                MemorySegment reservedSegment = allocator.allocate(ValueLayout.JAVA_BYTE, config.getWriterWriteBufferSize());
                 processWriterTasks(nodeMap, reservedSegment);
             }catch (InterruptedException i) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Writer thread interrupted", i);

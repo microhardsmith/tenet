@@ -9,24 +9,25 @@ import cn.zorcc.common.network.api.Protocol;
 import cn.zorcc.common.network.api.Sentry;
 import cn.zorcc.common.network.lib.OsNetworkLibrary;
 import cn.zorcc.common.util.NativeUtil;
+import cn.zorcc.common.util.SslUtil;
 
 import java.lang.foreign.MemorySegment;
 
-public record SslSentry(
+public record SslSentry (
         Channel channel,
         boolean clientSide,
         MemorySegment ssl,
         State sslState
 ) implements Sentry {
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
-    private static final int WANT_READ = 1 << 1;
-    private static final int WANT_WRITE = 1 << 2;
+    private static final long WANT_READ = 1L << 1;
+    private static final long WANT_WRITE = 1L << 2;
     public SslSentry(Channel channel, boolean clientSide, MemorySegment ssl) {
-        this(channel, clientSide, ssl, new State(Constants.INITIAL));
+        this(channel, clientSide, ssl, new State(0L));
     }
 
     @Override
-    public int onReadableEvent(MemorySegment reserved, int len) {
+    public long onReadableEvent(MemorySegment reserved, long len) {
         if(sslState.unregister(WANT_READ)) {
             return handshake();
         }else {
@@ -35,7 +36,7 @@ public record SslSentry(
     }
 
     @Override
-    public int onWritableEvent() {
+    public long onWritableEvent() {
         if(sslState.unregister(WANT_WRITE)) {
             return handshake();
         }else {
@@ -46,7 +47,7 @@ public record SslSentry(
                 if(r == 1) {
                     return handshake();
                 }else {
-                    return SslBinding.throwException(SslBinding.sslGetErr(ssl, r), "SSL_set_fd()");
+                    return SslUtil.throwException(SslBinding.sslGetErr(ssl, r), "SSL_set_fd()");
                 }
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to establish connection, err opt : \{errOpt}");
@@ -68,10 +69,11 @@ public record SslSentry(
         }
     }
 
-    private int handshake() {
+    private long handshake() {
         int r = clientSide ? SslBinding.sslConnect(ssl) : SslBinding.sslAccept(ssl);
         if(r == 1) {
-            return verifyCertificate();
+            verifyCertificate();
+            return Constants.NET_UPDATE;
         }else {
             int err = SslBinding.sslGetErr(ssl, r);
             if(err == Constants.SSL_ERROR_WANT_READ) {
@@ -81,12 +83,12 @@ public record SslSentry(
                 sslState.register(WANT_WRITE);
                 return Constants.NET_W;
             }else {
-                return SslBinding.throwException(err, "SSL_handshake()");
+                return SslUtil.throwException(err, "SSL_handshake()");
             }
         }
     }
 
-    private int verifyCertificate() {
+    private void verifyCertificate() {
         if(clientSide) {
             MemorySegment x509 = SslBinding.sslGetPeerCertificate(ssl);
             if(NativeUtil.checkNullPointer(x509)) {
@@ -98,6 +100,5 @@ public record SslSentry(
             }
             SslBinding.x509Free(x509);
         }
-        return Constants.NET_UPDATE;
     }
 }

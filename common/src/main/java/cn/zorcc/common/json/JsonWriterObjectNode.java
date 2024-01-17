@@ -3,7 +3,7 @@ package cn.zorcc.common.json;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.Meta;
 import cn.zorcc.common.MetaInfo;
-import cn.zorcc.common.WriteBuffer;
+import cn.zorcc.common.structure.WriteBuffer;
 
 import java.util.List;
 

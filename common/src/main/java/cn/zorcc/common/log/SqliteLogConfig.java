@@ -4,10 +4,6 @@ import cn.zorcc.common.Constants;
 
 public final class SqliteLogConfig {
     /**
-     *   Default native buffer for sqlite log insertion
-     */
-    private long buffer = 64 * Constants.KB;
-    /**
      *   Dir path to store the sqlite database file
      */
     private String dir = Constants.EMPTY_STRING;
@@ -23,14 +19,6 @@ public final class SqliteLogConfig {
      *   Max existing time before switching database file
      */
     private long maxRecordingTime = Constants.DAY;
-
-    public long getBuffer() {
-        return buffer;
-    }
-
-    public void setBuffer(long buffer) {
-        this.buffer = buffer;
-    }
 
     public String getDir() {
         return dir;

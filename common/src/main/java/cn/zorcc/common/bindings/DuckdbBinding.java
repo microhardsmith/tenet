@@ -41,6 +41,10 @@ public final class DuckdbBinding {
         duckdbDestroyResult = NativeUtil.methodHandle(symbolLookup, "duckdb_destroy_result", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
     }
 
+    private DuckdbBinding() {
+        throw new UnsupportedOperationException();
+    }
+
     public static int open(MemorySegment path, MemorySegment db) {
         try{
             return (int) duckdbOpen.invokeExact(path, db);

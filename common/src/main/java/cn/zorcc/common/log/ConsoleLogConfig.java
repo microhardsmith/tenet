@@ -20,14 +20,6 @@ public final class ConsoleLogConfig {
      */
     private int classNameLen = 40;
     /**
-     *  Default size for containing buffer for stdout
-     */
-    private int outBuffer = 4 * Constants.KB;
-    /**
-     *  Default size of containing buffer for stderr
-     */
-    private int errBuffer = 12 * Constants.KB;
-    /**
      *  Console color for log time output
      */
     private String timeColor = Constants.BLUE;
@@ -74,22 +66,6 @@ public final class ConsoleLogConfig {
 
     public void setClassNameLen(int classNameLen) {
         this.classNameLen = classNameLen;
-    }
-
-    public int getOutBuffer() {
-        return outBuffer;
-    }
-
-    public void setOutBuffer(int outBuffer) {
-        this.outBuffer = outBuffer;
-    }
-
-    public int getErrBuffer() {
-        return errBuffer;
-    }
-
-    public void setErrBuffer(int errBuffer) {
-        this.errBuffer = errBuffer;
     }
 
     public String getTimeColor() {

@@ -1,7 +1,7 @@
 package cn.zorcc.common.http;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.WriteBuffer;
+import cn.zorcc.common.structure.WriteBuffer;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -40,9 +40,9 @@ public final class HttpHeader {
     public void encode(WriteBuffer writeBuffer) {
         for (Map.Entry<String, String> entry : headers.entrySet()) {
             writeBuffer.writeBytes(entry.getKey().getBytes(StandardCharsets.UTF_8));
-            writeBuffer.writeBytes(Constants.COLON, Constants.SPACE);
+            writeBuffer.writeBytes(Constants.HTTP_PAIR_SEP);
             writeBuffer.writeBytes(entry.getValue().getBytes(StandardCharsets.UTF_8));
-            writeBuffer.writeBytes(Constants.CR, Constants.LF);
+            writeBuffer.writeBytes(Constants.HTTP_LINE_SEP);
         }
     }
 }

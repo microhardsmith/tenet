@@ -4,6 +4,7 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.bindings.SqliteBinding;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.Arena;
@@ -16,20 +17,19 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  *   Delegate a sqlite connection, all the read-write operations should be controlled inside the sqliteConn object rather than directly using SqliteBindings
+ *   TODO completely refactor needed
  */
 public final class SqliteConn implements AutoCloseable {
     private static final AtomicLong counter = new AtomicLong(0);
     private static final int DEFAULT_OPEN_FLAGS = Constants.SQLITE_OPEN_READWRITE |
             Constants.SQLITE_OPEN_CREATE | Constants.SQLITE_OPEN_PRIVATECACHE |
             Constants.SQLITE_OPEN_NOFOLLOW | Constants.SQLITE_OPEN_NOMUTEX;
-    private static final String FETCH_METADATA = """
-    SELECT * FROM sqlite_master'
-    """;
+    private static final String FETCH_METADATA = "SELECT * FROM sqlite_master";
+    private static final MemorySegment transactionBegin = NativeUtil.globalArena.allocateFrom("BEGIN", StandardCharsets.UTF_8);
+    private static final MemorySegment transactionRollback = NativeUtil.globalArena.allocateFrom("ROLLBACK", StandardCharsets.UTF_8);
+    private static final MemorySegment transactionCommit = NativeUtil.globalArena.allocateFrom("COMMIT", StandardCharsets.UTF_8);
     private final MemorySegment sqlite;
     private final Arena reservedArena = Arena.ofConfined();
-    private final MemorySegment transactionBegin = reservedArena.allocateUtf8String("BEGIN");
-    private final MemorySegment transactionRollback = reservedArena.allocateUtf8String("ROLLBACK");
-    private final MemorySegment transactionCommit = reservedArena.allocateUtf8String("COMMIT");
     private final MemorySegment ppErr = reservedArena.allocate(ValueLayout.ADDRESS).reinterpret(ValueLayout.ADDRESS.byteSize());
     public SqliteConn(String filePath) {
         if(counter.getAndIncrement() == 0) {
@@ -43,13 +43,13 @@ public final class SqliteConn implements AutoCloseable {
     }
 
     private static MemorySegment openDatabase(String filePath) {
-        try(Arena arena = Arena.ofConfined()) {
-            MemorySegment ppDb = arena.allocate(ValueLayout.ADDRESS);
-            MemorySegment f = arena.allocateUtf8String(filePath);
+        try(Allocator allocator = Allocator.newDirectAllocator()) {
+            MemorySegment ppDb = allocator.allocate(ValueLayout.ADDRESS);
+            MemorySegment f = allocator.allocateFrom(filePath);
             int r = SqliteBinding.open(f, ppDb, SqliteConn.DEFAULT_OPEN_FLAGS);
             MemorySegment sqlite = ppDb.get(ValueLayout.ADDRESS, 0);
             if(r != 0) {
-                String err = NativeUtil.getStr(SqliteBinding.errMsg(sqlite));
+                String err = SqliteBinding.errMsg(sqlite).getString(0L, StandardCharsets.UTF_8);
                 int close = SqliteBinding.close(sqlite);
                 if(close != 0) {
                     throw new FrameworkException(ExceptionType.SQLITE, STR."Failed to close unopened sqlite database, open err : \{err}, close err : \{close}");
@@ -74,9 +74,9 @@ public final class SqliteConn implements AutoCloseable {
     }
 
     public List<SqliteMetadata> fetchingMetadata() {
-        try(Arena arena = Arena.ofConfined()) {
+        try(Allocator allocator = Allocator.newDirectAllocator()) {
             List<SqliteMetadata> result = new ArrayList<>();
-            MemorySegment stmt = prepareNormalizeStatement(arena.allocateUtf8String(FETCH_METADATA));
+            MemorySegment stmt = prepareNormalizeStatement(allocator.allocateFrom(FETCH_METADATA));
             for( ; ; ) {
                 int r = SqliteBinding.step(stmt);
                 if(r == Constants.SQLITE_DONE) {
@@ -200,9 +200,9 @@ public final class SqliteConn implements AutoCloseable {
     public void exec(MemorySegment sql) {
         int r = SqliteBinding.exec(sqlite, sql, ppErr);
         if(r != 0) {
-            String actualSql = sql.getUtf8String(0);
+            String actualSql = sql.getString(0L);
             MemorySegment pErr = ppErr.get(ValueLayout.ADDRESS, 0).reinterpret(Long.MAX_VALUE);
-            String err = NativeUtil.getStr(pErr);
+            String err = pErr.getString(0L);
             SqliteBinding.free(pErr);
             throw new FrameworkException(ExceptionType.SQLITE, STR."Unable to exec sql : [\{actualSql}], err : [\{err}]");
         }

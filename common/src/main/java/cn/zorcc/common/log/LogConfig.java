@@ -4,6 +4,10 @@ import cn.zorcc.common.Constants;
 
 public final class LogConfig {
     /**
+     *   Global buffer size allocated for the logging thread
+     */
+    private long bufferSize = Constants.MB;
+    /**
      *   Global minimal log level
      */
     private String level = "DEBUG";
@@ -35,6 +39,14 @@ public final class LogConfig {
      *   Whether using sqlite log output
      */
     private SqliteLogConfig sqlite;
+
+    public long getBufferSize() {
+        return bufferSize;
+    }
+
+    public void setBufferSize(long bufferSize) {
+        this.bufferSize = bufferSize;
+    }
 
     public String getLevel() {
         return level;

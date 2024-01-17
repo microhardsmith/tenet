@@ -2,10 +2,11 @@ package cn.zorcc.common.http;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
-import cn.zorcc.common.ReadBuffer;
-import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.api.Decoder;
+import cn.zorcc.common.structure.Allocator;
+import cn.zorcc.common.structure.ReadBuffer;
+import cn.zorcc.common.structure.WriteBuffer;
 import cn.zorcc.common.util.CompressUtil;
 
 import java.lang.foreign.MemorySegment;
@@ -40,7 +41,7 @@ public final class HttpServerDecoder implements Decoder {
             switch (tryDecode(readBuffer)) {
                 case FINISHED -> {
                     entityList.add(current);
-                    if(readBuffer.available() > 0) {
+                    if(readBuffer.available() > 0L) {
                         throw new FrameworkException(ExceptionType.HTTP, "Http pipeline was not supported");
                     }
                     return ;
@@ -208,8 +209,16 @@ public final class HttpServerDecoder implements Decoder {
     private MemorySegment tryDecompress(MemorySegment rawData) {
         return switch (current.getHttpHeader().get(HttpHeader.K_CONTENT_ENCODING)) {
             case null -> rawData;
-            case HttpHeader.V_GZIP -> CompressUtil.decompressUsingGzip(rawData);
-            case HttpHeader.V_DEFLATE -> CompressUtil.decompressUsingDeflate(rawData);
+            case HttpHeader.V_GZIP -> {
+                try(Allocator allocator = Allocator.newDirectAllocator()) {
+                    yield CompressUtil.decompressUsingGzip(rawData, allocator);
+                }
+            }
+            case HttpHeader.V_DEFLATE -> {
+                try(Allocator allocator = Allocator.newDirectAllocator()) {
+                    yield CompressUtil.decompressUsingDeflate(rawData, allocator);
+                }
+            }
             default -> throw new FrameworkException(ExceptionType.HTTP, "Unsupported compression type detected");
         };
     }

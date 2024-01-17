@@ -2,13 +2,12 @@ package cn.zorcc.common.log;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
-import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.bindings.TenetBinding;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.structure.WriteBuffer;
 import cn.zorcc.common.util.FileUtil;
 import cn.zorcc.common.util.NativeUtil;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,15 +17,13 @@ public final class ConsoleLogEventHandler implements Consumer<LogEvent> {
     private final List<LogHandler> handlers;
     private final List<LogEvent> eventList = new ArrayList<>();
     private final int flushThreshold;
-    private final int outBufferSize;
-    private final int errBufferSize;
+    private final MemorySegment reserved;
     private final MemorySegment stdout = TenetBinding.stdout();
     private final MemorySegment stderr = TenetBinding.stderr();
 
-    public ConsoleLogEventHandler(LogConfig logConfig) {
+    public ConsoleLogEventHandler(LogConfig logConfig, MemorySegment m) {
         ConsoleLogConfig config = logConfig.getConsole();
-        outBufferSize = config.getOutBuffer();
-        errBufferSize = config.getErrBuffer();
+        reserved = m;
         handlers = Logger.createLogHandlers(logConfig.getLogFormat(), s -> switch (s) {
             case "time" -> timeHandler(config);
             case "level" -> levelHandler(config);
@@ -36,10 +33,10 @@ public final class ConsoleLogEventHandler implements Consumer<LogEvent> {
             default -> throw new FrameworkException(ExceptionType.LOG, STR."Unresolved log format : \{s}");
         });
         flushThreshold = config.getFlushThreshold();
-        if (FileUtil.setvbuf(stdout, NativeUtil.NULL_POINTER, TenetBinding.nbf(), 0) != 0) {
+        if (FileUtil.setvbuf(stdout, MemorySegment.NULL, TenetBinding.nbf(), 0) != 0) {
             throw new FrameworkException(ExceptionType.LOG, "Failed to set stdout to nbf mode");
         }
-        if (FileUtil.setvbuf(stderr, NativeUtil.NULL_POINTER, TenetBinding.nbf(), 0) != 0) {
+        if (FileUtil.setvbuf(stderr, MemorySegment.NULL, TenetBinding.nbf(), 0) != 0) {
             throw new FrameworkException(ExceptionType.LOG, "Failed to set stderr to nbf mode");
         }
     }
@@ -75,7 +72,7 @@ public final class ConsoleLogEventHandler implements Consumer<LogEvent> {
      *   So when running in an IDE, let's just flush everything to stdout to keep things working
      */
     private void flushToStdout() {
-        try(WriteBuffer outBuffer = WriteBuffer.newDefaultWriteBuffer(Arena.ofConfined(), outBufferSize + errBufferSize)) {
+        try(WriteBuffer outBuffer = WriteBuffer.newReservedWriteBuffer(reserved, false)) {
             for (LogEvent event : eventList) {
                 handlers.forEach(logHandler -> logHandler.process(outBuffer ,event));
                 if(event.throwable() != null) {
@@ -85,7 +82,7 @@ public final class ConsoleLogEventHandler implements Consumer<LogEvent> {
                     outBuffer.writeSegment(Constants.ANSI_SUFFIX);
                 }
             }
-            if(outBuffer.writeIndex() > 0) {
+            if(outBuffer.writeIndex() > 0L) {
                 FileUtil.fwrite(outBuffer.toSegment(), stdout);
             }
         }finally {
@@ -97,18 +94,18 @@ public final class ConsoleLogEventHandler implements Consumer<LogEvent> {
      *   This is the default console-logging behaviour
      */
     private void flushToStdoutAndStderr() {
-        try(WriteBuffer outBuffer = WriteBuffer.newDefaultWriteBuffer(Arena.ofConfined(), outBufferSize);
-            WriteBuffer errBuffer = WriteBuffer.newDefaultWriteBuffer(Arena.ofConfined(), errBufferSize)) {
+        try(WriteBuffer outBuffer = WriteBuffer.newReservedWriteBuffer(reserved, false);
+            WriteBuffer errBuffer = WriteBuffer.newDefaultWriteBuffer(Constants.KB)) {
             for (LogEvent event : eventList) {
                 handlers.forEach(logHandler -> logHandler.process(outBuffer, event));
                 if(event.throwable() != null) {
                     errBuffer.writeSegment(event.throwable());
                 }
             }
-            if(outBuffer.writeIndex() > 0) {
+            if(outBuffer.writeIndex() > 0L) {
                 FileUtil.fwrite(outBuffer.toSegment(), stdout);
             }
-            if(errBuffer.writeIndex() > 0) {
+            if(errBuffer.writeIndex() > 0L) {
                 FileUtil.fwrite(errBuffer.toSegment(), stderr);
             }
         }finally {

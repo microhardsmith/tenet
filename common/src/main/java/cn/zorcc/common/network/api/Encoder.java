@@ -1,6 +1,6 @@
 package cn.zorcc.common.network.api;
 
-import cn.zorcc.common.WriteBuffer;
+import cn.zorcc.common.structure.WriteBuffer;
 
 /**
  *   Channel Encoder interface determines how a Java Object should be encoded into the target WriteBuffer

@@ -1,29 +1,25 @@
 package cn.zorcc.common;
 
 
-import cn.zorcc.common.util.NativeUtil;
+import cn.zorcc.common.structure.Allocator;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- *   Global seq generator, default representation would be using 16 bytes
+ *   Global seq generator, default representation would be using 16 bytes, so it can be simplified as two long value writing
  */
 public final class Seq {
     private static final int TIMESTAMP_BYTES = 6;
     private static final int APP_ID_BYTES = 2;
     private static final int NODE_ID_BYTES = 1;
     private static final int SEQ_BYTES = 4;
-    private static final int TOTAL_BYTES = TIMESTAMP_BYTES + ((APP_ID_BYTES + NODE_ID_BYTES) << 1) + SEQ_BYTES;
     private static final AtomicInteger sequence = new AtomicInteger(new Random().nextInt());
 
     private Seq() {
         throw new UnsupportedOperationException();
-    }
-
-    public static int length() {
-        return TOTAL_BYTES;
     }
 
     public static MemorySegment create(int currentAppId, int currentNodeId, int targetAppId, int targetNodeId) {
@@ -31,24 +27,11 @@ public final class Seq {
     }
 
     public static MemorySegment create(long timestamp, long currentAppId, long currentNodeId, long targetAppId, long targetNodeId) {
-        MemorySegment memorySegment = MemorySegment.ofArray(new byte[TOTAL_BYTES]);
-        long currentIndex = 0;
-        currentIndex = write(memorySegment, currentIndex, timestamp, TIMESTAMP_BYTES);
-        currentIndex = write(memorySegment, currentIndex, currentAppId, APP_ID_BYTES);
-        currentIndex = write(memorySegment, currentIndex, currentNodeId, NODE_ID_BYTES);
-        currentIndex = write(memorySegment, currentIndex, targetAppId, APP_ID_BYTES);
-        currentIndex = write(memorySegment, currentIndex, targetNodeId, NODE_ID_BYTES);
-        write(memorySegment, currentIndex, sequence.getAndIncrement(), SEQ_BYTES);
-        return memorySegment;
-    }
-
-    private static long write(MemorySegment memorySegment, long currentIndex, long value, int bytes) {
-        long nextIndex = currentIndex + bytes;
-        while (currentIndex < nextIndex) {
-            NativeUtil.setByte(memorySegment, currentIndex, (byte) value);
-            value = value >> 8;
-            currentIndex++;
-        }
-        return nextIndex;
+        MemorySegment segment = Allocator.HEAP.allocate(ValueLayout.JAVA_LONG, 2);
+        long l1 = (timestamp << 16) | currentAppId;
+        long l2 = (currentNodeId << 56) | (targetAppId << 40) | (targetNodeId << 32) | sequence.getAndIncrement();
+        segment.set(ValueLayout.JAVA_LONG, 0L, l1);
+        segment.set(ValueLayout.JAVA_LONG, 8L, l2);
+        return segment;
     }
 }

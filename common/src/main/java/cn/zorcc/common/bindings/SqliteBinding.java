@@ -12,7 +12,7 @@ import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 
 /**
- *   Sqlite bindings for the underlying dynamic library
+ *   Sqlite bindings for the underlying dynamic library TODO critical specification
  *   The binding class shouldn't be directly used unless developers knows perfectly what they want to achieve
  */
 public final class SqliteBinding {
@@ -52,37 +52,72 @@ public final class SqliteBinding {
 
     static {
         SymbolLookup symbolLookup = NativeUtil.loadLibrary(Constants.SQLITE);
-        threadHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_threadsafe", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        openHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_open_v2", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        configHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_config", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
-        initializeHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_initialize", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        prepareHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_prepare_v3", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-        bindIntHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_int", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
-        bindLongHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_int64", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG));
-        bindDoubleHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_double", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_DOUBLE));
-        bindTextHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_text64", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS,  ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_BYTE));
-        bindBlobHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_blob64", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
-        bindNullHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_null", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        stepHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_step", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        columnBytesHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_bytes", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        columnIntHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_int", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        columnLongHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_int64", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        columnDoubleHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_double", FunctionDescriptor.of(ValueLayout.JAVA_DOUBLE, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        columnTextHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_text", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        columnBlobHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_blob", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        columnTypeHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_type", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        resetHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_reset", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        clearBindingsHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_clear_bindings", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        finalizeHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_finalize", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        changesHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_changes64", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
-        backupInitHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_backup_init", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-        backupStepHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_backup_step", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        backupFinishHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_backup_finish", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-        freeHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-        shutdownHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_shutdown", FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        closeHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_close_v2", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-        errMsgHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_errmsg", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
-        execHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_exec", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+        threadHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_threadsafe",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT));
+        openHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_open_v2",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        configHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_config",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
+        initializeHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_initialize",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT));
+        prepareHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_prepare_v3",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+        bindIntHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_int",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
+        bindLongHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_int64",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG));
+        bindDoubleHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_double",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_DOUBLE));
+        bindTextHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_text64",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS,  ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_BYTE));
+        bindBlobHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_blob64",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+        bindNullHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_bind_null",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        stepHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_step",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        columnBytesHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_bytes",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        columnIntHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_int",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        columnLongHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_int64",
+                FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        columnDoubleHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_double",
+                FunctionDescriptor.of(ValueLayout.JAVA_DOUBLE, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        columnTextHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_text",
+                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        columnBlobHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_blob",
+                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        columnTypeHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_column_type",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        resetHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_reset",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        clearBindingsHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_clear_bindings",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        finalizeHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_finalize",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        changesHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_changes64",
+                FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+        backupInitHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_backup_init",
+                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+        backupStepHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_backup_step",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        backupFinishHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_backup_finish",
+                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+        freeHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_free",
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+        shutdownHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_shutdown",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT));
+        closeHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_close_v2",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+        errMsgHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_errmsg",
+                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+        execHandle = NativeUtil.methodHandle(symbolLookup, "sqlite3_exec",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+    }
+
+    private SqliteBinding() {
+        throw new UnsupportedOperationException();
     }
 
     public static void check(int r, String errMsg) {
@@ -117,7 +152,7 @@ public final class SqliteBinding {
 
     public static int open(MemorySegment fileName, MemorySegment ppDb, int flags) {
         try{
-            return (int) openHandle.invokeExact(fileName, ppDb, flags, NativeUtil.NULL_POINTER);
+            return (int) openHandle.invokeExact(fileName, ppDb, flags, MemorySegment.NULL);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
@@ -125,7 +160,7 @@ public final class SqliteBinding {
 
     public static int prepare(MemorySegment sqlite, MemorySegment sql, int len, int flags, MemorySegment ppStmt) {
         try{
-            return (int) prepareHandle.invokeExact(sqlite, sql, len, flags, ppStmt, NativeUtil.NULL_POINTER);
+            return (int) prepareHandle.invokeExact(sqlite, sql, len, flags, ppStmt, MemorySegment.NULL);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }
@@ -333,7 +368,7 @@ public final class SqliteBinding {
 
     public static int exec(MemorySegment sqlite, MemorySegment sql, MemorySegment err) {
         try{
-            return (int) execHandle.invokeExact(sqlite, sql, NativeUtil.NULL_POINTER, NativeUtil.NULL_POINTER, err);
+            return (int) execHandle.invokeExact(sqlite, sql, MemorySegment.NULL, MemorySegment.NULL, err);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.SQLITE, Constants.UNREACHED, throwable);
         }

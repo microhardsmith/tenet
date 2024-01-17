@@ -4,8 +4,11 @@ import cn.zorcc.common.AbstractLifeCycle;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.structure.Wheel;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -31,14 +34,15 @@ public final class LoggerConsumer extends AbstractLifeCycle {
 
     private static Thread createConsumerThread(LogConfig logConfig) {
         return Thread.ofPlatform().name("tenet-log").unstarted(() -> {
-            List<Consumer<LogEvent>> handlers = createEventHandlerList(logConfig);
-            TransferQueue<LogEvent> queue = Logger.queue();
-            Wheel.wheel().addPeriodicJob(() -> {
-                if (!queue.offer(LogEvent.FLUSH_EVENT)) {
-                    throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED);
-                }
-            }, Duration.ZERO, Duration.ofMillis(logConfig.getFlushInterval()));
-            try{
+            try(Allocator allocator = Allocator.newDirectAllocator()) {
+                MemorySegment reserved = allocator.allocate(ValueLayout.JAVA_BYTE, logConfig.getBufferSize());
+                List<Consumer<LogEvent>> handlers = createEventHandlerList(logConfig, reserved);
+                TransferQueue<LogEvent> queue = Logger.queue();
+                Wheel.wheel().addPeriodicJob(() -> {
+                    if (!queue.offer(LogEvent.FLUSH_EVENT)) {
+                        throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED);
+                    }
+                }, Duration.ZERO, Duration.ofMillis(logConfig.getFlushInterval()));
                 for( ; ; ){
                     final LogEvent logEvent = queue.take();
                     handlers.forEach(consumer -> consumer.accept(logEvent));
@@ -52,19 +56,19 @@ public final class LoggerConsumer extends AbstractLifeCycle {
         });
     }
 
-    private static List<Consumer<LogEvent>> createEventHandlerList(LogConfig logConfig) {
+    private static List<Consumer<LogEvent>> createEventHandlerList(LogConfig logConfig, MemorySegment reserved) {
         List<Consumer<LogEvent>> handlers = new ArrayList<>();
         ConsoleLogConfig consoleLogConfig = logConfig.getConsole();
         if(consoleLogConfig != null) {
-            handlers.add(new ConsoleLogEventHandler(logConfig));
+            handlers.add(new ConsoleLogEventHandler(logConfig, reserved));
         }
         FileLogConfig fileLogConfig = logConfig.getFile();
         if(fileLogConfig != null) {
-            handlers.add(new FileLogEventHandler(logConfig));
+            handlers.add(new FileLogEventHandler(logConfig, reserved));
         }
         SqliteLogConfig sqliteLogConfig = logConfig.getSqlite();
         if(sqliteLogConfig != null) {
-            handlers.add(new SqliteLogEventHandler(logConfig));
+            handlers.add(new SqliteLogEventHandler(logConfig, reserved));
         }
         return Collections.unmodifiableList(handlers);
     }

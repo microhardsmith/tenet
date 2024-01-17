@@ -32,16 +32,30 @@ public final class DeflateBinding {
 
     static {
         SymbolLookup symbolLookup = NativeUtil.loadLibrary(Constants.DEFLATE);
-        allocCompressor = NativeUtil.methodHandle(symbolLookup, "libdeflate_alloc_compressor", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
-        freeCompressor = NativeUtil.methodHandle(symbolLookup, "libdeflate_free_compressor", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-        allocDecompressor = NativeUtil.methodHandle(symbolLookup, "libdeflate_alloc_decompressor", FunctionDescriptor.of(ValueLayout.ADDRESS));
-        freeDecompressor = NativeUtil.methodHandle(symbolLookup, "libdeflate_free_decompressor", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-        deflateCompress = NativeUtil.methodHandle(symbolLookup, "libdeflate_deflate_compress", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
-        deflateCompressBound = NativeUtil.methodHandle(symbolLookup, "libdeflate_deflate_compress_bound", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
-        gzipCompress = NativeUtil.methodHandle(symbolLookup, "libdeflate_gzip_compress", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
-        gzipCompressBound = NativeUtil.methodHandle(symbolLookup, "libdeflate_gzip_compress_bound", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
-        deflateDecompress = NativeUtil.methodHandle(symbolLookup, "libdeflate_deflate_decompress", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
-        gzipDecompress = NativeUtil.methodHandle(symbolLookup, "libdeflate_gzip_decompress", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+        allocCompressor = NativeUtil.methodHandle(symbolLookup, "libdeflate_alloc_compressor",
+                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        freeCompressor = NativeUtil.methodHandle(symbolLookup, "libdeflate_free_compressor",
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+        allocDecompressor = NativeUtil.methodHandle(symbolLookup, "libdeflate_alloc_decompressor",
+                FunctionDescriptor.of(ValueLayout.ADDRESS));
+        freeDecompressor = NativeUtil.methodHandle(symbolLookup, "libdeflate_free_decompressor",
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+        deflateCompress = NativeUtil.methodHandle(symbolLookup, "libdeflate_deflate_compress",
+                FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+        deflateCompressBound = NativeUtil.methodHandle(symbolLookup, "libdeflate_deflate_compress_bound",
+                FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+        gzipCompress = NativeUtil.methodHandle(symbolLookup, "libdeflate_gzip_compress",
+                FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+        gzipCompressBound = NativeUtil.methodHandle(symbolLookup, "libdeflate_gzip_compress_bound",
+                FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+        deflateDecompress = NativeUtil.methodHandle(symbolLookup, "libdeflate_deflate_decompress",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+        gzipDecompress = NativeUtil.methodHandle(symbolLookup, "libdeflate_gzip_decompress",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+    }
+
+    private DeflateBinding() {
+        throw new UnsupportedOperationException();
     }
 
     /**

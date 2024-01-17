@@ -2,11 +2,9 @@ package cn.zorcc.common.json;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.Format;
-import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.exception.JsonParseException;
-import cn.zorcc.common.util.NativeUtil;
+import cn.zorcc.common.structure.WriteBuffer;
 
-import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
@@ -24,8 +22,6 @@ public abstract class JsonWriterNode {
     private static final byte[] INFINITY = "Infinity".getBytes(StandardCharsets.UTF_8);
     private static final byte[] NAN = "NaN".getBytes(StandardCharsets.UTF_8);
     private static final byte[] NULL = "null".getBytes(StandardCharsets.UTF_8);
-    private static final int INTEGER_BYTE_LENGTH = 16;
-    private static final int LONG_BYTE_LENGTH = 32;
     private JsonWriterNode prev;
     private boolean notFirst = false;
     private int pos = 0;
@@ -94,13 +90,10 @@ public abstract class JsonWriterNode {
         if(format == null) {
             writePrimitiveChar(writeBuffer, c);
         }else {
-            Class<?> expectedType = format.expectedType();
-            if(expectedType == String.class) {
-                writeStrBytes(writeBuffer, String.valueOf(c).getBytes(StandardCharsets.UTF_8));
-            }else if(expectedType == boolean.class || expectedType == Boolean.class) {
-                writePrimitiveBoolean(writeBuffer, c > 0);
-            }else {
-                throw new JsonParseException(format, c);
+            switch (format.expectedType()) {
+                case Class<?> t when t == String.class -> writeStrBytes(writeBuffer, String.valueOf(c).getBytes(StandardCharsets.UTF_8));
+                case Class<?> t when t == boolean.class || t == Boolean.class -> writePrimitiveBoolean(writeBuffer, c != '\u0000');
+                default -> throw new JsonParseException(format, c);
             }
         }
     }
@@ -118,13 +111,10 @@ public abstract class JsonWriterNode {
         if(format == null) {
             writePrimitiveShort(writeBuffer ,s);
         }else {
-            Class<?> expectedType = format.expectedType();
-            if(expectedType == String.class) {
-                writeStrBytes(writeBuffer, String.valueOf(s).getBytes(StandardCharsets.UTF_8));
-            }else if(expectedType == boolean.class || expectedType == Boolean.class) {
-                writePrimitiveBoolean(writeBuffer, s > 0);
-            }else {
-                throw new JsonParseException(format, s);
+            switch (format.expectedType()) {
+                case Class<?> t when t == String.class -> writeStrBytes(writeBuffer, String.valueOf(s).getBytes(StandardCharsets.UTF_8));
+                case Class<?> t when t == boolean.class || t == Boolean.class -> writePrimitiveBoolean(writeBuffer, s > (short) 0);
+                default -> throw new JsonParseException(format, s);
             }
         }
     }
@@ -143,29 +133,16 @@ public abstract class JsonWriterNode {
         if(format == null) {
             writePrimitiveInt(writeBuffer, i);
         }else {
-            Class<?> expectedType = format.expectedType();
-            if(expectedType == String.class) {
-                writeStrBytes(writeBuffer, String.valueOf(i).getBytes(StandardCharsets.UTF_8));
-            }else if(expectedType == boolean.class || expectedType == Boolean.class) {
-                writePrimitiveBoolean(writeBuffer, i > 0);
-            }else {
-                throw new JsonParseException(format, i);
+            switch (format.expectedType()) {
+                case Class<?> t when t == String.class -> writeStrBytes(writeBuffer, String.valueOf(i).getBytes(StandardCharsets.UTF_8));
+                case Class<?> t when t == boolean.class || t == Boolean.class -> writePrimitiveBoolean(writeBuffer, i > 0);
+                default -> throw new JsonParseException(format, i);
             }
         }
     }
 
     private static void writePrimitiveInt(WriteBuffer writeBuffer, int i) {
-        try(WriteBuffer tempBuffer = WriteBuffer.newHeapWriteBuffer(INTEGER_BYTE_LENGTH)) {
-            while (i > 0) {
-                tempBuffer.writeByte((byte) (Constants.B_ZERO + i % 10));
-                i /= 10;
-            }
-            MemorySegment segment = tempBuffer.toSegment();
-            long len = segment.byteSize();
-            for(int t = 1; t <= len; t++) {
-                writeBuffer.writeByte(NativeUtil.getByte(segment, len - t));
-            }
-        }
+        writeBuffer.writeBytes(Integer.toString(i).getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -175,29 +152,16 @@ public abstract class JsonWriterNode {
         if(format == null) {
             writePrimitiveLong(writeBuffer, l);
         }else {
-            Class<?> expectedType = format.expectedType();
-            if(expectedType == String.class) {
-                writeStrBytes(writeBuffer, String.valueOf(l).getBytes(StandardCharsets.UTF_8));
-            }else if(expectedType == boolean.class || expectedType == Boolean.class) {
-                writePrimitiveBoolean(writeBuffer, l > 0);
-            }else {
-                throw new JsonParseException(format, l);
+            switch (format.expectedType()) {
+                case Class<?> t when t == String.class -> writeStrBytes(writeBuffer, String.valueOf(l).getBytes(StandardCharsets.UTF_8));
+                case Class<?> t when t == boolean.class || t == Boolean.class -> writePrimitiveBoolean(writeBuffer, l > 0L);
+                default -> throw new JsonParseException(format, l);
             }
         }
     }
 
     private static void writePrimitiveLong(WriteBuffer writeBuffer, long l) {
-        try(WriteBuffer tempBuffer = WriteBuffer.newHeapWriteBuffer(LONG_BYTE_LENGTH)) {
-            while (l > 0) {
-                tempBuffer.writeByte((byte) (Constants.B_ZERO + l % 10));
-                l /= 10;
-            }
-            MemorySegment segment = tempBuffer.toSegment();
-            long len = segment.byteSize();
-            for(int t = 1; t <= len; t++) {
-                writeBuffer.writeByte(NativeUtil.getByte(segment, len - t));
-            }
-        }
+        writeBuffer.writeBytes(Long.toString(l).getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -223,13 +187,10 @@ public abstract class JsonWriterNode {
         if(format == null) {
             writePrimitiveFloat(writeBuffer, f);
         }else {
-            Class<?> expectedType = format.expectedType();
-            if(expectedType == String.class) {
-                writeStrBytes(writeBuffer, String.valueOf(f).getBytes(StandardCharsets.UTF_8));
-            }else if(expectedType == boolean.class || expectedType == Boolean.class) {
-                writePrimitiveBoolean(writeBuffer, f > 0);
-            }else {
-                throw new JsonParseException(format, f);
+            switch (format.expectedType()) {
+                case Class<?> t when t == String.class -> writeStrBytes(writeBuffer, String.valueOf(f).getBytes(StandardCharsets.UTF_8));
+                case Class<?> t when t == boolean.class || t == Boolean.class -> writePrimitiveBoolean(writeBuffer, Math.signum(f) > 0.0f);
+                default -> throw new JsonParseException(format, f);
             }
         }
     }
@@ -251,13 +212,10 @@ public abstract class JsonWriterNode {
         if(format == null) {
             writePrimitiveDouble(writeBuffer, d);
         }else {
-            Class<?> expectedType = format.expectedType();
-            if(expectedType == String.class) {
-                writeStrBytes(writeBuffer, String.valueOf(d).getBytes(StandardCharsets.UTF_8));
-            }else if(expectedType == boolean.class || expectedType == Boolean.class) {
-                writePrimitiveBoolean(writeBuffer, d > 0);
-            }else {
-                throw new JsonParseException(format, d);
+            switch (format.expectedType()) {
+                case Class<?> t when t == String.class -> writeStrBytes(writeBuffer, String.valueOf(d).getBytes(StandardCharsets.UTF_8));
+                case Class<?> t when t == boolean.class || t == Boolean.class -> writePrimitiveBoolean(writeBuffer, Math.signum(d) > 0.0d);
+                default -> throw new JsonParseException(format, d);
             }
         }
     }

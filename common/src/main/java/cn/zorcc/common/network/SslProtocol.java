@@ -8,6 +8,7 @@ import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.api.Protocol;
 import cn.zorcc.common.network.lib.OsNetworkLibrary;
 import cn.zorcc.common.structure.Mutex;
+import cn.zorcc.common.util.SslUtil;
 
 import java.lang.foreign.MemorySegment;
 
@@ -29,12 +30,12 @@ public record SslProtocol(
     private static final int REMOTE_INITIATED_SHUTDOWN = 1 << 16;
 
     @Override
-    public int onReadableEvent(MemorySegment reserved, int len) {
+    public long onReadableEvent(MemorySegment reserved, long len) {
         try(Mutex _ = sslState.withMutex()) {
             if(sslState.unregister(SEND_WANT_READ)) {
                 channel.writer().submit(new WriterTask(WriterTaskType.WRITABLE, channel, null, null));
             }
-            int received = SslBinding.sslRead(ssl, reserved, len);
+            int received = SslBinding.sslRead(ssl, reserved, Math.toIntExact(len));
             if(received <= 0) {
                 int err = SslBinding.sslGetErr(ssl, received);
                 if(err == Constants.SSL_ERROR_WANT_READ) {
@@ -47,7 +48,7 @@ public record SslProtocol(
                     }
                     return 0;
                 }else {
-                    return SslBinding.throwException(err, "SSL_read()");
+                    return SslUtil.throwException(err, "SSL_read()");
                 }
             }else {
                 return received;
@@ -56,7 +57,7 @@ public record SslProtocol(
     }
 
     @Override
-    public int onWritableEvent() {
+    public long onWritableEvent() {
         try(Mutex _ = sslState.withMutex()) {
             if(sslState.unregister(SEND_WANT_WRITE)) {
                 channel.writer().submit(new WriterTask(WriterTaskType.WRITABLE, channel, null, null));
@@ -66,9 +67,9 @@ public record SslProtocol(
     }
 
     @Override
-    public int doWrite(MemorySegment data, int len) {
+    public long doWrite(MemorySegment data, long len) {
         try(Mutex _ = sslState.withMutex()) {
-            int written = SslBinding.sslWrite(ssl, data, len);
+            int written = SslBinding.sslWrite(ssl, data, Math.toIntExact(len));
             if(written <= 0) {
                 int err = SslBinding.sslGetErr(ssl, written);
                 if(err == Constants.SSL_ERROR_WANT_READ) {
@@ -78,7 +79,7 @@ public record SslProtocol(
                     sslState.register(SEND_WANT_WRITE);
                     return Constants.NET_PW;
                 }else {
-                    return SslBinding.throwException(err, "SSL_write()");
+                    return SslUtil.throwException(err, "SSL_write()");
                 }
             }else {
                 return written;

@@ -35,25 +35,19 @@
 
   <properties>
     <project.version>0.0.1</project.version>
-    <java.version>21</java.version>
+    <java.version>22</java.version>
     <resource.delimiter>@</resource.delimiter>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <maven-compiler-plugin.version>3.11.0</maven-compiler-plugin.version>
+    <maven-compiler-plugin.version>3.12.1</maven-compiler-plugin.version>
     <maven.compiler.encoding>UTF-8</maven.compiler.encoding>
     <maven-surefile-plugin.version>3.1.2</maven-surefile-plugin.version>
     <maven-assembly-plugin.version>3.6.0</maven-assembly-plugin.version>
-    <jmh.version>1.36</jmh.version>
-    <junit.version>5.10.0</junit.version>
+    <jmh.version>1.37</jmh.version>
+    <junit.version>5.10.1</junit.version>
 
     <scram.version>2.1</scram.version>
-    <jctools.version>4.0.1</jctools.version>
-    <jackson.version>2.14.1</jackson.version>
-    <kryo.version>5.3.0</kryo.version>
-    <rocksdb.version>7.6.0</rocksdb.version>
-    <nimbus-jose-jwt.version>9.25.6</nimbus-jose-jwt.version>
-    <oshi.version>6.3.1</oshi.version>
-    <questdb.version>6.6.1</questdb.version>
+    <jctools.version>4.0.2</jctools.version>
   </properties>
 
   <!-- general dependencies for all modules -->
@@ -93,14 +87,10 @@
           <encoding>${maven.compiler.encoding}</encoding>
           <verbose>true</verbose>
           <parameters>true</parameters> <!-- adding -parameter so that java reflection could see the parameter names -->
-          <compilerArgs>
-            <arg>--enable-preview</arg> <!-- enable virtual threads and ffi-->
-          </compilerArgs>
+          <enablePreview>true</enablePreview>
           <source>${java.version}</source>
           <target>${java.version}</target>
           <release>${java.version}</release>
-          <meminitial>256m</meminitial>
-          <maxmem>2048m</maxmem>
           <annotationProcessorPaths>
             <path>
               <groupId>org.openjdk.jmh</groupId>

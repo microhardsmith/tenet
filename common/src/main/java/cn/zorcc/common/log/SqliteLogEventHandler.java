@@ -2,13 +2,13 @@ package cn.zorcc.common.log;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
-import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.sqlite.SqliteConn;
+import cn.zorcc.common.structure.Allocator;
+import cn.zorcc.common.structure.WriteBuffer;
 import cn.zorcc.common.util.FileUtil;
 
 import java.io.IOException;
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -40,14 +40,13 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
     private final int flushThreshold;
     private final long maxRowCount;
     private final long maxRecordingTime;
-    private final Arena reservedArena = Arena.ofConfined();
     private final MemorySegment reserved;
     private long currentCreateTime;
     private long currentRowCount = 0;
     private SqliteConn sqliteConn;
     private MemorySegment stmt;
 
-    public SqliteLogEventHandler(LogConfig logConfig) {
+    public SqliteLogEventHandler(LogConfig logConfig, MemorySegment m) {
         try{
             SqliteLogConfig config = logConfig.getSqlite();
             dir = FileUtil.normalizePath(config.getDir() == null || config.getDir().isEmpty() ? System.getProperty("user.dir") : config.getDir());
@@ -58,7 +57,7 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
             flushThreshold = config.getFlushThreshold() <= 0 ? Integer.MIN_VALUE : config.getFlushThreshold();
             maxRowCount = config.getMaxRowCount() <= 0 ? Long.MIN_VALUE : config.getMaxRowCount();
             maxRecordingTime = config.getMaxRecordingTime() <= 0 ? Long.MIN_VALUE : config.getMaxRecordingTime();
-            reserved = reservedArena.allocate(config.getBuffer());
+            reserved = m;
             openNewSqliteDatabase();
         }catch (IOException e) {
             throw new FrameworkException(ExceptionType.LOG, "Unable to create sqlite database");
@@ -77,11 +76,10 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
         }
         final SqliteConn oldConn = sqliteConn;
         final MemorySegment oldStmt = stmt;
-        try(Arena arena = Arena.ofConfined()) {
-            sqliteConn = new SqliteConn(path);
-            sqliteConn.exec(arena.allocateUtf8String(TABLE_CREATE_SQL));
-            stmt = sqliteConn.preparePersistentStatement(arena.allocateUtf8String(LOG_INSERT_SQL));
-        }
+        Allocator allocator = Allocator.newSlicingAllocator(reserved);
+        sqliteConn = new SqliteConn(path);
+        sqliteConn.exec(allocator.allocateFrom(TABLE_CREATE_SQL));
+        stmt = sqliteConn.preparePersistentStatement(allocator.allocateFrom(LOG_INSERT_SQL));
         if(oldStmt != null && oldConn != null) {
             oldConn.finalize(oldStmt);
             oldConn.close();
@@ -110,7 +108,6 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
                 flush();
                 sqliteConn.finalize(stmt);
                 sqliteConn.close();
-                reservedArena.close();
             }
         }
     }
@@ -119,7 +116,7 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
         if(!eventList.isEmpty()) {
             sqliteConn.begin();
             for (LogEvent logEvent : eventList) {
-                try(WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(reserved)) {
+                try(WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(reserved, false)) {
                     sqliteConn.bindLong(stmt, 1, logEvent.timestamp());
                     sqliteConn.bindText(stmt, 2, wrapText(writeBuffer, logEvent.level()));
                     sqliteConn.bindText(stmt, 3, wrapText(writeBuffer, logEvent.className()));

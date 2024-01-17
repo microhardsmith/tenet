@@ -2,9 +2,9 @@ package cn.zorcc.common.postgre;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
-import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.api.Encoder;
+import cn.zorcc.common.structure.WriteBuffer;
 
 import java.lang.foreign.MemorySegment;
 

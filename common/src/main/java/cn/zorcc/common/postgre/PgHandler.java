@@ -2,13 +2,13 @@ package cn.zorcc.common.postgre;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
-import cn.zorcc.common.ReadBuffer;
-import cn.zorcc.common.WriteBuffer;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.Channel;
 import cn.zorcc.common.network.TaggedResult;
 import cn.zorcc.common.network.api.Handler;
+import cn.zorcc.common.structure.ReadBuffer;
+import cn.zorcc.common.structure.WriteBuffer;
 import com.ongres.scram.client.ScramClient;
 import com.ongres.scram.client.ScramSession;
 import com.ongres.scram.common.exception.ScramInvalidServerSignatureException;
@@ -108,10 +108,10 @@ public final class PgHandler implements Handler {
         try(WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer()) {
             writeBuffer.writeInt(Integer.MIN_VALUE);
             writeBuffer.writeInt(3 << 16);
-            writeBuffer.writeCStr("user");
-            writeBuffer.writeCStr(pgConfig.getUserName());
-            writeBuffer.writeCStr("database");
-            writeBuffer.writeCStr(pgConfig.getDatabaseName());
+            writeBuffer.writeStr("user");
+            writeBuffer.writeStr(pgConfig.getUserName());
+            writeBuffer.writeStr("database");
+            writeBuffer.writeStr(pgConfig.getDatabaseName());
             channel.sendMsg(new PgMsg(Constants.NUT, writeBuffer.toSegment()));
         }
     }
@@ -157,7 +157,7 @@ public final class PgHandler implements Handler {
 
     private void handleSaslPasswordMsg(ReadBuffer readBuffer, Channel channel) {
         state = WAITING_SASL_CONTINUE;
-        List<String> mechanisms = readBuffer.readMultipleCStr();
+        List<String> mechanisms = readBuffer.readMultipleStr();
         try(WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer()) {
             ScramClient scramClient = ScramClient.channelBinding(ScramClient.ChannelBinding.NO)
                     .stringPreparation(StringPreparations.SASL_PREPARATION)
@@ -166,7 +166,7 @@ public final class PgHandler implements Handler {
             log.debug(STR."Postgresql using scram mechanism : \{mechanism}");
             scramSession = scramClient.scramSession("*");
             byte[] clientFirstMessage = scramSession.clientFirstMessage().getBytes(StandardCharsets.UTF_8);
-            writeBuffer.writeCStr(mechanism);
+            writeBuffer.writeStr(mechanism);
             if(clientFirstMessage.length > 0) {
                 writeBuffer.writeInt(clientFirstMessage.length);
                 writeBuffer.writeBytes(clientFirstMessage);
@@ -187,12 +187,12 @@ public final class PgHandler implements Handler {
         if(code != Constants.PG_AUTH_SASL_CONTINUE) {
             throw new FrameworkException(ExceptionType.POSTGRESQL, Constants.UNREACHED);
         }
-        byte[] authenticationData = readBuffer.readAll();
+        byte[] authenticationData = readBuffer.readBytes(readBuffer.available());
         try(WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer()) {
             ScramSession.ServerFirstProcessor serverFirstProcessor = scramSession.receiveServerFirstMessage(new String(authenticationData, StandardCharsets.UTF_8));
             clientFinalProcessor = serverFirstProcessor.clientFinalProcessor(pgConfig.getPassword());
             String clientFinalMessage = clientFinalProcessor.clientFinalMessage();
-            writeBuffer.writeCStr(clientFinalMessage);
+            writeBuffer.writeStr(clientFinalMessage);
             channel.sendMsg(new PgMsg(Constants.PG_PASSWORD, writeBuffer.toSegment()));
         }catch (ScramParseException e) {
             throw new FrameworkException(ExceptionType.POSTGRESQL, "SASL authentication failed in continue phrase", e);
@@ -209,7 +209,7 @@ public final class PgHandler implements Handler {
         if(code != Constants.PG_AUTH_SASL_FINAL) {
             throw new FrameworkException(ExceptionType.POSTGRESQL, Constants.UNREACHED);
         }
-        byte[] authenticationData = readBuffer.readAll();
+        byte[] authenticationData = readBuffer.readBytes(readBuffer.available());
         try{
             clientFinalProcessor.receiveServerFinalMessage(new String(authenticationData, StandardCharsets.UTF_8));
         }catch (ScramParseException | ScramServerErrorException | ScramInvalidServerSignatureException e) {
@@ -242,7 +242,7 @@ public final class PgHandler implements Handler {
     private void handleClearTextPasswordMsg(Channel channel) {
         state = WAITING_CLEAR_TEXT_PASSWORD;
         try(WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer()) {
-            writeBuffer.writeCStr(pgConfig.getPassword());
+            writeBuffer.writeStr(pgConfig.getPassword());
             channel.sendMsg(new PgMsg(Constants.PG_PASSWORD, writeBuffer.toSegment()));
         }
     }
@@ -266,8 +266,8 @@ public final class PgHandler implements Handler {
     private void handleMsgAfterAuth(byte type, MemorySegment data, Channel channel) {
         ReadBuffer readBuffer = new ReadBuffer(data);
         if(type == Constants.PG_PARAMETER_STATUS) {
-            String key = readBuffer.readCStr();
-            String value = readBuffer.readCStr();
+            String key = readBuffer.readStr();
+            String value = readBuffer.readStr();
             log.debug(STR."Postgresql parameter status received, key : \{key}, value : \{value}");
         }else if(type == Constants.PG_BACKEND_KEY_DATA) {
             int processId = readBuffer.readInt();
@@ -291,7 +291,7 @@ public final class PgHandler implements Handler {
     private void sendConfigureEncodingMsg(Channel channel) {
         state = CONFIGURING_ENCODING;
         try(WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer()) {
-            writeBuffer.writeCStr("SET client_encoding TO 'utf-8' ");
+            writeBuffer.writeStr("SET client_encoding TO 'utf-8' ");
             channel.sendMsg(new PgMsg(Constants.PG_SIMPLE_QUERY, writeBuffer.toSegment()));
         }
     }
@@ -299,7 +299,7 @@ public final class PgHandler implements Handler {
     private void sendConfigureSchemaMsg(Channel channel, String schema) {
         state = CONFIGURING_SCHEMA;
         try(WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer()) {
-            writeBuffer.writeCStr(STR."SET search_path TO \{schema} ");
+            writeBuffer.writeStr(STR."SET search_path TO \{schema} ");
             channel.sendMsg(new PgMsg(Constants.PG_SIMPLE_QUERY, writeBuffer.toSegment()));
         }
     }
@@ -309,7 +309,7 @@ public final class PgHandler implements Handler {
         for( ; ; ) {
             byte errCode = readBuffer.readByte();
             if(errCode != Constants.NUT) {
-                String errStr = readBuffer.readCStr();
+                String errStr = readBuffer.readStr();
                 errMap.put(errTypeMap.get(errCode), errStr);
             }else {
                 break ;
@@ -327,8 +327,8 @@ public final class PgHandler implements Handler {
             log.debug("Configuring client-encoding completed");
         }else if(type == Constants.PG_PARAMETER_STATUS) {
             ReadBuffer readBuffer = new ReadBuffer(data);
-            String key = readBuffer.readCStr();
-            String value = readBuffer.readCStr();
+            String key = readBuffer.readStr();
+            String value = readBuffer.readStr();
             log.debug(STR."Parameter status updated, key : \{key}, value : \{value}");
         }else if(type == Constants.PG_READY) {
             state = READY_FOR_QUERY;

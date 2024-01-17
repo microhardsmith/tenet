@@ -4,6 +4,8 @@ import cn.zorcc.common.Record;
 import cn.zorcc.common.*;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.exception.JsonParseException;
+import cn.zorcc.common.structure.ReadBuffer;
+import cn.zorcc.common.structure.WriteBuffer;
 
 import java.util.Collection;
 import java.util.HashMap;
