@@ -1,7 +1,7 @@
 package cn.zorcc.common;
 
 /**
- *   Operating system enums
+ *   Operating system enums, currently supporting Windows, Linux and macOS
  */
 public enum OsType {
     Windows,

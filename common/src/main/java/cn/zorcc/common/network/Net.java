@@ -53,15 +53,7 @@ public final class Net extends AbstractLifeCycle {
                 Timeout timeout = Timeout.of(allocator, muxTimeout);
                 MemorySegment events = allocator.allocate(MemoryLayout.sequenceLayout(maxEvents, osNetworkLibrary.eventLayout()));
                 for( ; ; ) {
-                    int r = osNetworkLibrary.muxWait(mux, events, maxEvents, timeout);
-                    if(r < 0) {
-                        int errno = Math.abs(r);
-                        if(errno == osNetworkLibrary.interruptCode()) {
-                            return ;
-                        }else {
-                            throw new FrameworkException(ExceptionType.NETWORK, STR."Mux wait failed with errno : \{errno}");
-                        }
-                    }
+                    int r = osNetworkLibrary.waitMux(mux, events, maxEvents, timeout);
                     for( ; ; ) {
                         ListenerTask listenerTask = netQueue.poll();
                         if(listenerTask == null) {

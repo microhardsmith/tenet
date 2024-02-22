@@ -20,14 +20,6 @@ import java.util.function.Supplier;
  *   Reflection helper class
  */
 public final class ReflectUtil {
-    private static final Map<Class<?>, Class<?>> wrapperMap = Map.of(byte.class, Byte.class,
-            short.class, Short.class,
-            int.class, Integer.class,
-            long.class, Long.class,
-            float.class, Float.class,
-            double.class, Double.class,
-            boolean.class, Boolean.class,
-            char.class, Character.class);
 
     private ReflectUtil() {
         throw new UnsupportedOperationException();
@@ -37,7 +29,17 @@ public final class ReflectUtil {
      *   Get the corresponding wrapper type based on its primitive type
      */
     public static Class<?> getWrapperClass(Class<?> primitiveClass) {
-        return wrapperMap.get(primitiveClass);
+        return switch (primitiveClass) {
+            case Class<?> t when t == byte.class -> Byte.class;
+            case Class<?> t when t == short.class -> Short.class;
+            case Class<?> t when t == int.class -> Integer.class;
+            case Class<?> t when t == long.class -> Long.class;
+            case Class<?> t when t == float.class -> Float.class;
+            case Class<?> t when t == double.class -> Double.class;
+            case Class<?> t when t == char.class -> Character.class;
+            case Class<?> t when t == boolean.class -> Boolean.class;
+            default -> throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
+        };
     }
 
     /**
@@ -89,11 +91,11 @@ public final class ReflectUtil {
      *   Create a plain-class's constructor method using lambda
      */
     @SuppressWarnings("unchecked")
-    public static <T> Supplier<T> createConstructor(Class<T> type) {
+    public static <T> Supplier<T> createConstructor(MethodHandles.Lookup lookup, Class<T> type) {
         try{
-            MethodHandle cmh = Constants.LOOKUP.findConstructor(type, MethodType.methodType(void.class));
+            MethodHandle cmh = lookup.findConstructor(type, MethodType.methodType(void.class));
             MethodType methodType = cmh.type();
-            CallSite callSite = LambdaMetafactory.metafactory(Constants.LOOKUP,
+            CallSite callSite = LambdaMetafactory.metafactory(lookup,
                     Constants.GET,
                     MethodType.methodType(Supplier.class),
                     methodType.erase(), cmh, methodType);
@@ -107,11 +109,11 @@ public final class ReflectUtil {
      *   Create a record's constructor method using lambda
      */
     @SuppressWarnings("unchecked")
-    public static <T> Function<Object[], T> createRecordConstructor(Class<T> recordClass, List<Class<?>> parameterTypes) {
+    public static <T> Function<Object[], T> createRecordConstructor(MethodHandles.Lookup lookup, Class<T> recordClass, List<Class<?>> parameterTypes) {
         try{
-            MethodHandle cmh = Constants.LOOKUP.findConstructor(recordClass, MethodType.methodType(void.class, parameterTypes)).asSpreader(Object[].class, parameterTypes.size());
+            MethodHandle cmh = lookup.findConstructor(recordClass, MethodType.methodType(void.class, parameterTypes)).asSpreader(Object[].class, parameterTypes.size());
             MethodType methodType = cmh.type();
-            CallSite callSite = LambdaMetafactory.metafactory(Constants.LOOKUP,
+            CallSite callSite = LambdaMetafactory.metafactory(lookup,
                     Constants.APPLY,
                     MethodType.methodType(Function.class, MethodHandle.class),
                     methodType.erase(),
@@ -127,11 +129,11 @@ public final class ReflectUtil {
      *   Create a public method invoker using lambda
      */
     @SuppressWarnings("unchecked")
-    public static BiFunction<Object, Object[], Object> createMethodCaller(Class<?> targetType, String methodName, Class<?> returnType, List<Class<?>> parameterTypes) {
+    public static BiFunction<Object, Object[], Object> createMethodCaller(MethodHandles.Lookup lookup, Class<?> targetType, String methodName, Class<?> returnType, List<Class<?>> parameterTypes) {
         try{
-            MethodHandle cmh = Constants.LOOKUP.findVirtual(targetType, methodName, MethodType.methodType(returnType, parameterTypes)).asSpreader(Object[].class, parameterTypes.size());
+            MethodHandle cmh = lookup.findVirtual(targetType, methodName, MethodType.methodType(returnType, parameterTypes)).asSpreader(Object[].class, parameterTypes.size());
             MethodType methodType = cmh.type();
-            CallSite callSite = LambdaMetafactory.metafactory(Constants.LOOKUP,
+            CallSite callSite = LambdaMetafactory.metafactory(lookup,
                     Constants.APPLY,
                     MethodType.methodType(BiFunction.class, MethodHandle.class),
                     methodType.erase(),
@@ -147,13 +149,13 @@ public final class ReflectUtil {
      *   Create a getter method using lambda
      */
     @SuppressWarnings("unchecked")
-    public static Function<Object, Object> createGetter(MethodHandle mh, Class<?> fieldClass) {
+    public static Function<Object, Object> createGetter(MethodHandles.Lookup lookup, MethodHandle mh, Class<?> fieldClass) {
         try{
             MethodType type = mh.type();
             if(fieldClass.isPrimitive()) {
                 type = type.changeReturnType(ReflectUtil.getWrapperClass(fieldClass));
             }
-            CallSite callSite = LambdaMetafactory.metafactory(Constants.LOOKUP,
+            CallSite callSite = LambdaMetafactory.metafactory(lookup,
                     Constants.APPLY,
                     MethodType.methodType(Function.class),
                     type.erase(), mh, type);
@@ -167,13 +169,13 @@ public final class ReflectUtil {
      *   Create a setter method using lambda
      */
     @SuppressWarnings("unchecked")
-    public static BiConsumer<Object, Object> createSetter(MethodHandle mh, Class<?> fieldClass) {
+    public static BiConsumer<Object, Object> createSetter(MethodHandles.Lookup lookup, MethodHandle mh, Class<?> fieldClass) {
         try{
             MethodType type = mh.type();
             if(fieldClass.isPrimitive()) {
                 type = type.changeParameterType(1, ReflectUtil.getWrapperClass(fieldClass));
             }
-            CallSite callSite = LambdaMetafactory.metafactory(Constants.LOOKUP,
+            CallSite callSite = LambdaMetafactory.metafactory(lookup,
                     Constants.ACCEPT,
                     MethodType.methodType(BiConsumer.class),
                     type.erase(), mh, type);

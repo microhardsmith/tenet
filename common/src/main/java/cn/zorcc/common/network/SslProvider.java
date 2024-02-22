@@ -23,7 +23,7 @@ public record SslProvider(
         try (Allocator allocator = Allocator.newDirectAllocator()) {
             if(caFiles != null && !caFiles.isBlank()) {
                 for (String caFile : caFiles.split(",")) {
-                    MemorySegment file = allocator.allocateFrom(caFile);
+                    MemorySegment file = allocator.allocateFrom(caFile.trim());
                     if(SslBinding.loadVerifyLocations(ctx, file, MemorySegment.NULL) != 1) {
                         throw new FrameworkException(ExceptionType.NETWORK, STR."Can't load verify file : \{caFile}");
                     }
@@ -31,7 +31,7 @@ public record SslProvider(
             }
             if(caPaths != null && !caPaths.isBlank()) {
                 for (String caPath : caPaths.split(",")) {
-                    MemorySegment path = allocator.allocateFrom(caPath);
+                    MemorySegment path = allocator.allocateFrom(caPath.trim());
                     if(SslBinding.loadVerifyLocations(ctx, MemorySegment.NULL, path) != 1) {
                         throw new FrameworkException(ExceptionType.NETWORK, STR."Can't load verify dir : \{caPath}");
                     }

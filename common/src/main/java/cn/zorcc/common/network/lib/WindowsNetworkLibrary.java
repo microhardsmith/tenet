@@ -195,7 +195,7 @@ public final class WindowsNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public int muxWait(Mux mux, MemorySegment events, int maxEvents, Timeout timeout) {
+    public int wait(Mux mux, MemorySegment events, int maxEvents, Timeout timeout) {
         return TenetWindowsBinding.epollWait(mux.winHandle(), events, maxEvents, timeout.val());
     }
 

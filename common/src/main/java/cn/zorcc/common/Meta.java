@@ -3,6 +3,7 @@ package cn.zorcc.common;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.ReflectUtil;
 
+import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.lang.reflect.Type;
@@ -70,7 +71,8 @@ public final class Meta<T> {
                 }
                 return Collections.unmodifiableMap(m);
             }) : null;
-            Supplier<T> constructor = ReflectUtil.createConstructor(objectClass);
+            MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(objectClass, MethodHandles.lookup());
+            Supplier<T> constructor = ReflectUtil.createConstructor(lookup, objectClass);
             Map<String, MetaInfo> metaInfoMap = new LinkedHashMap<>();
             for (Field f : ReflectUtil.getAllFields(objectClass).stream().sorted((o1, o2) -> {
                 Ordinal a1 = o1.getAnnotation(Ordinal.class);
@@ -81,9 +83,9 @@ public final class Meta<T> {
                 Class<?> fieldType = f.getType();
                 Type genericType = f.getGenericType();
                 String getterMethodName = ReflectUtil.getterName(fieldType, fieldName);
-                Function<Object, Object> getter =ReflectUtil.createGetter(Constants.LOOKUP.findVirtual(objectClass, getterMethodName, MethodType.methodType(fieldType)), fieldType);
+                Function<Object, Object> getter =ReflectUtil.createGetter(lookup, lookup.findVirtual(objectClass, getterMethodName, MethodType.methodType(fieldType)), fieldType);
                 String setterMethodName = ReflectUtil.setterName(fieldName);
-                BiConsumer<Object, Object> setter = ReflectUtil.createSetter(Constants.LOOKUP.findVirtual(objectClass, setterMethodName, MethodType.methodType(void.class, fieldType)), fieldType);
+                BiConsumer<Object, Object> setter = ReflectUtil.createSetter(lookup, lookup.findVirtual(objectClass, setterMethodName, MethodType.methodType(void.class, fieldType)), fieldType);
                 MetaInfo metaInfo = new MetaInfo(fieldName, fieldType, genericType, getter, setter, f.isAnnotationPresent(Format.class) ? f.getAnnotation(Format.class) : null);
                 metaInfoMap.put(fieldName, metaInfo);
             }

@@ -7,6 +7,8 @@ import cn.zorcc.common.exception.FrameworkException;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -35,14 +37,25 @@ public final class NativeUtil {
      *   Global dynamic library cache to avoid repeated loading
      */
     private static final Map<String, SymbolLookup> libraryCache = new ConcurrentHashMap<>();
+    private static final String MALLOC = "malloc";
+    private static final String REALLOC = "realloc";
+    private static final String FREE = "free";
     private static final MethodHandle mallocHandle;
     private static final MethodHandle reallocHandle;
     private static final MethodHandle freeHandle;
 
     static {
-        mallocHandle = NativeUtil.nativeMethodHandle("malloc", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.JAVA_LONG), Linker.Option.critical(false));
-        reallocHandle = NativeUtil.nativeMethodHandle("realloc", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
-        freeHandle = NativeUtil.nativeMethodHandle("free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS), Linker.Option.critical(false));
+        String allocatorLibrary = System.getProperty(Constants.ALLOCATOR);
+        if(allocatorLibrary == null || allocatorLibrary.isBlank()) {
+            mallocHandle = NativeUtil.nativeMethodHandle(MALLOC, FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.JAVA_LONG), Linker.Option.critical(false));
+            reallocHandle = NativeUtil.nativeMethodHandle(REALLOC, FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG), Linker.Option.critical(false));
+            freeHandle = NativeUtil.nativeMethodHandle(FREE, FunctionDescriptor.ofVoid(ValueLayout.ADDRESS), Linker.Option.critical(false));
+        }else {
+            SymbolLookup symbolLookup = loadMultipleLibrary(allocatorLibrary);
+            mallocHandle = NativeUtil.methodHandle(symbolLookup, System.getProperty(MALLOC, MALLOC), FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.JAVA_LONG), Linker.Option.critical(false));
+            reallocHandle = NativeUtil.methodHandle(symbolLookup, System.getProperty(REALLOC, REALLOC), FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG), Linker.Option.critical(false));
+            freeHandle = NativeUtil.methodHandle(symbolLookup, System.getProperty(FREE, FREE), FunctionDescriptor.ofVoid(ValueLayout.ADDRESS), Linker.Option.critical(false));
+        }
     }
 
     public static MemorySegment malloc(long byteSize) {
@@ -113,14 +126,35 @@ public final class NativeUtil {
         }
     }
 
-    private static String getDynamicLibraryName(String identifier) {
-        return switch (osType) {
-            case Windows -> STR."lib\{identifier}.dll";
-            case Linux -> STR."lib\{identifier}.so";
-            case MacOS -> STR."lib\{identifier}.dylib";
+    /**
+     *  Loading a dynamic library from the TENET_LIBRARY_PATH
+     *  Note that link would probably not work well, it's recommended to just make a copy into the folder
+     *  Due to historical reasons, dynamic libraries in Windows are not named with the "lib" prefix convention, but Linux and macOS usually did, sometimes the name of dynamic library matters
+     *  So in general, you will need to specify the full file name as identifier to load it, no regarding which operating system you are using.
+     */
+    private static String getDynamicLibraryPath(String identifier) {
+        String fileName = switch (osType) {
+            case Windows -> STR."\{identifier}.dll";
+            case Linux -> STR."\{identifier}.so";
+            case MacOS -> STR."\{identifier}.dylib";
             default -> throw new FrameworkException(ExceptionType.NATIVE, "Unrecognized operating system");
         };
+        String defaultPath = libPath + Constants.SEPARATOR + fileName;
+        if(Files.exists(Path.of(defaultPath))) {
+            return defaultPath;
+        }
+        if(defaultPath.startsWith(Constants.LIB)) {
+            fileName = fileName.substring(Constants.LIB.length());
+        }else {
+            fileName = Constants.LIB + fileName;
+        }
+        String fallBackPath = libPath + Constants.SEPARATOR + fileName;
+        if(Files.exists(Path.of(fallBackPath))) {
+            return fallBackPath;
+        }
+        throw new FrameworkException(ExceptionType.NATIVE, "Native library not found");
     }
+
     public static OsType ostype() {
         return osType;
     }
@@ -156,13 +190,29 @@ public final class NativeUtil {
     }
 
     /**
-     *  Load a native library by environment variable, return null if system library was not found in environment variables
+     *  Load a set of native library by environment variable, return the last one, throw an exception if library was not found in environment variables
+     */
+    public static SymbolLookup loadMultipleLibrary(String identifiers) {
+        String[] s = identifiers.split(",");
+        if(s.length > 0) {
+            SymbolLookup r = null;
+            for (String identifier : s) {
+                r = loadLibrary(identifier);
+            }
+            return Objects.requireNonNull(r);
+        }else {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED);
+        }
+    }
+
+    /**
+     *  Load a native library by environment variable, throw an exception if library was not found in environment variables
      */
     public static SymbolLookup loadLibrary(String identifier) {
         if(libPath == null) {
             throw new FrameworkException(ExceptionType.NATIVE, "Global libPath not found");
         }
-        return libraryCache.computeIfAbsent(identifier, i -> SymbolLookup.libraryLookup(libPath + Constants.SEPARATOR + getDynamicLibraryName(i), globalArena));
+        return Objects.requireNonNull(libraryCache.computeIfAbsent(identifier, i -> SymbolLookup.libraryLookup(getDynamicLibraryPath(i), globalArena)));
     }
 
     /**

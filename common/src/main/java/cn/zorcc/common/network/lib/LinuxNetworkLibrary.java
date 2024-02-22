@@ -187,7 +187,7 @@ public final class LinuxNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public int muxWait(Mux mux, MemorySegment events, int maxEvents, Timeout timeout) {
+    public int wait(Mux mux, MemorySegment events, int maxEvents, Timeout timeout) {
         return TenetLinuxBinding.epollWait(mux.epfd(), events, maxEvents, timeout.val());
     }
 

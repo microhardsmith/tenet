@@ -80,7 +80,7 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
     /**
      *   Start multiplexing waiting for events, return the event count that triggered
      */
-    int muxWait(Mux mux, MemorySegment events, int maxEvents, Timeout timeout);
+    int wait(Mux mux, MemorySegment events, int maxEvents, Timeout timeout);
 
     /**
      *   For poller to access the events array, the first return value represents the socket, the second value represents the event type
@@ -218,10 +218,34 @@ public sealed interface OsNetworkLibrary permits WindowsNetworkLibrary, LinuxNet
         return value;
     }
 
+    /**
+     *   Change the mux state
+     */
     default void ctlMux(Mux mux, Socket socket, long from, long to) {
         check(ctl(mux, socket, from, to), "ctl mux");
     }
 
+    /**
+     *   Blocking wait the mux until event triggered
+     */
+    default int waitMux(Mux mux, MemorySegment events, int maxEvents, Timeout timeout) {
+        int r = wait(mux, events, maxEvents, timeout);
+        if(r < 0) {
+            int errno = Math.abs(r);
+            if(errno == interruptCode()) {
+                // If the current epoll_wait() were interrupted, we will do it again later
+                return 0;
+            }else {
+                throw new FrameworkException(ExceptionType.NETWORK, STR."Mux wait failed with errno : \{errno}");
+            }
+        }else {
+            return r;
+        }
+    }
+
+    /**
+     *   Exit and close the underlying mux
+     */
     default void exitMux(Mux mux) {
         check(closeMux(mux), "close Mux");
     }

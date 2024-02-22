@@ -7,7 +7,6 @@ import cn.zorcc.common.util.ReflectUtil;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
 public record TableDescription(
@@ -20,12 +19,13 @@ public record TableDescription(
     Object delArg,
     Object notDelArg
 ) {
-    record Rank(String str, int ordinal) implements Comparator<Rank> {
+    record Rank(String str, int ordinal) implements Comparable<Rank> {
         @Override
-        public int compare(Rank o1, Rank o2) {
-            return Integer.compare(o1.ordinal, o2.ordinal);
+        public int compareTo(Rank o) {
+            return Integer.compare(ordinal, o.ordinal);
         }
     }
+
     public static TableDescription of(Class<?> clazz) {
         if(!clazz.isAnnotationPresent(Table.class)) {
             throw new FrameworkException(ExceptionType.SQL, "No @Table() found on po class : %s".formatted(clazz.getSimpleName()));

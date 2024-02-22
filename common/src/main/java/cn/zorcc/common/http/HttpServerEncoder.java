@@ -44,6 +44,10 @@ public final class HttpServerEncoder implements Encoder {
                     yield CompressUtil.compressUsingDeflate(rawData, DeflateBinding.LIBDEFLATE_DEFAULT_LEVEL, allocator);
                 }
             }
+            case BROTLI -> {
+                // TODO add brotli implementation
+                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+            }
         };
         headers.put(HttpHeader.K_CONTENT_LENGTH, String.valueOf(data.byteSize()));
         headers.encode(writeBuffer);

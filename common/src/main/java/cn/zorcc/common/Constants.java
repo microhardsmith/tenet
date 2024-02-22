@@ -19,16 +19,20 @@ public final class Constants {
     /**
      *   dynamic library
      */
-    public static final String TENET = "tenet";
-    public static final String CRYPTO = "crypto";
-    public static final String SSL = "ssl";
-    public static final String DEFLATE = "deflate";
-    public static final String SQLITE = "sqlite";
-    public static final String DUCKDB = "duckdb";
+    public static final String LIB = "lib";
+    public static final String TENET = "libtenet";
+    public static final String CRYPTO = "libcrypto";
+    public static final String SSL = "libssl";
+    public static final String DEFLATE = "libdeflate";
+    public static final String BROTLI_COMMON = "libbrotlicommon";
+    public static final String BROTLI_ENC = "libbrotlienc";
+    public static final String BROTLI_DEC = "libbrotildec";
+    public static final String SQLITE = "libsqlite";
+    public static final String DUCKDB = "libduckdb";
+    public static final String ALLOCATOR = "allocator";
     public static final String TENET_LIBRARY_PATH = "TENET_LIBRARY_PATH";
     public static final String CA_FILE = "CA_FILE";
     public static final String CA_DIR = "CA_DIR";
-    public static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
     public static final String GET = "get";
     public static final String SET = "set";
     public static final String IS = "is";

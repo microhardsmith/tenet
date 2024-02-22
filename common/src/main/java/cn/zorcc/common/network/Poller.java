@@ -58,15 +58,7 @@ public final class Poller {
                 }
                 int state = Constants.RUNNING;
                 for( ; ; ) {
-                    int r = osNetworkLibrary.muxWait(mux, events, maxEvents, timeout);
-                    if(r < 0) {
-                        int errno = Math.abs(r);
-                        if(errno == osNetworkLibrary.interruptCode()) {
-                            return ;
-                        }else {
-                            throw new FrameworkException(ExceptionType.NETWORK, STR."Mux wait failed with errno : \{errno}");
-                        }
-                    }
+                    int r = osNetworkLibrary.waitMux(mux, events, maxEvents, timeout);
                     state = processTasks(nodeMap, state);
                     if(state == Constants.STOPPED) {
                         break ;

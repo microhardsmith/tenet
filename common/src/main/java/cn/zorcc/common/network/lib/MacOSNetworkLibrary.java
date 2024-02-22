@@ -200,7 +200,7 @@ public final class MacOSNetworkLibrary implements OsNetworkLibrary {
     }
 
     @Override
-    public int muxWait(Mux mux, MemorySegment events, int maxEvents, Timeout timeout) {
+    public int wait(Mux mux, MemorySegment events, int maxEvents, Timeout timeout) {
         return TenetMacosBinding.keventWait(mux.kqfd(), events, maxEvents, timeout.ptr());
     }
 

@@ -7,6 +7,7 @@ import cn.zorcc.common.util.ReflectUtil;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.lang.invoke.MethodHandles;
 import java.util.List;
 import java.util.function.Function;
 
@@ -27,8 +28,9 @@ public class RecordTest {
     private static final Alpha alpha = new Alpha(a1, a2, a3, a4, a5, a6, a7, a8);
 
     @Test
-    public void testNull() {
-        Function<Object[], Alpha> c = ReflectUtil.createRecordConstructor(Alpha.class, List.of(int.class, Integer.class, int[].class, Integer[].class, String.class, List.class, List.class, List.class));
+    public void testNull() throws IllegalAccessException {
+        MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(Alpha.class, MethodHandles.lookup());
+        Function<Object[], Alpha> c = ReflectUtil.createRecordConstructor(lookup, Alpha.class, List.of(int.class, Integer.class, int[].class, Integer[].class, String.class, List.class, List.class, List.class));
         Object[] objects = new Object[8];
         objects[0] = a1;
         Alpha a = c.apply(objects);
@@ -36,8 +38,9 @@ public class RecordTest {
     }
 
     @Test
-    public void testRecordConstructor() {
-        Function<Object[], Alpha> c = ReflectUtil.createRecordConstructor(Alpha.class, List.of(int.class, Integer.class, int[].class, Integer[].class, String.class, List.class, List.class, List.class));
+    public void testRecordConstructor() throws IllegalAccessException {
+        MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(Alpha.class, MethodHandles.lookup());
+        Function<Object[], Alpha> c = ReflectUtil.createRecordConstructor(lookup, Alpha.class, List.of(int.class, Integer.class, int[].class, Integer[].class, String.class, List.class, List.class, List.class));
         Object[] objects = new Object[8];
         objects[0] = a1;
         objects[1] = a2;
