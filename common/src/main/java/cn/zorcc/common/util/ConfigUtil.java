@@ -16,6 +16,12 @@ public final class ConfigUtil {
         throw new UnsupportedOperationException();
     }
 
+    public static void checkParam(int value, int min, int max) {
+        if(value <= min || value >= max) {
+            throw new FrameworkException(ExceptionType.CONFIG, STR."Configuration error : \{value}");
+        }
+    }
+
     /**
      *   Load json configuration file from resources folder, create a default one if not found
      */

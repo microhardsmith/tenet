@@ -6,9 +6,6 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.TestConstants;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.network.api.Decoder;
-import cn.zorcc.common.network.api.Encoder;
-import cn.zorcc.common.network.api.Handler;
 import cn.zorcc.common.structure.ReadBuffer;
 import cn.zorcc.common.structure.Wheel;
 import cn.zorcc.common.structure.WriteBuffer;
@@ -104,7 +101,7 @@ public class EchoTest {
         listenerConfig.setDecoderSupplier(EchoDecoder::new);
         listenerConfig.setHandlerSupplier(EchoServerHandler::new);
         if(usingSsl) {
-            listenerConfig.setProvider(SslProvider.newServerProvider(TestConstants.SELF_PUBLIC_KEY_FILE, TestConstants.SELF_PRIVATE_KEY_FILE));
+            listenerConfig.setProvider(Provider.newSslServerProvider(TestConstants.SELF_PUBLIC_KEY_FILE, TestConstants.SELF_PRIVATE_KEY_FILE));
         }else {
             listenerConfig.setProvider(Net.tcpProvider());
         }
@@ -113,13 +110,18 @@ public class EchoTest {
         netConfig.setPollerCount(1);
         netConfig.setWriterCount(1);
         Net net = new Net(netConfig);
-        net.addServerListener(listenerConfig);
+        net.serve(listenerConfig);
         return net;
     }
 
     private static class EchoClientHandler implements Handler {
         private final AtomicInteger counter = new AtomicInteger(0);
         private final AtomicReference<Runnable> task = new AtomicReference<>();
+
+        @Override
+        public void onFailed(Channel channel) {
+            log.info(STR."Client channel failed to connect, loc : \{channel.loc()}");
+        }
 
         @Override
         public void onConnected(Channel channel) {
@@ -158,6 +160,11 @@ public class EchoTest {
     }
 
     private static class EchoServerHandler implements Handler {
+        @Override
+        public void onFailed(Channel channel) {
+            log.info(STR."Detecting channel failed to connect from \{channel.loc()}");
+        }
+
         @Override
         public void onConnected(Channel channel) {
             log.info(STR."Detecting channel connected from : \{channel.loc()}");

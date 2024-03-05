@@ -4,7 +4,7 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.bindings.DeflateBinding;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.network.api.Encoder;
+import cn.zorcc.common.network.Encoder;
 import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.structure.WriteBuffer;
 import cn.zorcc.common.util.CompressUtil;

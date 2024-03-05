@@ -1,15 +1,20 @@
-package cn.zorcc.common.network.api;
-
-import cn.zorcc.common.network.Channel;
-import cn.zorcc.common.network.TaggedResult;
+package cn.zorcc.common.network;
 
 /**
  *   Handler represents the actual business logic that a channel should perform in Protocol phase
  */
 public interface Handler {
+
+    /**
+     *   If connection failed in Sentry phase, this function would be invoked
+     *   Note that you can't do much in this callback function, try sending message would be impossible (also no side effect)
+     *   It's suggested to only do logging in this function, or schedule a reconnect
+     */
+    void onFailed(Channel channel);
+
     /**
      *   After channel got connected, this function would be invoked
-     *   The definition of connected means the Sentry has been upgraded to Protocol
+     *   The definition of connected means the Sentry has been successfully upgraded to Protocol
      *   If a RuntimeException was thrown in this function, the channel would be immediately closed to guard the application
      */
     void onConnected(Channel channel);
@@ -31,7 +36,7 @@ public interface Handler {
     /**
      *   After connection was closed, this function would be invoked
      *   Note that you can't expect sending some data in this function, since the connection has already been closed
-     *   If connection failed in Sentry phase, this function would never be triggered (if there's an onConnected(), there is an onRemoved(), vice versa)
+     *   If connection failed in Sentry phase (in which case onFailed() would be invoked), this function would never be triggered (if there's an onConnected(), there is an onRemoved(), vice versa)
      */
     void onRemoved(Channel channel);
 }

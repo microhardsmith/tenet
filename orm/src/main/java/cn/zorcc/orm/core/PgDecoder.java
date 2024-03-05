@@ -4,7 +4,7 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.OldPair;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.network.api.Decoder;
+import cn.zorcc.common.network.Decoder;
 import cn.zorcc.common.postgre.PgRowDescription;
 import cn.zorcc.common.postgre.PgStatus;
 import cn.zorcc.common.structure.ReadBuffer;

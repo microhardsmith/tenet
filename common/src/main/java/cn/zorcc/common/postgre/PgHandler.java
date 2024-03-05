@@ -5,8 +5,8 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.Channel;
+import cn.zorcc.common.network.Handler;
 import cn.zorcc.common.network.TaggedResult;
-import cn.zorcc.common.network.api.Handler;
 import cn.zorcc.common.structure.ReadBuffer;
 import cn.zorcc.common.structure.WriteBuffer;
 import com.ongres.scram.client.ScramClient;
@@ -100,6 +100,11 @@ public final class PgHandler implements Handler {
 
     public PgHandler(PgConfig pgConfig) {
         this.pgConfig = pgConfig;
+    }
+
+    @Override
+    public void onFailed(Channel channel) {
+        log.debug(STR."Failed to establish postgresql connection with loc : \{channel.loc()}");
     }
 
     @Override

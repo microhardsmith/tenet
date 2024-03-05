@@ -6,9 +6,6 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.TestConstants;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.network.api.Decoder;
-import cn.zorcc.common.network.api.Encoder;
-import cn.zorcc.common.network.api.Handler;
 import cn.zorcc.common.structure.ReadBuffer;
 import cn.zorcc.common.structure.Wheel;
 import cn.zorcc.common.structure.WriteBuffer;
@@ -101,7 +98,7 @@ public class TagTest {
         listenerConfig.setDecoderSupplier(TagDecoder::new);
         listenerConfig.setHandlerSupplier(TagServerHandler::new);
         if(usingSsl) {
-            listenerConfig.setProvider(SslProvider.newServerProvider(TestConstants.SELF_PUBLIC_KEY_FILE, TestConstants.SELF_PRIVATE_KEY_FILE));
+            listenerConfig.setProvider(Provider.newSslServerProvider(TestConstants.SELF_PUBLIC_KEY_FILE, TestConstants.SELF_PRIVATE_KEY_FILE));
         }else {
             listenerConfig.setProvider(Net.tcpProvider());
         }
@@ -110,17 +107,28 @@ public class TagTest {
         netConfig.setPollerCount(1);
         netConfig.setWriterCount(1);
         Net net = new Net(netConfig);
-        net.addServerListener(listenerConfig);
+        net.serve(listenerConfig);
         return net;
     }
 
     private static class TagClientHandler implements Handler {
         private final AtomicInteger counter = new AtomicInteger(0);
         private final AtomicReference<Runnable> task = new AtomicReference<>();
+
+        @Override
+        public void onFailed(Channel channel) {
+            log.info(STR."Client channel failed to connected, loc : \{channel.loc()}");
+        }
+
         @Override
         public void onConnected(Channel channel) {
             log.info(STR."Client channel connected, loc : \{channel.loc()}");
-            task.set(Wheel.wheel().addPeriodicJob(() -> channel.sendTaggedMsg(tag -> new Msg(tag, STR."Hello : \{counter.getAndIncrement()}")), Duration.ZERO, Duration.ofSeconds(1)));
+            task.set(Wheel.wheel().addPeriodicJob(() -> {
+                Object result = channel.sendTaggedMsg(tag -> new Msg(tag, STR."Hello : \{counter.getAndIncrement()}"));
+                if(result instanceof String s) {
+                    log.info(STR."Client receiving msg : \{s}");
+                }
+            }, Duration.ZERO, Duration.ofSeconds(1)));
             Wheel.wheel().addJob(() -> channel.shutdown(Duration.ofSeconds(5)), Duration.ofSeconds(30));
         }
 
@@ -147,6 +155,12 @@ public class TagTest {
     }
 
     private static class TagServerHandler implements Handler {
+
+        @Override
+        public void onFailed(Channel channel) {
+            log.info(STR."Detecting channel failed from : \{channel.loc()}");
+        }
+
         @Override
         public void onConnected(Channel channel) {
             log.info(STR."Detecting channel connected from : \{channel.loc()}");

@@ -32,7 +32,7 @@ public record ReadBuffer(
     }
 
     public ReadBuffer(MemorySegment segment) {
-        this(segment, segment.byteSize(), new LongHolder());
+        this(segment, segment.byteSize(), new LongHolder(0L));
     }
 
 
@@ -41,7 +41,7 @@ public record ReadBuffer(
     }
 
     public void setReadIndex(long index) {
-        if(index < 0 || index > size) {
+        if(index < 0L || index > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "ReadIndex out of bound");
         }
         indexHolder.setValue(index);

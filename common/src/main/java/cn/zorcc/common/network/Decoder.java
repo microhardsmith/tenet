@@ -1,4 +1,4 @@
-package cn.zorcc.common.network.api;
+package cn.zorcc.common.network;
 
 import cn.zorcc.common.structure.ReadBuffer;
 

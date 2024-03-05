@@ -7,6 +7,7 @@ import cn.zorcc.common.exception.FrameworkException;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
+import java.lang.invoke.VarHandle;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -43,6 +44,13 @@ public final class NativeUtil {
     private static final MethodHandle mallocHandle;
     private static final MethodHandle reallocHandle;
     private static final MethodHandle freeHandle;
+    private static final VarHandle BYTE_HANDLE = ValueLayout.JAVA_BYTE.varHandle();
+    private static final VarHandle SHORT_HANDLE = ValueLayout.JAVA_SHORT_UNALIGNED.varHandle();
+    private static final VarHandle INT_HANDLE = ValueLayout.JAVA_INT_UNALIGNED.varHandle();
+    private static final VarHandle LONG_HANDLE = ValueLayout.JAVA_LONG_UNALIGNED.varHandle();
+    private static final VarHandle FLOAT_HANDLE = ValueLayout.JAVA_FLOAT_UNALIGNED.varHandle();
+    private static final VarHandle DOUBLE_HANDLE = ValueLayout.JAVA_DOUBLE_UNALIGNED.varHandle();
+    private static final VarHandle ADDRESS_HANDLE = ValueLayout.ADDRESS_UNALIGNED.varHandle();
 
     static {
         String allocatorLibrary = System.getProperty(Constants.ALLOCATOR);
@@ -244,5 +252,61 @@ public final class NativeUtil {
             }
         }
         return true;
+    }
+
+    public static byte getByte(MemorySegment m, long offset) {
+        return (byte) BYTE_HANDLE.get(m, offset);
+    }
+
+    public static void setByte(MemorySegment m, long offset, byte b) {
+        BYTE_HANDLE.set(m, offset, b);
+    }
+
+    public static short getShort(MemorySegment m, long offset) {
+        return (short) SHORT_HANDLE.get(m, offset);
+    }
+
+    public static void setShort(MemorySegment m, long offset, short s) {
+        SHORT_HANDLE.set(m, offset, s);
+    }
+
+    public static int getInt(MemorySegment m, long offset) {
+        return (int) INT_HANDLE.get(m, offset);
+    }
+
+    public static void setInt(MemorySegment m, long offset, int i) {
+        INT_HANDLE.set(m, offset, i);
+    }
+
+    public static long getLong(MemorySegment m, long offset) {
+        return (long) LONG_HANDLE.get(m, offset);
+    }
+
+    public static void setLong(MemorySegment m, long offset, long l) {
+        LONG_HANDLE.set(m, offset, l);
+    }
+
+    public static float getFloat(MemorySegment m, long offset) {
+        return (float) FLOAT_HANDLE.get(m, offset);
+    }
+
+    public static void setFloat(MemorySegment m, long offset, float f) {
+        FLOAT_HANDLE.set(m, offset, f);
+    }
+
+    public static double getDouble(MemorySegment m, long offset) {
+        return (double) DOUBLE_HANDLE.get(m, offset);
+    }
+
+    public static void setDouble(MemorySegment m, long offset, double d) {
+        DOUBLE_HANDLE.set(m, offset, d);
+    }
+
+    public static MemorySegment getAddress(MemorySegment m, long offset) {
+        return (MemorySegment) ADDRESS_HANDLE.get(m, offset);
+    }
+
+    public void setAddress(MemorySegment m, long offset, MemorySegment address) {
+        ADDRESS_HANDLE.set(m, offset, address);
     }
 }

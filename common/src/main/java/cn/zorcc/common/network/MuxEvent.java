@@ -5,6 +5,6 @@ package cn.zorcc.common.network;
  */
 public record MuxEvent(
         int socket,
-        long event
+        int event
 ) {
 }

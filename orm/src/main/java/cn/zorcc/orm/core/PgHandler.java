@@ -2,8 +2,8 @@ package cn.zorcc.orm.core;
 
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.Channel;
+import cn.zorcc.common.network.Handler;
 import cn.zorcc.common.network.TaggedResult;
-import cn.zorcc.common.network.api.Handler;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedTransferQueue;
@@ -16,6 +16,11 @@ public class PgHandler implements Handler {
     private final BlockingQueue<Object> msgQueue = new LinkedTransferQueue<>();
     public PgHandler(PgManager pgManager) {
         this.pgManager = pgManager;
+    }
+
+    @Override
+    public void onFailed(Channel channel) {
+
     }
 
     @Override

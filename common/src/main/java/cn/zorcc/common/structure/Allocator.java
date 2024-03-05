@@ -6,6 +6,7 @@ import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
+import java.util.Arrays;
 
 /**
  *   Allocator is a substitute for Arena, using malloc, realloc and free, which avoids internal checking and thus having much better performance
@@ -34,16 +35,19 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
     @Override
     void close();
 
-    record HeapAllocator() implements Allocator {
+    /**
+     *   Allocator for heap memory usage, Allocator.HEAP should be used instead of creating a new one
+     */
+    final class HeapAllocator implements Allocator {
 
         @Override
         public MemorySegment allocate(long byteSize, long byteAlignment) {
             int size = Math.toIntExact(byteSize);
             MemorySegment memorySegment = switch (Math.toIntExact(byteAlignment)) {
-                case 1 -> MemorySegment.ofArray(new byte[size]);
-                case 2 -> MemorySegment.ofArray(new short[calculateSize(byteSize, 1)]);
-                case 4 -> MemorySegment.ofArray(new int[calculateSize(byteSize, 2)]);
-                case 8 -> MemorySegment.ofArray(new long[calculateSize(byteSize, 3)]);
+                case Byte.BYTES -> MemorySegment.ofArray(new byte[size]);
+                case Short.BYTES -> MemorySegment.ofArray(new short[calculateSize(byteSize, 1)]);
+                case Integer.BYTES -> MemorySegment.ofArray(new int[calculateSize(byteSize, 2)]);
+                case Long.BYTES -> MemorySegment.ofArray(new long[calculateSize(byteSize, 3)]);
                 default -> throw new FrameworkException(ExceptionType.NATIVE, STR."Unexpected alignment : \{byteAlignment}");
             };
             return memorySegment.byteSize() == byteSize ? memorySegment.asSlice(0L, byteSize) : memorySegment;
@@ -63,13 +67,10 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
     /**
      *   DirectAllocator using malloc and free for native memory allocation, each allocation were recorded into the LongList
      */
-    record DirectAllocator(
-            LongList list
-    ) implements Allocator {
-
-        DirectAllocator() {
-            this(new LongList());
-        }
+    final class DirectAllocator implements Allocator {
+        private static final int SIZE = 8;
+        private long[] pointers;
+        private int index = 0;
 
         @Override
         public MemorySegment allocate(long byteSize, long byteAlignment) {
@@ -79,7 +80,17 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
                     if(NativeUtil.checkNullPointer(ptr)) {
                         throw new OutOfMemoryError();
                     }
-                    list.add(ptr.address());
+                    if(pointers == null) {
+                        pointers = new long[SIZE];
+                    }
+                    if(index == pointers.length) {
+                        int newCapacity = pointers.length + pointers.length >> 1;
+                        if(newCapacity < 0) {
+                            throw new FrameworkException(ExceptionType.CONTEXT, "Size overflow");
+                        }
+                        pointers = Arrays.copyOf(pointers, newCapacity);
+                    }
+                    pointers[index++] = ptr.address();
                     return ptr;
                 }
                 default -> throw new FrameworkException(ExceptionType.NATIVE, STR."Unexpected alignment : \{byteAlignment}");
@@ -88,7 +99,10 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
 
         @Override
         public void close() {
-            list.forEach(address -> NativeUtil.free(MemorySegment.ofAddress(address)));
+            final int len = index;
+            for(int i = 0; i < len; i++) {
+                NativeUtil.free(MemorySegment.ofAddress(pointers[i]));
+            }
         }
     }
 
@@ -102,7 +116,7 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
             LongHolder indexHolder
     ) implements Allocator {
         SlicingAllocator(MemorySegment memorySegment) {
-            this(memorySegment, new LongHolder());
+            this(memorySegment, new LongHolder(0L));
         }
 
         @Override

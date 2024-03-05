@@ -1,7 +1,5 @@
 package cn.zorcc.common.jmh;
 
-import cn.zorcc.common.Constants;
-import cn.zorcc.common.network.Socket;
 import cn.zorcc.common.structure.IntMap;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Param;
@@ -9,39 +7,93 @@ import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.runner.RunnerException;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.TreeMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class IntMapTest extends JmhTest {
-    private static final Object o = new Object();
-    @Param({"5", "20", "100", "1000", "10000"})
+    private static final int LENGTH = 64;
+    @Param({"10", "1000", "100000"})
     private int size;
-
-    @Benchmark
-    public void testSocketMap(Blackhole bh) {
-        Map<Socket, Object> m = new HashMap<>(Constants.KB);
-        for(int i = 0; i < size; i++) {
-            Socket socket = new Socket(i);
-            m.put(socket, o);
-            bh.consume(m.get(socket));
+    private static final Object t = new Object();
+    private static final Map<Integer, Object> m1 = new LinkedHashMap<>(LENGTH, Float.MAX_VALUE);
+    private static final IntMap<Object> m2 = IntMap.newLinkedMap(LENGTH);
+    private static final IntMap<Object> m3 = IntMap.newTreeMap(LENGTH);
+    private static final Map<Integer, Object> m4 = new TreeMap<>();
+    static {
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        for(int i = 0; i < 10000; i++) {
+            int o = random.nextInt();
+            m1.put(i, o);
+            m2.put(i, o);
+            m3.put(i, o);
+            m4.put(i, o);
         }
     }
 
     @Benchmark
-    public void testHashMap(Blackhole bh) {
-        Map<Integer, Object> m = new HashMap<>(Constants.KB);
+    public void testGetHashMap(Blackhole bh) {
         for(int i = 0; i < size; i++) {
-            m.put(i, o);
-            bh.consume(m.get(i));
+            bh.consume(m1.get(i));
         }
     }
 
     @Benchmark
-    public void testIntMap(Blackhole bh) {
-        IntMap<Object> m = new IntMap<>(Constants.KB);
+    public void testGetILinkedMap(Blackhole bh) {
         for(int i = 0; i < size; i++) {
-            m.put(i, o);
-            bh.consume(m.get(i));
+            bh.consume(m2.get(i));
         }
+    }
+
+    @Benchmark
+    public void testGetITreeMap(Blackhole bh) {
+        for(int i = 0; i < size; i++) {
+            bh.consume(m3.get(i));
+        }
+    }
+
+    @Benchmark
+    public void testGetTreeMap(Blackhole bh) {
+        for(int i = 0; i < size; i++) {
+            bh.consume(m4.get(i));
+        }
+    }
+
+    @Benchmark
+    public void testPutHashMap(Blackhole bh) {
+        HashMap<Object, Object> m = new HashMap<>(LENGTH, Float.MAX_VALUE);
+        for(int i = 0; i < size; i++) {
+            m.put(i, t);
+        }
+        bh.consume(m);
+    }
+
+    @Benchmark
+    public void testPutILinkedMap(Blackhole bh) {
+        IntMap<Object> m = IntMap.newLinkedMap(LENGTH);
+        for(int i = 0; i < size; i++) {
+            m.put(i, t);
+        }
+        bh.consume(m);
+    }
+
+    @Benchmark
+    public void testPutITreeMap(Blackhole bh) {
+        IntMap<Object> m = IntMap.newTreeMap(LENGTH);
+        for(int i = 0; i < size; i++) {
+            m.put(i, t);
+        }
+        bh.consume(m);
+    }
+
+    @Benchmark
+    public void testPutTreeMap(Blackhole bh) {
+        TreeMap<Integer, Object> m = new TreeMap<>();
+        for(int i = 0; i < size; i++) {
+            m.put(i, t);
+        }
+        bh.consume(m);
     }
 
     public static void main(String[] args) throws RunnerException {

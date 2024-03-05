@@ -44,7 +44,7 @@ public final class LoggerConsumer extends AbstractLifeCycle {
                     }
                 }, Duration.ZERO, Duration.ofMillis(logConfig.getFlushInterval()));
                 for( ; ; ){
-                    final LogEvent logEvent = queue.take();
+                    LogEvent logEvent = queue.take();
                     handlers.forEach(consumer -> consumer.accept(logEvent));
                     if(logEvent == LogEvent.SHUTDOWN_EVENT) {
                         break;

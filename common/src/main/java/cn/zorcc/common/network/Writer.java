@@ -13,33 +13,33 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public final class Writer {
+public record Writer(
+        BlockingQueue<WriterTask> writerQueue,
+        Thread writerThread
+) {
     private static final Logger log = new Logger(Writer.class);
     private static final AtomicInteger counter = new AtomicInteger(0);
-    private final BlockingQueue<WriterTask> queue = new LinkedTransferQueue<>();
-    private final Thread writerThread;
-    public Writer(NetConfig config) {
-        this.writerThread = createWriterThread(config);
+
+    public static Writer newWriter(NetConfig config) {
+        BlockingQueue<WriterTask> queue = new LinkedTransferQueue<>();
+        Thread writerThread = createWriterThread(config, queue);
+        return new Writer(queue, writerThread);
     }
 
     public void submit(WriterTask writerTask) {
-        if(writerTask == null || !queue.offer(writerTask)) {
+        if(writerTask == null || !writerQueue.offer(writerTask)) {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
-    public Thread thread() {
-        return writerThread;
-    }
-
-    private Thread createWriterThread(NetConfig config) {
+    private static Thread createWriterThread(NetConfig config, BlockingQueue<WriterTask> queue) {
         int sequence = counter.getAndIncrement();
         return Thread.ofPlatform().name(STR."writer-\{sequence}").unstarted(() -> {
             log.info(STR."Initializing writer thread, sequence : \{sequence}");
             try(Allocator allocator = Allocator.newDirectAllocator()){
-                IntMap<WriterNode> nodeMap = new IntMap<>(config.getWriterMapSize());
-                MemorySegment reservedSegment = allocator.allocate(ValueLayout.JAVA_BYTE, config.getWriterWriteBufferSize());
-                processWriterTasks(nodeMap, reservedSegment);
+                IntMap<WriterNode> nodeMap = IntMap.newTreeMap(config.getWriterMapSize());
+                MemorySegment reservedSegment = allocator.allocate(ValueLayout.JAVA_BYTE, config.getWriterBufferSize());
+                processWriterTasks(nodeMap, queue, reservedSegment);
             }catch (InterruptedException i) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Writer thread interrupted", i);
             }finally {
@@ -48,7 +48,7 @@ public final class Writer {
         });
     }
 
-    private void processWriterTasks(IntMap<WriterNode> nodeMap, MemorySegment reserved) throws InterruptedException {
+    private static void processWriterTasks(IntMap<WriterNode> nodeMap, BlockingQueue<WriterTask> queue, MemorySegment reserved) throws InterruptedException {
         int state = Constants.RUNNING;
         for( ; ; ) {
             WriterTask writerTask = queue.take();
@@ -80,9 +80,9 @@ public final class Writer {
 
     private static void handleInitiateMsg(IntMap<WriterNode> nodeMap, WriterTask writerTask) {
         Object msg = writerTask.msg();
-        if(msg instanceof ProtoAndState protoAndState) {
+        if(msg instanceof Protocol protocol) {
             Channel channel = writerTask.channel();
-            WriterNode writerNode = new ProtocolWriterNode(nodeMap, channel, protoAndState.protocol(), protoAndState.state());
+            WriterNode writerNode = new WriterNode.ProtocolWriterNode(nodeMap, channel, protocol);
             nodeMap.put(channel.socket().intValue(), writerNode);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -113,7 +113,7 @@ public final class Writer {
         }
     }
 
-    private void handleShutdown(IntMap<WriterNode> nodeMap, WriterTask writerTask) {
+    private static void handleShutdown(IntMap<WriterNode> nodeMap, WriterTask writerTask) {
         Channel channel = writerTask.channel();
         WriterNode writerNode = nodeMap.get(channel.socket().intValue());
         if(writerNode != null) {
@@ -121,7 +121,7 @@ public final class Writer {
         }
     }
 
-    private void handleClose(IntMap<WriterNode> nodeMap, WriterTask writerTask) {
+    private static void handleClose(IntMap<WriterNode> nodeMap, WriterTask writerTask) {
         Channel channel = writerTask.channel();
         WriterNode writerNode = nodeMap.get(channel.socket().intValue());
         if(writerNode != null) {

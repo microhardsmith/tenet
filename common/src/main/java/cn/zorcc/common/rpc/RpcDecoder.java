@@ -1,6 +1,6 @@
 package cn.zorcc.common.rpc;
 
-import cn.zorcc.common.network.api.Decoder;
+import cn.zorcc.common.network.Decoder;
 import cn.zorcc.common.structure.ReadBuffer;
 
 import java.util.List;

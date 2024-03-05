@@ -3,7 +3,7 @@ package cn.zorcc.orm.core;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.network.api.Encoder;
+import cn.zorcc.common.network.Encoder;
 import cn.zorcc.common.structure.WriteBuffer;
 import cn.zorcc.orm.PgConfig;
 import cn.zorcc.orm.frontend.*;

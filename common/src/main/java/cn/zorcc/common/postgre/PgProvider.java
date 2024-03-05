@@ -5,8 +5,8 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.bindings.SslBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Channel;
-import cn.zorcc.common.network.api.Provider;
-import cn.zorcc.common.network.api.Sentry;
+import cn.zorcc.common.network.Provider;
+import cn.zorcc.common.network.Sentry;
 import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.common.util.SslUtil;
 

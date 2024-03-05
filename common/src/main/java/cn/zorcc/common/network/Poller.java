@@ -4,54 +4,50 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.network.api.Sentry;
-import cn.zorcc.common.network.lib.OsNetworkLibrary;
 import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.structure.IntMap;
-import org.jctools.queues.atomic.MpscUnboundedAtomicArrayQueue;
+import cn.zorcc.common.structure.TaskQueue;
 
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.time.Duration;
-import java.util.Queue;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public final class Poller {
+public record Poller(
+        Mux mux,
+        TaskQueue<PollerTask> pollerQueue,
+        Thread pollerThread
+) {
     private static final Logger log = new Logger(Poller.class);
     private static final AtomicInteger counter = new AtomicInteger(0);
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
-    private final Mux mux = osNetworkLibrary.createMux();
-    private final Thread pollerThread;
-    private final Queue<PollerTask> readerTaskQueue = new MpscUnboundedAtomicArrayQueue<>(Constants.KB);
-    public Poller(NetConfig config) {
-        this.pollerThread = createPollerThread(config);
-    }
 
-    public Mux mux() {
-        return mux;
-    }
-
-    public Thread thread() {
-        return pollerThread;
+    public static Poller newPoller(NetConfig config) {
+        Mux mux = osNetworkLibrary.createMux();
+        TaskQueue<PollerTask> pollerQueue = new TaskQueue<>(config.getPollerQueueSize());
+        Thread pollerThread = createPollerThread(mux, pollerQueue, config);
+        return new Poller(mux, pollerQueue, pollerThread);
     }
 
     public void submit(PollerTask pollerTask) {
-        if (pollerTask == null || !readerTaskQueue.offer(pollerTask)) {
+        if (pollerTask == null) {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
+        pollerQueue.offer(pollerTask);
     }
 
-    private Thread createPollerThread(NetConfig config) {
+    private static Thread createPollerThread(Mux mux, TaskQueue<PollerTask> pollerQueue, NetConfig config) {
         int sequence = counter.getAndIncrement();
         return Thread.ofPlatform().name(STR."poller-\{sequence}").unstarted(() -> {
             log.info(STR."Initializing poller thread, sequence : \{sequence}");
-            IntMap<PollerNode> nodeMap = new IntMap<>(config.getPollerMapSize());
+            IntMap<PollerNode> nodeMap = IntMap.newTreeMap(config.getPollerMapSize());
             try(Allocator allocator = Allocator.newDirectAllocator()) {
                 Timeout timeout = Timeout.of(allocator, config.getPollerMuxTimeout());
                 int maxEvents = config.getPollerMaxEvents();
-                int readBufferSize = config.getPollerReadBufferSize();
-                MemorySegment events = allocator.allocate(MemoryLayout.sequenceLayout(maxEvents, osNetworkLibrary.eventLayout()));
+                int readBufferSize = config.getPollerBufferSize();
+                // Note that different operating system using different alignment for their event's struct layout, however, malloc just makes it always align with 8 bytes, if not, let's force it
+                MemorySegment events = allocator.allocate(MemoryLayout.sequenceLayout(maxEvents, osNetworkLibrary.eventLayout()), Long.SIZE);
                 MemorySegment[] reservedArray = new MemorySegment[maxEvents];
                 for(int i = 0; i < reservedArray.length; i++) {
                     reservedArray[i] = allocator.allocate(ValueLayout.JAVA_BYTE, readBufferSize);
@@ -59,7 +55,7 @@ public final class Poller {
                 int state = Constants.RUNNING;
                 for( ; ; ) {
                     int r = osNetworkLibrary.waitMux(mux, events, maxEvents, timeout);
-                    state = processTasks(nodeMap, state);
+                    state = processTasks(pollerQueue, nodeMap, state);
                     if(state == Constants.STOPPED) {
                         break ;
                     }
@@ -86,12 +82,8 @@ public final class Poller {
         });
     }
 
-    private int processTasks(IntMap<PollerNode> nodeMap, int currentState) {
-        for( ; ; ) {
-            PollerTask pollerTask = readerTaskQueue.poll();
-            if(pollerTask == null) {
-                return currentState;
-            }
+    private static int processTasks(TaskQueue<PollerTask> pollerQueue, IntMap<PollerNode> nodeMap, int currentState) {
+        for (PollerTask pollerTask : pollerQueue.elements()) {
             switch (pollerTask.type()) {
                 case BIND -> handleBindMsg(nodeMap, pollerTask);
                 case UNBIND -> handleUnbindMsg(nodeMap, pollerTask);
@@ -117,27 +109,27 @@ public final class Poller {
                 }
             }
         }
+        return currentState;
     }
 
-    private void handleBindMsg(IntMap<PollerNode> nodeMap, PollerTask pollerTask) {
+    private static void handleBindMsg(IntMap<PollerNode> nodeMap, PollerTask pollerTask) {
         Channel channel = pollerTask.channel();
-        SentryPollerNode sentryPollerNode = switch (pollerTask.msg()) {
-            case Sentry sentry -> new SentryPollerNode(nodeMap, channel, sentry, null);
-            case SentryWithCallback sentryWithCallback-> new SentryPollerNode(nodeMap, channel, sentryWithCallback.sentry(), sentryWithCallback.runnable());
-            default -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-        };
-        nodeMap.put(channel.socket().intValue(), sentryPollerNode);
+        if(pollerTask.msg() instanceof Sentry sentry) {
+            nodeMap.put(channel.socket().intValue(), new PollerNode.SentryPollerNode(nodeMap, channel, sentry));
+        }else {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        }
     }
 
-    private void handleUnbindMsg(IntMap<PollerNode> nodeMap, PollerTask pollerTask) {
+    private static void handleUnbindMsg(IntMap<PollerNode> nodeMap, PollerTask pollerTask) {
         Channel channel = pollerTask.channel();
         PollerNode pollerNode = nodeMap.get(channel.socket().intValue());
-        if(pollerNode instanceof SentryPollerNode sentryPollerNode) {
+        if(pollerNode instanceof PollerNode.SentryPollerNode sentryPollerNode) {
             sentryPollerNode.onClose(pollerTask);
         }
     }
 
-    private void handleRegisterMsg(IntMap<PollerNode> nodeMap, PollerTask pollerTask) {
+    private static void handleRegisterMsg(IntMap<PollerNode> nodeMap, PollerTask pollerTask) {
         Channel channel = pollerTask.channel();
         PollerNode pollerNode = nodeMap.get(channel.socket().intValue());
         if(pollerNode != null) {
@@ -145,7 +137,7 @@ public final class Poller {
         }
     }
 
-    private void handleUnregisterMsg(IntMap<PollerNode> nodeMap, PollerTask pollerTask) {
+    private static void handleUnregisterMsg(IntMap<PollerNode> nodeMap, PollerTask pollerTask) {
         Channel channel = pollerTask.channel();
         PollerNode pollerNode = nodeMap.get(channel.socket().intValue());
         if(pollerNode != null) {
@@ -153,7 +145,7 @@ public final class Poller {
         }
     }
 
-    private void handleCloseMsg(IntMap<PollerNode> nodeMap, PollerTask pollerTask) {
+    private static void handleCloseMsg(IntMap<PollerNode> nodeMap, PollerTask pollerTask) {
         Channel channel = pollerTask.channel();
         PollerNode pollerNode = nodeMap.get(channel.socket().intValue());
         if(pollerNode != null) {

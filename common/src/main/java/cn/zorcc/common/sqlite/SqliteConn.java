@@ -200,9 +200,9 @@ public final class SqliteConn implements AutoCloseable {
     public void exec(MemorySegment sql) {
         int r = SqliteBinding.exec(sqlite, sql, ppErr);
         if(r != 0) {
-            String actualSql = sql.getString(0L);
+            String actualSql = sql.getString(0L, StandardCharsets.UTF_8);
             MemorySegment pErr = ppErr.get(ValueLayout.ADDRESS, 0).reinterpret(Long.MAX_VALUE);
-            String err = pErr.getString(0L);
+            String err = pErr.getString(0L, StandardCharsets.UTF_8);
             SqliteBinding.free(pErr);
             throw new FrameworkException(ExceptionType.SQLITE, STR."Unable to exec sql : [\{actualSql}], err : [\{err}]");
         }

@@ -2,44 +2,42 @@ package cn.zorcc.common.postgre;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
-import cn.zorcc.common.State;
 import cn.zorcc.common.bindings.SslBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Channel;
-import cn.zorcc.common.network.SslProtocol;
-import cn.zorcc.common.network.TcpProtocol;
-import cn.zorcc.common.network.api.Protocol;
-import cn.zorcc.common.network.api.Sentry;
-import cn.zorcc.common.network.lib.OsNetworkLibrary;
+import cn.zorcc.common.network.Protocol;
+import cn.zorcc.common.network.Sentry;
 import cn.zorcc.common.structure.Allocator;
-import cn.zorcc.common.structure.Holder;
+import cn.zorcc.common.structure.IntHolder;
 import cn.zorcc.common.structure.ReadBuffer;
 import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
-public record PgSentry(
-        Channel channel,
-        MemorySegment sslCtx,
-        PgConfig pgConfig,
-        State sslState,
-        Holder<MemorySegment> sslHolder
-) implements Sentry {
-    private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
-    private static final long WAITING_SSL = 1L;
-    private static final long WANT_READ = 1L << 1;
-    private static final long WANT_WRITE = 1L << 2;
+public final class PgSentry implements Sentry {
+    private static final int WAITING_SSL = 1;
+    private static final int WANT_READ = 1 << 1;
+    private static final int WANT_WRITE = 1 << 2;
+    private final Channel channel;
+    private final MemorySegment sslCtx;
+    private final PgConfig pgConfig;
+    private final IntHolder sslState = new IntHolder(0);
+    private MemorySegment ssl = MemorySegment.NULL;
     public PgSentry(Channel channel, MemorySegment sslCtx, PgConfig pgConfig) {
-        this(channel, sslCtx, pgConfig, new State(0L), new Holder<>());
+        this.channel = channel;
+        this.sslCtx = sslCtx;
+        this.pgConfig = pgConfig;
     }
 
     @Override
-    public long onReadableEvent(MemorySegment reserved, long len) {
-        if(sslState.unregister(WAITING_SSL)) {
+    public int onReadableEvent(MemorySegment reserved, long len) {
+        int current = sslState.getValue();
+        if((current & WAITING_SSL) != 0) {
+            sslState.setValue(current & ~(WAITING_SSL));
             byte b = new ReadBuffer(reserved).readByte();
             if(b == Constants.PG_SSL_OK) {
-                sslHolder.setValue(SslBinding.sslNew(sslCtx));
+                ssl = SslBinding.sslNew(sslCtx);
                 return handshake();
             }else if(b == Constants.PG_SSL_DISABLE) {
                 if(pgConfig.getSslMode().equals(Constants.PG_SSL_VERIFY_CA) || pgConfig.getSslMode().equals(Constants.PG_SSL_VERIFY_FULL)) {
@@ -50,7 +48,8 @@ public record PgSentry(
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
-        }else if(sslState.unregister(WANT_READ)) {
+        }else if((current & WANT_READ) != 0) {
+            sslState.setValue(current & (~WANT_READ));
             return handshake();
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -58,8 +57,10 @@ public record PgSentry(
     }
 
     @Override
-    public long onWritableEvent() {
-        if(sslState.unregister(WANT_WRITE)) {
+    public int onWritableEvent() {
+        int current = sslState.getValue();
+        if((current & WANT_WRITE) != 0) {
+            sslState.setValue(current & (~WANT_WRITE));
             return handshake();
         }else {
             int errOpt = osNetworkLibrary.getErrOpt(channel.socket());
@@ -72,7 +73,7 @@ public record PgSentry(
             long len = segment.byteSize();
             long sent = osNetworkLibrary.send(channel.socket(), segment, len);
             if(sent == len) {
-                sslState.register(WAITING_SSL);
+                sslState.setValue(current | WAITING_SSL);
                 return Constants.NET_IGNORED;
             }else if(sent < len) {
                 throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to send SSL request, only \{sent} bytes got written, consider this connection unfunctionally");
@@ -86,18 +87,16 @@ public record PgSentry(
 
     @Override
     public Protocol toProtocol() {
-        MemorySegment ssl = sslHolder.getValue();
-        if(ssl != null) {
-            return new SslProtocol(channel, ssl, sslState);
+        if(ssl != MemorySegment.NULL) {
+            return Protocol.newSslProtocol(channel, ssl, sslState);
         }else {
-            return new TcpProtocol(channel);
+            return Protocol.newTcpProtocol(channel);
         }
     }
 
     @Override
     public void doClose() {
-        MemorySegment ssl = sslHolder.getValue();
-        if(ssl != null) {
+        if(ssl != MemorySegment.NULL) {
             SslBinding.sslFree(ssl);
         }
         int r = osNetworkLibrary.closeSocket(channel.socket());
@@ -106,8 +105,7 @@ public record PgSentry(
         }
     }
 
-    private long handshake() {
-        MemorySegment ssl = sslHolder.getValue();
+    private int handshake() {
         int r = SslBinding.sslConnect(ssl);
         if(r == 1) {
             verifyCertificate();
@@ -115,10 +113,10 @@ public record PgSentry(
         }else {
             int err = SslBinding.sslGetErr(ssl, r);
             if(err == Constants.SSL_ERROR_WANT_READ) {
-                sslState.register(WANT_READ);
+                sslState.setValue(sslState.getValue() | WANT_READ);
                 return Constants.NET_R;
             }else if(err == Constants.SSL_ERROR_WANT_WRITE) {
-                sslState.register(WANT_WRITE);
+                sslState.setValue(sslState.getValue() | WANT_WRITE);
                 return Constants.NET_W;
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform SSL_handshake(), err code : \{err}");
@@ -128,7 +126,6 @@ public record PgSentry(
 
     private void verifyCertificate() {
         if(!pgConfig.getSslMode().equals(Constants.PG_SSL_PREFER)) {
-            MemorySegment ssl = sslHolder.getValue();
             MemorySegment x509 = SslBinding.sslGetPeerCertificate(ssl);
             if(NativeUtil.checkNullPointer(x509)) {
                 throw new FrameworkException(ExceptionType.NETWORK, "Postgresql server certificate not provided");

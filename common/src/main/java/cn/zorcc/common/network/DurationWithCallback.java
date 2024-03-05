@@ -15,8 +15,4 @@ public record DurationWithCallback(
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
-
-    public DurationWithCallback(Duration duration) {
-        this(duration, null);
-    }
 }

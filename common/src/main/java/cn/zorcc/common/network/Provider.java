@@ -4,8 +4,6 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.bindings.SslBinding;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.network.api.Provider;
-import cn.zorcc.common.network.api.Sentry;
 import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.common.util.SslUtil;
@@ -13,12 +11,35 @@ import cn.zorcc.common.util.SslUtil;
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 
-public record SslProvider(
-        boolean clientSide,
-        MemorySegment ctx
-) implements Provider {
+/**
+ *   Sentry factory with customized deallocated procedure provided
+ */
+@FunctionalInterface
+public interface Provider {
+    /**
+     *   Return a newly created sentry instance
+     */
+    Sentry create(Channel channel);
 
-    public static SslProvider newClientProvider(String caFiles, String caPaths) {
+    /**
+     *   Release current provider's resources, implementation could choose to override it
+     */
+    default void close() {
+
+    }
+
+    static Provider newTcpProvider() {
+        return new TcpProvider();
+    }
+
+    record TcpProvider() implements Provider {
+        @Override
+        public Sentry create(Channel channel) {
+            return Sentry.newTcpSentry(channel);
+        }
+    }
+
+    static SslProvider newSslClientProvider(String caFiles, String caPaths) {
         MemorySegment ctx = createCtx();
         try (Allocator allocator = Allocator.newDirectAllocator()) {
             if(caFiles != null && !caFiles.isBlank()) {
@@ -45,7 +66,7 @@ public record SslProvider(
         return new SslProvider(true, ctx);
     }
 
-    public static SslProvider newServerProvider(String publicKeyFile, String privateKeyFile) {
+    static SslProvider newSslServerProvider(String publicKeyFile, String privateKeyFile) {
         MemorySegment ctx = createCtx();
         try(Allocator allocator = Allocator.newDirectAllocator()) {
             MemorySegment publicKey = allocator.allocateFrom(publicKeyFile, StandardCharsets.UTF_8);
@@ -72,13 +93,19 @@ public record SslProvider(
         return ctx;
     }
 
-    @Override
-    public Sentry create(Channel channel) {
-        return new SslSentry(channel, clientSide, SslBinding.sslNew(ctx));
-    }
+    record SslProvider(
+            boolean clientSide,
+            MemorySegment ctx
+    ) implements Provider {
 
-    @Override
-    public void close() {
-        SslBinding.sslCtxFree(ctx);
+        @Override
+        public Sentry create(Channel channel) {
+            return Sentry.newSslSentry(channel, clientSide, SslBinding.sslNew(ctx));
+        }
+
+        @Override
+        public void close() {
+            SslBinding.sslCtxFree(ctx);
+        }
     }
 }

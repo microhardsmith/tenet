@@ -5,7 +5,6 @@ import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.lang.invoke.MethodHandles;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -148,6 +147,7 @@ public final class Constants {
     public static final int PAGE_SIZE = 4 * KB;
     public static final String UNREACHED = "Should never be reached";
 
+    public static final Object[] EMPTY_ARRAY = {};
     public static final String EMPTY_STRING = "";
     public static final String NULL_STRING = "null";
     public static final String L_BRACKET = "(";
@@ -334,18 +334,18 @@ public final class Constants {
     /**
      *   Net
      */
-    public static final long NET_NONE = Long.MIN_VALUE;
-    public static final long NET_IGNORED = Long.MIN_VALUE | 1;
-    public static final long NET_UPDATE = Long.MIN_VALUE | (1 << 2);
-    public static final long NET_W = Long.MIN_VALUE | (1 << 4); // register write only
-    public static final long NET_PW = Long.MIN_VALUE | (1 << 6); // register write if possible
-    public static final long NET_R = Long.MIN_VALUE | (1 << 8); // register read only
-    public static final long NET_PR = Long.MIN_VALUE | (1 << 10); // register read if possible
-    public static final long NET_RW = NET_R | NET_W; // register read and write
-    public static final long NET_PRW = NET_PR | NET_PW; // register read and write if possible
-    public static final long NET_PC = Long.MIN_VALUE | (1 << 12);
-    public static final long NET_WC = Long.MIN_VALUE | (1 << 16);
-    public static final long NET_OTHER = Long.MIN_VALUE | (1 << 20);
+    public static final int NET_NONE = 1;
+    public static final int NET_IGNORED = 1 << 1;
+    public static final int NET_UPDATE = 1 << 2;
+    public static final int NET_W = NET_NONE | 1 << 3; // register write only
+    public static final int NET_PW = 1 << 4; // register write if possible
+    public static final int NET_R = NET_NONE | 1 << 5; // register read only
+    public static final int NET_PR = 1 << 6; // register read if possible
+    public static final int NET_RW = NET_NONE | NET_R | NET_W; // register read and write
+    public static final int NET_PRW = NET_PR | NET_PW; // register read and write if possible
+    public static final int NET_PC = 1 << 7;
+    public static final int NET_WC = 1 << 8;
+    public static final int NET_OTHER = 1 << 9;
 
     /**
      *   Ssl library

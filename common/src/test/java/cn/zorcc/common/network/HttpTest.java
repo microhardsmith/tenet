@@ -7,7 +7,6 @@ import cn.zorcc.common.TestConstants;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.http.*;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.network.api.Handler;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.MemorySegment;
@@ -48,7 +47,7 @@ public class HttpTest {
         httpListenerConfig.setProvider(Net.tcpProvider());
         httpListenerConfig.setLoc(TestConstants.HTTP_LOC);
         Net net = new Net();
-        net.addServerListener(httpListenerConfig);
+        net.serve(httpListenerConfig);
         return net;
     }
 
@@ -57,10 +56,10 @@ public class HttpTest {
         httpsListenerConfig.setEncoderSupplier(HttpServerEncoder::new);
         httpsListenerConfig.setDecoderSupplier(HttpServerDecoder::new);
         httpsListenerConfig.setHandlerSupplier(HttpTestHandler::new);
-        httpsListenerConfig.setProvider(SslProvider.newServerProvider(TestConstants.SERVER_PUBLIC_KEY_FILE, TestConstants.SERVER_PRIVATE_KEY_FILE));
+        httpsListenerConfig.setProvider(Provider.newSslServerProvider(TestConstants.SERVER_PUBLIC_KEY_FILE, TestConstants.SERVER_PRIVATE_KEY_FILE));
         httpsListenerConfig.setLoc(TestConstants.HTTPS_LOC);
         Net net = new Net();
-        net.addServerListener(httpsListenerConfig);
+        net.serve(httpsListenerConfig);
         return net;
     }
 
@@ -75,11 +74,11 @@ public class HttpTest {
         httpsListenerConfig.setEncoderSupplier(HttpServerEncoder::new);
         httpsListenerConfig.setDecoderSupplier(HttpServerDecoder::new);
         httpsListenerConfig.setHandlerSupplier(HttpTestHandler::new);
-        httpsListenerConfig.setProvider(SslProvider.newServerProvider(TestConstants.SERVER_PUBLIC_KEY_FILE, TestConstants.SERVER_PRIVATE_KEY_FILE));
+        httpsListenerConfig.setProvider(Provider.newSslServerProvider(TestConstants.SERVER_PUBLIC_KEY_FILE, TestConstants.SERVER_PRIVATE_KEY_FILE));
         httpsListenerConfig.setLoc(TestConstants.HTTPS_LOC);
         Net net = new Net();
-        net.addServerListener(httpListenerConfig);
-        net.addServerListener(httpsListenerConfig);
+        net.serve(httpListenerConfig);
+        net.serve(httpsListenerConfig);
         return net;
     }
 
@@ -91,6 +90,11 @@ public class HttpTest {
                 """.getBytes(StandardCharsets.UTF_8));
         private static final ZoneId gmt = ZoneId.of("GMT");
         private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss z", Locale.ENGLISH).withZone(gmt);
+
+        @Override
+        public void onFailed(Channel channel) {
+            log.debug(STR."Http connection failed to establish : \{channel.loc()}");
+        }
 
         @Override
         public void onConnected(Channel channel) {

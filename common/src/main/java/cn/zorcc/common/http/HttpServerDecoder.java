@@ -3,7 +3,7 @@ package cn.zorcc.common.http;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.network.api.Decoder;
+import cn.zorcc.common.network.Decoder;
 import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.structure.ReadBuffer;
 import cn.zorcc.common.structure.WriteBuffer;
