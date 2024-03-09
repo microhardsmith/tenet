@@ -162,7 +162,7 @@ public final class CompressUtil {
             while ((bytesRead = gzipIn.read(buffer)) != -1) {
                 writeBuffer.writeBytes(buffer, 0, bytesRead);
             }
-            return writeBuffer.toArray();
+            return writeBuffer.asArray();
         }catch (IOException e) {
             throw new FrameworkException(ExceptionType.COMPRESS, "Unable to perform gzip decompression", e);
         }
@@ -183,7 +183,7 @@ public final class CompressUtil {
                 int len = deflater.deflate(buffer);
                 writeBuffer.writeBytes(buffer, 0, len);
             }
-            return writeBuffer.toArray();
+            return writeBuffer.asArray();
         } finally {
             deflater.end();
         }
@@ -198,7 +198,7 @@ public final class CompressUtil {
                 int decompressLen = inflater.inflate(buffer);
                 writeBuffer.writeBytes(buffer, 0, decompressLen);
             }
-            return writeBuffer.toArray();
+            return writeBuffer.asArray();
         }catch (DataFormatException e) {
             throw new FrameworkException(ExceptionType.COMPRESS, "Unable to perform deflate decompression", e);
         }finally {

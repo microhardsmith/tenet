@@ -202,7 +202,7 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
          *   Send msg over the channel, invoking its callback if successful, otherwise copy the data locally for channel to become writable
          */
         private void sendMsg(WriteBuffer writeBuffer, WriterCallback writerCallback) {
-            MemorySegment data = writeBuffer.toSegment();
+            MemorySegment data = writeBuffer.asSegment();
             if(taskQueue == null) {
                 long len = data.byteSize();
                 long r;

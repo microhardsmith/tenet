@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.OffsetTime;
 import java.time.ZoneOffset;
+import java.util.List;
 
 /**
  *   Constants pool
@@ -148,6 +149,7 @@ public final class Constants {
     public static final String UNREACHED = "Should never be reached";
 
     public static final Object[] EMPTY_ARRAY = {};
+    public static final List<Object> EMPTY_LIST = List.of();
     public static final String EMPTY_STRING = "";
     public static final String NULL_STRING = "null";
     public static final String L_BRACKET = "(";

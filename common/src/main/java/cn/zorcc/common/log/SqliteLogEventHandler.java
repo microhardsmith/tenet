@@ -150,6 +150,6 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
 
     private static MemorySegment wrapText(WriteBuffer writeBuffer, MemorySegment segment) {
         writeBuffer.writeSegment(segment);
-        return writeBuffer.toSegment();
+        return writeBuffer.asSegment();
     }
 }

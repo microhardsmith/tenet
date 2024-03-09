@@ -18,7 +18,7 @@ public final class HttpServerEncoder implements Encoder {
         if(o instanceof HttpResponse httpResponse) {
             encodeHttpResponse(writeBuffer, httpResponse);
         }else {
-            throw new FrameworkException(ExceptionType.HTTP, "Unrecognized encoding object");
+            throw new FrameworkException(ExceptionType.HTTP, "Unrecognized object for encoding");
         }
     }
 
@@ -35,11 +35,13 @@ public final class HttpServerEncoder implements Encoder {
         MemorySegment data = switch (httpResponse.getCompressionStatus()) {
             case NONE -> rawData;
             case GZIP -> {
+                headers.put(HttpHeader.K_CONTENT_ENCODING, HttpHeader.V_GZIP);
                 try(Allocator allocator = Allocator.newDirectAllocator()) {
                     yield CompressUtil.compressUsingGzip(rawData, DeflateBinding.LIBDEFLATE_DEFAULT_LEVEL, allocator);
                 }
             }
             case DEFLATE -> {
+                headers.put(HttpHeader.K_CONTENT_ENCODING, HttpHeader.V_DEFLATE);
                 try(Allocator allocator = Allocator.newDirectAllocator()) {
                     yield CompressUtil.compressUsingDeflate(rawData, DeflateBinding.LIBDEFLATE_DEFAULT_LEVEL, allocator);
                 }

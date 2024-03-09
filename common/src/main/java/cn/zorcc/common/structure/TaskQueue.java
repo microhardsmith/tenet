@@ -1,10 +1,10 @@
 package cn.zorcc.common.structure;
 
-import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -30,16 +30,14 @@ public final class TaskQueue<T> {
     public void offer(T element) {
         lock.lock();
         try{
-            int nextIndex = index + 1;
-            if(elements.length == nextIndex) {
-                int newLen = nextIndex + (nextIndex >> 1);
-                if(newLen < 0) {
+            if(index == elements.length) {
+                int newCapacity = elements.length + (elements.length >> 1);
+                if(newCapacity < 0) {
                     throw new FrameworkException(ExceptionType.CONTEXT, "Size overflow");
                 }
-                elements = Arrays.copyOf(elements, newLen);
+                elements = Arrays.copyOf(elements, newCapacity);
             }
-            elements[nextIndex] = element;
-            index = nextIndex;
+            elements[index++] = element;
         }finally {
             lock.unlock();
         }
@@ -49,16 +47,16 @@ public final class TaskQueue<T> {
      *   Poll all the tasks from current task queue
      */
     @SuppressWarnings("unchecked")
-    public T[] elements() {
+    public List<T> elements() {
         lock.lock();
         try{
             if(index > 0) {
-                Object[] current = elements;
+                List<Object> result = Arrays.stream(elements, 0, index).toList();
                 elements = new Object[initialSize];
                 index = 0;
-                return (T[]) current;
+                return (List<T>) result;
             }else {
-                return (T[]) Constants.EMPTY_ARRAY;
+                return List.of();
             }
         }finally {
             lock.unlock();

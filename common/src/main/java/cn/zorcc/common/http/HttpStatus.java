@@ -30,7 +30,7 @@ public enum HttpStatus {
                 writeBuffer.writeBytes(b.code.getBytes(StandardCharsets.UTF_8));
                 writeBuffer.writeByte(Constants.SPACE);
                 writeBuffer.writeBytes(b.description.getBytes(StandardCharsets.UTF_8));
-                return writeBuffer.toSegment();
+                return writeBuffer.asSegment();
             }
         }));
     }

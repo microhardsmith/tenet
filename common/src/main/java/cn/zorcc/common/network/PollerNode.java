@@ -298,7 +298,7 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
             }else {
                 tempBuffer.writeSegment(memorySegment);
                 long len = tempBuffer.writeIndex();
-                long readIndex = process(tempBuffer.toSegment());
+                long readIndex = process(tempBuffer.asSegment());
                 if(readIndex == len) {
                     tempBuffer.close();
                     tempBuffer = null;

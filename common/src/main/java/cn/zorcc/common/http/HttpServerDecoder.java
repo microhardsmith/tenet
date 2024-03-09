@@ -157,7 +157,7 @@ public final class HttpServerDecoder implements Decoder {
         if(bytes == null) {
             return ResultStatus.INCOMPLETE;
         }else if (bytes == Constants.EMPTY_BYTES) {
-            current.setData(tryDecompress(tempBuffer.toSegment()));
+            current.setData(tryDecompress(tempBuffer.asSegment()));
             decodingStatus = DecodingStatus.INITIAL;
             return ResultStatus.FINISHED;
         }else {

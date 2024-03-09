@@ -2,12 +2,16 @@ package cn.zorcc.common;
 
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.structure.IntHolder;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.RuntimeMXBean;
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  *   Context is the core of a tenet application, it serves as a singleton pool, and used for triggering Lifecycle events
@@ -24,15 +28,19 @@ public final class Context {
 
     }
     private static final Logger log = new Logger(Context.class);
-    private static final Map<Class<?>, Object> containerMap = new HashMap<>();
-    private static final Deque<Container> pendingContainers = new ArrayDeque<>();
-    private static final IntHolder contextState = new IntHolder(0);
+    private static final Map<Class<?>, Object> containerMap = new ConcurrentHashMap<>();
+    private static final Deque<Container> pendingContainers = new ConcurrentLinkedDeque<>();
+    private static final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
+    private static final Lock readLock = readWriteLock.readLock();
+    private static final Lock writeLock = readWriteLock.writeLock();
     private static final ContextListener contextListener = ServiceLoader.load(ContextListener.class).findFirst().orElse(new DefaultContextListener());
+    private static int state = Constants.INITIAL;
 
     public static void init() {
         long nano = Clock.nano();
-        contextState.transform(current -> {
-            if(current != Constants.INITIAL) {
+        writeLock.lock();
+        try{
+            if(state != Constants.INITIAL) {
                 throw new FrameworkException(ExceptionType.CONTEXT, "Context has been initialized");
             }
             List<Container> tempContainers = new ArrayList<>(pendingContainers);
@@ -58,8 +66,10 @@ public final class Context {
             String[] pidAndDevice = runtimeMXBean.getName().split("@");
             log.info(STR."Process running with Pid: \{pidAndDevice[0]} on Device: \{pidAndDevice[1]}");
             log.info(STR."Tenet application started in \{ Duration.ofNanos(Clock.elapsed(nano)).toMillis()} ms, JVM running for \{runtimeMXBean.getUptime()} ms");
-            return Constants.RUNNING;
-        }, Thread::yield);
+            state = Constants.RUNNING;
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     private static void initializeCycles(List<LifeCycle> cycles) {
@@ -74,14 +84,18 @@ public final class Context {
             }
             finishedCycles.addLast(cycle);
         }
-        Runtime.getRuntime().addShutdownHook(Thread.ofPlatform().unstarted(() -> contextState.transform(current -> {
-            if(current == Constants.RUNNING) {
-                finishedCycles.reversed().forEach(LifeCycle::UninterruptibleExit);
-                return Constants.CLOSING;
-            }else {
-                return Constants.STOPPED;
+        Runtime.getRuntime().addShutdownHook(Thread.ofPlatform().unstarted(() -> {
+            writeLock.lock();
+            try {
+                if(state == Constants.RUNNING) {
+                    state = Constants.CLOSING;
+                    finishedCycles.reversed().forEach(LifeCycle::UninterruptibleExit);
+                    state = Constants.STOPPED;
+                }
+            } finally {
+                writeLock.unlock();
             }
-        }, Thread::yield)));
+        }));
     }
 
     public static <T> void load(T target, Class<T> type) {
@@ -91,29 +105,32 @@ public final class Context {
         if (!type.isAssignableFrom(target.getClass())) {
             throw new FrameworkException(ExceptionType.CONTEXT, STR."Container doesn't match its class : \{type.getSimpleName()}");
         }
-        contextState.transform(current -> {
-            if(current <= Constants.RUNNING) {
+        readLock.lock();
+        try {
+            if(state <= Constants.RUNNING) {
                 pendingContainers.addLast(new Container(target, type));
-                return current;
-            }else {
-                throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
             }
-        }, Thread::yield);
+        } finally {
+            readLock.unlock();
+        }
     }
 
 
     @SuppressWarnings("unchecked")
     public static <T> T get(Class<T> type) {
-        return contextState.extract(current -> {
-            if(current <= Constants.RUNNING) {
+        readLock.lock();
+        try {
+            if(state <= Constants.RUNNING) {
                 Object o = containerMap.computeIfAbsent(type, contextListener::onRequested);
                 if(o == null) {
                     throw new FrameworkException(ExceptionType.CONTEXT, STR."Unable to retrieve target container : \{type.getName()}");
                 }
                 return (T) o;
             }else {
-                throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
+                return (T) containerMap.get(type);
             }
-        }, Thread::yield);
+        } finally {
+            readLock.unlock();
+        }
     }
 }

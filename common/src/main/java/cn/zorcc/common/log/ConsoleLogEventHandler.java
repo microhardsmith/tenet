@@ -83,7 +83,7 @@ public final class ConsoleLogEventHandler implements Consumer<LogEvent> {
                 }
             }
             if(outBuffer.writeIndex() > 0L) {
-                FileUtil.fwrite(outBuffer.toSegment(), stdout);
+                FileUtil.fwrite(outBuffer.asSegment(), stdout);
             }
         }finally {
             eventList.clear();
@@ -103,10 +103,10 @@ public final class ConsoleLogEventHandler implements Consumer<LogEvent> {
                 }
             }
             if(outBuffer.writeIndex() > 0L) {
-                FileUtil.fwrite(outBuffer.toSegment(), stdout);
+                FileUtil.fwrite(outBuffer.asSegment(), stdout);
             }
             if(errBuffer.writeIndex() > 0L) {
-                FileUtil.fwrite(errBuffer.toSegment(), stderr);
+                FileUtil.fwrite(errBuffer.asSegment(), stderr);
             }
         }finally {
             eventList.clear();

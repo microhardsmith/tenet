@@ -17,12 +17,11 @@ import java.util.List;
  *   Note that writeIndex is a mutable field, because
  */
 @SuppressWarnings("unused")
-public record ReadBuffer(
-        MemorySegment segment,
-        long size,
-        LongHolder indexHolder
-) {
+public final class ReadBuffer {
     private static final MethodHandle strlen;
+    private final MemorySegment segment;
+    private final long size;
+    private long readIndex;
 
     static {
         Linker linker = Linker.nativeLinker();
@@ -32,19 +31,21 @@ public record ReadBuffer(
     }
 
     public ReadBuffer(MemorySegment segment) {
-        this(segment, segment.byteSize(), new LongHolder(0L));
+        this.segment = segment;
+        this.size = segment.byteSize();
+        this.readIndex = 0L;
     }
 
 
     public long readIndex() {
-        return indexHolder.getValue();
+        return readIndex;
     }
 
-    public void setReadIndex(long index) {
-        if(index < 0L || index > size) {
+    public void setReadIndex(long nextIndex) {
+        if(nextIndex < 0L || nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "ReadIndex out of bound");
         }
-        indexHolder.setValue(index);
+        readIndex = nextIndex;
     }
 
     public long size() {
@@ -52,17 +53,16 @@ public record ReadBuffer(
     }
 
     public long available() {
-        return size - indexHolder.getValue();
+        return size - readIndex;
     }
 
     public byte readByte() {
-        long readIndex = indexHolder.getValue();
         long nextIndex = readIndex + Constants.BYTE_SIZE;
         if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
-        byte b = segment.get(ValueLayout.JAVA_BYTE, readIndex);
-        indexHolder.setValue(nextIndex);
+        byte b = NativeUtil.getByte(segment, readIndex);
+        readIndex = nextIndex;
         return b;
     }
 
@@ -70,13 +70,12 @@ public record ReadBuffer(
      *   The returned segment would have the same scope as current ReadBuffer
      */
     public MemorySegment readSegment(long count) {
-        long readIndex = indexHolder.getValue();
         long nextIndex = readIndex + count * Constants.BYTE_SIZE;
         if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
         MemorySegment result = segment.asSlice(readIndex, count);
-        indexHolder.setValue(nextIndex);
+        readIndex = nextIndex;
         return result;
     }
 
@@ -101,57 +100,52 @@ public record ReadBuffer(
     }
 
     public short readShort() {
-        long readIndex = indexHolder.getValue();
         long nextIndex = readIndex + Constants.SHORT_SIZE;
         if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
-        short s = segment.get(ValueLayout.JAVA_SHORT_UNALIGNED, readIndex);
-        indexHolder.setValue(nextIndex);
+        short s = NativeUtil.getShort(segment, readIndex);
+        readIndex = nextIndex;
         return s;
     }
 
     public int readInt() {
-        long readIndex = indexHolder.getValue();
         long nextIndex = readIndex + Constants.INT_SIZE;
         if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
-        int i = segment.get(ValueLayout.JAVA_INT_UNALIGNED, readIndex);
-        indexHolder.setValue(nextIndex);
+        int i = NativeUtil.getInt(segment, readIndex);
+        readIndex = nextIndex;
         return i;
     }
 
     public long readLong() {
-        long readIndex = indexHolder.getValue();
         long nextIndex = readIndex + Constants.LONG_SIZE;
         if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
-        long l = segment.get(ValueLayout.JAVA_LONG_UNALIGNED, readIndex);
-        indexHolder.setValue(nextIndex);
+        long l = NativeUtil.getLong(segment, readIndex);
+        readIndex = nextIndex;
         return l;
     }
 
     public float readFloat() {
-        long readIndex = indexHolder.getValue();
         long nextIndex = readIndex + Constants.FLOAT_SIZE;
         if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
-        float f = segment.get(ValueLayout.JAVA_FLOAT_UNALIGNED, readIndex);
-        indexHolder.setValue(nextIndex);
+        float f = NativeUtil.getFloat(segment, readIndex);
+        readIndex = nextIndex;
         return f;
     }
 
     public double readDouble() {
-        long readIndex = indexHolder.getValue();
         long nextIndex = readIndex + Constants.DOUBLE_SIZE;
         if(nextIndex > size) {
             throw new FrameworkException(ExceptionType.NATIVE, "read index overflow");
         }
-        double d = segment.get(ValueLayout.JAVA_DOUBLE_UNALIGNED, readIndex);
-        indexHolder.setValue(nextIndex);
+        double d = NativeUtil.getDouble(segment, readIndex);
+        readIndex = nextIndex;
         return d;
     }
 
@@ -160,11 +154,10 @@ public record ReadBuffer(
      *   If no separators were found in the sequence, no bytes would be read and null would be returned
      */
     public byte[] readUntil(byte[] separators) {
-        long readIndex = indexHolder.getValue();
         for(long cur = readIndex; cur <= size - separators.length; cur++) {
             if(NativeUtil.matches(segment, cur, separators)) {
                 byte[] result = cur == readIndex ? Constants.EMPTY_BYTES : segment.asSlice(readIndex, cur - readIndex).toArray(ValueLayout.JAVA_BYTE);
-                indexHolder.setValue(cur + separators.length);
+                readIndex = cur + separators.length;
                 return result;
             }
         }
@@ -172,11 +165,10 @@ public record ReadBuffer(
     }
 
     public byte[] readUntil(byte b) {
-        long readIndex = indexHolder.getValue();
         for(long cur = readIndex; cur < size; cur++) {
             if(segment.get(ValueLayout.JAVA_BYTE, cur) == b) {
                 byte[] result = cur == readIndex ? Constants.EMPTY_BYTES : segment.asSlice(readIndex, cur - readIndex).toArray(ValueLayout.JAVA_BYTE);
-                indexHolder.setValue(cur + 1);
+                readIndex = cur + 1;
                 return result;
             }
         }
@@ -184,11 +176,10 @@ public record ReadBuffer(
     }
 
     public byte[] readUntil(byte b1, byte b2) {
-        long readIndex = indexHolder.getValue();
         for(long cur = readIndex; cur < size; cur++) {
             if(segment.get(ValueLayout.JAVA_BYTE, cur) == b1 && cur < size - 1 && segment.get(ValueLayout.JAVA_BYTE, cur + 1) == b2) {
                 byte[] result = cur == readIndex ? Constants.EMPTY_BYTES : segment.asSlice(readIndex, cur - readIndex).toArray(ValueLayout.JAVA_BYTE);
-                indexHolder.setValue(cur + 2);
+                readIndex = cur + 2;
                 return result;
             }
         }
@@ -199,7 +190,6 @@ public record ReadBuffer(
      *   Read a C style UTF-8 string from the current readBuffer
      */
     public String readStr(Charset charset) {
-        long readIndex = indexHolder.getValue();
         long available = size - readIndex;
         long r = strlen(segment.asSlice(readIndex, available), available);
         if(r == available) {
@@ -208,7 +198,7 @@ public record ReadBuffer(
         int len = Math.toIntExact(r);
         byte[] bytes = new byte[len];
         MemorySegment.copy(segment, ValueLayout.JAVA_BYTE, readIndex, bytes, 0, len);
-        indexHolder.setValue(readIndex + len + 1);
+        readIndex += len + 1;
         return new String(bytes, charset);
     }
 

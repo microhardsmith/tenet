@@ -15,41 +15,56 @@ import java.util.Arrays;
  *   Direct memory WriteBuffer, not thread-safe, custom Resizer could be chosen to modify the default expansion mechanism
  */
 @SuppressWarnings("unused")
-public record WriteBuffer(
-        WriteBufferData data,
-        WriteBufferPolicy policy
-) implements AutoCloseable {
+public final class WriteBuffer implements AutoCloseable {
+
+    sealed interface WriteBufferPolicy permits DefaultWriteBufferPolicy, ReservedWriteBufferPolicy, HeapWriteBufferPolicy {
+        /**
+         *   Resize target writeBuffer to contain more bytes than nextIndex, this function will not change the writeIndex of the writeBufferData
+         */
+        void resize(WriteBuffer writeBuffer, long nextIndex);
+
+        /**
+         *   Close current writeBuffer after using
+         */
+        void close(WriteBuffer writeBuffer);
+    }
+
+    private static final long MINIMAL_WRITE_BUFFER_SIZE = 8;
     private static final int DEFAULT_HEAP_BUFFER_SIZE = 32;
+    private static final long DEFAULT_DIRECT_BUFFER_SIZE = 4 * Constants.KB;
+    private MemorySegment segment;
+    private long writeIndex;
+    private final WriteBufferPolicy policy;
 
-    static class WriteBufferData {
-        private MemorySegment segment;
-        private long writeIndex;
-
-        WriteBufferData(MemorySegment segment) {
-            this.segment = segment;
-            this.writeIndex = 0L;
-        }
+    private WriteBuffer(MemorySegment segment, WriteBufferPolicy policy) {
+        this.segment = segment;
+        this.writeIndex = 0L;
+        this.policy = policy;
     }
 
     public static WriteBuffer newDefaultWriteBuffer(long initialSize) {
-        if(initialSize <= 0L) {
-            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED);
+        if(initialSize < MINIMAL_WRITE_BUFFER_SIZE) {
+            throw new FrameworkException(ExceptionType.NATIVE, "DefaultWriteBuffer exceeding minimal size");
         }
-        return new WriteBuffer(new WriteBufferData(MemorySegment.NULL), new DefaultWriteBufferPolicy(initialSize));
+        return new WriteBuffer(MemorySegment.NULL, new DefaultWriteBufferPolicy(initialSize));
+    }
+
+    public static WriteBuffer newDefaultWriteBuffer() {
+        return newDefaultWriteBuffer(DEFAULT_DIRECT_BUFFER_SIZE);
     }
 
     public static WriteBuffer newReservedWriteBuffer(MemorySegment segment, boolean onHeap) {
         if(NativeUtil.checkNullPointer(segment)) {
-            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED);
+            throw new FrameworkException(ExceptionType.NATIVE, "ReservedWriteBuffer couldn't be allocated with NULL pointer");
         }
-        return new WriteBuffer(new WriteBufferData(segment), new ReservedWriteBufferPolicy(segment, onHeap));
+        return new WriteBuffer(segment, new ReservedWriteBufferPolicy(segment, onHeap));
     }
 
     public static WriteBuffer newHeapWriteBuffer(long initialSize) {
-        if(initialSize <= 0L) {
-            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED);
+        if(initialSize <= MINIMAL_WRITE_BUFFER_SIZE) {
+            throw new FrameworkException(ExceptionType.NATIVE, "HeapWriteBuffer exceeding minimal size");
         }
-        return new WriteBuffer(new WriteBufferData(MemorySegment.NULL), new HeapWriteBufferPolicy(initialSize));
+        return new WriteBuffer(MemorySegment.NULL, new HeapWriteBufferPolicy(initialSize));
     }
 
     public static WriteBuffer newHeapWriteBuffer() {
@@ -57,30 +72,30 @@ public record WriteBuffer(
     }
 
     public long writeIndex() {
-        return data.writeIndex;
+        return writeIndex;
     }
 
     public void resize(long nextIndex) {
-        if(nextIndex > data.segment.byteSize()) {
-            policy.resize(data, nextIndex);
+        if(nextIndex > segment.byteSize()) {
+            policy.resize(this, nextIndex);
         }
     }
 
     public void writeByte(byte b) {
-        long nextIndex = data.writeIndex + Byte.BYTES;
+        long nextIndex = writeIndex + Byte.BYTES;
         resize(nextIndex);
-        data.segment.set(ValueLayout.JAVA_BYTE, data.writeIndex, b);
-        data.writeIndex = nextIndex;
+        NativeUtil.setByte(segment, writeIndex, b);
+        writeIndex = nextIndex;
     }
 
     public void writeBytes(byte[] b, int off, int len) {
         if(len < 0 || off + len > b.length) {
             throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
         }
-        long nextIndex = data.writeIndex + len;
+        long nextIndex = writeIndex + len;
         resize(nextIndex);
-        MemorySegment.copy(b, off, data.segment, ValueLayout.JAVA_BYTE, data.writeIndex, len);
-        data.writeIndex = nextIndex;
+        MemorySegment.copy(b, off, segment, ValueLayout.JAVA_BYTE, writeIndex, len);
+        writeIndex = nextIndex;
     }
 
     public void writeBytes(byte[] bytes) {
@@ -88,47 +103,47 @@ public record WriteBuffer(
     }
 
     public void writeShort(short s) {
-        long nextIndex = data.writeIndex + Short.BYTES;
+        long nextIndex = writeIndex + Short.BYTES;
         resize(nextIndex);
-        data.segment.set(ValueLayout.JAVA_SHORT_UNALIGNED, data.writeIndex, s);
-        data.writeIndex = nextIndex;
+        NativeUtil.setShort(segment, writeIndex, s);
+        writeIndex = nextIndex;
     }
 
     public void writeInt(int i) {
-        long nextIndex = data.writeIndex + Integer.BYTES;
+        long nextIndex = writeIndex + Integer.BYTES;
         resize(nextIndex);
-        data.segment.set(ValueLayout.JAVA_INT_UNALIGNED, data.writeIndex, i);
-        data.writeIndex = nextIndex;
+        NativeUtil.setInt(segment, writeIndex, i);
+        writeIndex = nextIndex;
     }
 
     public void writeLong(long l) {
-        long nextIndex = data.writeIndex + Long.BYTES;
+        long nextIndex = writeIndex + Long.BYTES;
         resize(nextIndex);
-        data.segment.set(ValueLayout.JAVA_LONG_UNALIGNED, data.writeIndex, l);
-        data.writeIndex = nextIndex;
+        NativeUtil.setLong(segment, writeIndex, l);
+        writeIndex = nextIndex;
     }
 
     public void writeFloat(float f) {
-        long nextIndex = data.writeIndex + Float.BYTES;
+        long nextIndex = writeIndex + Float.BYTES;
         resize(nextIndex);
-        data.segment.set(ValueLayout.JAVA_FLOAT_UNALIGNED, data.writeIndex, f);
-        data.writeIndex = nextIndex;
+        NativeUtil.setFloat(segment, writeIndex, f);
+        writeIndex = nextIndex;
     }
 
     public void writeDouble(double d) {
-        long nextIndex = data.writeIndex + Double.BYTES;
+        long nextIndex = writeIndex + Double.BYTES;
         resize(nextIndex);
-        data.segment.set(ValueLayout.JAVA_DOUBLE_UNALIGNED, data.writeIndex, d);
-        data.writeIndex = nextIndex;
+        NativeUtil.setDouble(segment, writeIndex, d);
+        writeIndex = nextIndex;
     }
 
     public void writeStr(String str, Charset charset) {
         byte[] strBytes = str.getBytes(charset);
-        long nextIndex = data.writeIndex + strBytes.length + 1;
+        long nextIndex = writeIndex + strBytes.length + 1;
         resize(nextIndex);
-        MemorySegment.copy(strBytes, 0, data.segment, ValueLayout.JAVA_BYTE, data.writeIndex, strBytes.length);
-        data.segment.set(ValueLayout.JAVA_BYTE, data.writeIndex + strBytes.length, Constants.NUT);
-        data.writeIndex = nextIndex;
+        MemorySegment.copy(strBytes, 0, segment, ValueLayout.JAVA_BYTE, writeIndex, strBytes.length);
+        NativeUtil.setByte(segment, writeIndex + strBytes.length, Constants.NUT);
+        writeIndex = nextIndex;
     }
 
     public void writeStr(String str) {
@@ -137,10 +152,10 @@ public record WriteBuffer(
 
     public void writeSegment(MemorySegment memorySegment) {
         long len = memorySegment.byteSize();
-        long nextIndex = data.writeIndex + len;
+        long nextIndex = writeIndex + len;
         resize(nextIndex);
-        MemorySegment.copy(memorySegment, 0, data.segment, data.writeIndex, len);
-        data.writeIndex = nextIndex;
+        MemorySegment.copy(memorySegment, 0L, segment, writeIndex, len);
+        writeIndex = nextIndex;
     }
 
     public void writeSegmentWithPadding(MemorySegment memorySegment, long minWidth, byte padding) {
@@ -148,11 +163,11 @@ public record WriteBuffer(
         if(minWidth <= len) {
             writeSegment(memorySegment);
         }else {
-            long nextIndex = data.writeIndex + minWidth;
+            long nextIndex = writeIndex + minWidth;
             resize(nextIndex);
-            MemorySegment.copy(memorySegment, 0, data.segment, data.writeIndex, len);
-            data.segment.asSlice(data.writeIndex + len, minWidth - len).fill(padding);
-            data.writeIndex = nextIndex;
+            MemorySegment.copy(memorySegment, 0L, segment, writeIndex, len);
+            segment.asSlice(writeIndex + len, minWidth - len).fill(padding);
+            writeIndex = nextIndex;
         }
     }
 
@@ -170,93 +185,96 @@ public record WriteBuffer(
     }
 
     public void setByte(long index, byte value) {
-        if(index < 0L || index + Byte.BYTES > data.writeIndex) {
+        if(index < 0L || index + Byte.BYTES > writeIndex) {
             throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
         }
-        data.segment.set(ValueLayout.JAVA_BYTE, index, value);
+        NativeUtil.setByte(segment, index, value);
     }
 
     public void setShort(long index, short value) {
-        if(index < 0L || index + Short.BYTES > data.writeIndex) {
+        if(index < 0L || index + Short.BYTES > writeIndex) {
             throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
         }
-        data.segment.set(ValueLayout.JAVA_SHORT_UNALIGNED, index, value);
+        NativeUtil.setShort(segment, index, value);
     }
 
     public void setInt(long index, int value) {
-        if(index < 0L || index + Integer.BYTES > data.writeIndex) {
+        if(index < 0L || index + Integer.BYTES > writeIndex) {
             throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
         }
-        data.segment.set(ValueLayout.JAVA_INT_UNALIGNED, index, value);
+        NativeUtil.setInt(segment, index, value);
     }
 
     public void setLong(long index, long value) {
-        if(index < 0L || index + Long.BYTES > data.writeIndex) {
+        if(index < 0L || index + Long.BYTES > writeIndex) {
             throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
         }
-        data.segment.set(ValueLayout.JAVA_LONG_UNALIGNED, index, value);
+        NativeUtil.setLong(segment, index, value);
     }
 
     public void setFloat(long index, float value) {
-        if(index < 0L || index + Float.BYTES > data.writeIndex) {
+        if(index < 0L || index + Float.BYTES > writeIndex) {
             throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
         }
-        data.segment.set(ValueLayout.JAVA_FLOAT_UNALIGNED, index, value);
+        NativeUtil.setFloat(segment, index, value);
     }
 
     public void setDouble(long index, double value) {
-        if(index < 0L || index + Double.BYTES > data.writeIndex) {
+        if(index < 0L || index + Double.BYTES > writeIndex) {
             throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");
         }
-        data.segment.set(ValueLayout.JAVA_DOUBLE_UNALIGNED, index, value);
+        NativeUtil.setDouble(segment, index, value);
     }
 
     /**
      *   Return current written segment, from 0 ~ writeIndex, calling content() will not modify current writeBuffer's writeIndex
      */
     public MemorySegment content() {
-        return data.writeIndex == data.segment.byteSize() ? data.segment : data.segment.asSlice(0L, data.writeIndex);
+        return writeIndex == segment.byteSize() ? segment : segment.asSlice(0L, writeIndex);
     }
 
     /**
      *   Truncate from the beginning of the segment to the offset, return a new WriteBuffer
      */
     public WriteBuffer truncate(long offset) {
-        if(offset > data.writeIndex) {
+        if(offset < 0L || offset > writeIndex) {
             throw new FrameworkException(ExceptionType.NATIVE, "Truncate index overflow");
         }
-        WriteBufferData newData = new WriteBufferData(data.segment.asSlice(offset, data.segment.byteSize() - offset));
-        newData.writeIndex = data.writeIndex - offset;
-        return new WriteBuffer(newData, policy);
+        WriteBuffer trucatedWriteBuffer = new WriteBuffer(segment.asSlice(offset, segment.byteSize() - offset), policy);
+        trucatedWriteBuffer.writeIndex = writeIndex - offset;
+        return trucatedWriteBuffer;
     }
 
     @Override
     public void close() {
-        policy.close(data);
+        policy.close(this);
     }
 
     /**
      *   Converts current writeBuffer to an array
      */
-    public byte[] toArray() {
-        int size = Math.toIntExact(data.writeIndex);
-        data.writeIndex = 0L;
-        if(data.segment.isNative()) {
-            byte[] bytes = new byte[size];
-            MemorySegment.copy(data.segment, ValueLayout.JAVA_BYTE, data.writeIndex, bytes, 0, size);
+    public byte[] asArray() {
+        final int currentSize = Math.toIntExact(writeIndex);
+        if(currentSize == 0) {
+            return Constants.EMPTY_BYTES;
+        }
+        writeIndex = 0L;
+        if(segment.isNative()) {
+            byte[] bytes = new byte[currentSize];
+            MemorySegment.copy(segment, ValueLayout.JAVA_BYTE, 0L, bytes, 0, currentSize);
             return bytes;
         }else {
-            byte[] bytes = (byte[]) data.segment.heapBase().orElseThrow(() -> new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED));
-            return Arrays.copyOfRange(bytes, 0, size);
+            byte[] bytes = (byte[]) segment.heapBase().orElseThrow(() -> new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED));
+            return Arrays.copyOfRange(bytes, 0, currentSize);
         }
     }
 
     /**
      *   Converts current writeBuffer to a segment, sharing the same scope
      */
-    public MemorySegment toSegment() {
+    public MemorySegment asSegment() {
         MemorySegment m = content();
-        data.writeIndex = 0L;
+        writeIndex = 0L;
         return m;
     }
 
@@ -268,7 +286,7 @@ public record WriteBuffer(
             long initialSize
     ) implements WriteBufferPolicy {
         @Override
-        public void resize(WriteBufferData writeBufferData, long nextIndex) {
+        public void resize(WriteBuffer writeBufferData, long nextIndex) {
             MemorySegment newNativeSegment;
             if(writeBufferData.segment == MemorySegment.NULL) {
                 newNativeSegment = NativeUtil.malloc(Math.max(nextIndex, initialSize));
@@ -286,7 +304,7 @@ public record WriteBuffer(
         }
 
         @Override
-        public void close(WriteBufferData writeBufferData) {
+        public void close(WriteBuffer writeBufferData) {
             if(writeBufferData.segment != MemorySegment.NULL) {
                 NativeUtil.free(writeBufferData.segment);
             }
@@ -303,28 +321,29 @@ public record WriteBuffer(
     ) implements WriteBufferPolicy {
 
         @Override
-        public void resize(WriteBufferData writeBufferData, long nextIndex) {
+        public void resize(WriteBuffer writeBufferData, long nextIndex) {
             long newLen = Math.max(nextIndex, writeBufferData.segment.byteSize() << 1);
-            if(newLen < 0) {
+            if(newLen < 0L) {
                 throw new FrameworkException(ExceptionType.NATIVE, "MemorySize overflow");
             }
+            MemorySegment newSegment;
             if(onHeap) {
-                MemorySegment newHeapSegment = Allocator.HEAP.allocate(ValueLayout.JAVA_BYTE, newLen);
-                MemorySegment.copy(writeBufferData.segment, 0L, newHeapSegment, 0L, writeBufferData.writeIndex);
-                writeBufferData.segment = newHeapSegment;
+                newSegment = Allocator.HEAP.allocate(ValueLayout.JAVA_BYTE, newLen);
+                MemorySegment.copy(writeBufferData.segment, 0L, newSegment, 0L, writeBufferData.writeIndex);
             }else {
-                MemorySegment newNativeSegment = NativeUtil.realloc(writeBufferData.segment, newLen);
-                if(NativeUtil.checkNullPointer(newNativeSegment)) {
+                newSegment = NativeUtil.realloc(writeBufferData.segment, newLen);
+                if(NativeUtil.checkNullPointer(newSegment)) {
                     throw new OutOfMemoryError();
                 }
-                writeBufferData.segment = newNativeSegment;
             }
+            writeBufferData.segment = newSegment;
         }
 
         @Override
-        public void close(WriteBufferData writeBufferData) {
-            if(writeBufferData.segment != initialSegment && writeBufferData.segment.isNative()) {
-                NativeUtil.free(writeBufferData.segment);
+        public void close(WriteBuffer writeBufferData) {
+            MemorySegment current = writeBufferData.segment;
+            if(current != initialSegment && current.isNative()) {
+                NativeUtil.free(current);
             }
         }
     }
@@ -333,7 +352,7 @@ public record WriteBuffer(
             long initialSize
     ) implements WriteBufferPolicy {
         @Override
-        public void resize(WriteBufferData writeBufferData, long nextIndex) {
+        public void resize(WriteBuffer writeBufferData, long nextIndex) {
             MemorySegment newSegment;
             if(writeBufferData.segment == MemorySegment.NULL) {
                 newSegment = Allocator.HEAP.allocate(ValueLayout.JAVA_BYTE, initialSize);
@@ -349,20 +368,8 @@ public record WriteBuffer(
         }
 
         @Override
-        public void close(WriteBufferData writeBufferData) {
+        public void close(WriteBuffer writeBufferData) {
             // No external close operation needed for heapWriteBuffer
         }
-    }
-
-    sealed interface WriteBufferPolicy permits DefaultWriteBufferPolicy, ReservedWriteBufferPolicy, HeapWriteBufferPolicy {
-        /**
-         *   Resize target writeBuffer to contain more bytes than nextIndex, this function will not change the writeIndex of the writeBufferData
-         */
-        void resize(WriteBufferData writeBufferData, long nextIndex);
-
-        /**
-         *   Close current writeBuffer after using
-         */
-        void close(WriteBufferData writeBufferData);
     }
 }

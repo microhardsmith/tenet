@@ -44,7 +44,7 @@ public final class DefaultTimeResolver implements TimeResolver {
             writeBuffer.writeByte(NativeUtil.toAsciiByte(milli / 100));
             writeBuffer.writeByte(NativeUtil.toAsciiByte((milli / 10) % 10));
             writeBuffer.writeByte(NativeUtil.toAsciiByte(milli % 10));
-            return writeBuffer.toSegment();
+            return writeBuffer.asSegment();
         }
     }
 }

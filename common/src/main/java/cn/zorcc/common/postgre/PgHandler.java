@@ -117,7 +117,7 @@ public final class PgHandler implements Handler {
             writeBuffer.writeStr(pgConfig.getUserName());
             writeBuffer.writeStr("database");
             writeBuffer.writeStr(pgConfig.getDatabaseName());
-            channel.sendMsg(new PgMsg(Constants.NUT, writeBuffer.toSegment()));
+            channel.sendMsg(new PgMsg(Constants.NUT, writeBuffer.asSegment()));
         }
     }
 
@@ -178,7 +178,7 @@ public final class PgHandler implements Handler {
             }else {
                 writeBuffer.writeInt(-1);
             }
-            channel.sendMsg(new PgMsg(Constants.PG_PASSWORD, writeBuffer.toSegment()));
+            channel.sendMsg(new PgMsg(Constants.PG_PASSWORD, writeBuffer.asSegment()));
         }
     }
 
@@ -198,7 +198,7 @@ public final class PgHandler implements Handler {
             clientFinalProcessor = serverFirstProcessor.clientFinalProcessor(pgConfig.getPassword());
             String clientFinalMessage = clientFinalProcessor.clientFinalMessage();
             writeBuffer.writeStr(clientFinalMessage);
-            channel.sendMsg(new PgMsg(Constants.PG_PASSWORD, writeBuffer.toSegment()));
+            channel.sendMsg(new PgMsg(Constants.PG_PASSWORD, writeBuffer.asSegment()));
         }catch (ScramParseException e) {
             throw new FrameworkException(ExceptionType.POSTGRESQL, "SASL authentication failed in continue phrase", e);
         }
@@ -238,7 +238,7 @@ public final class PgHandler implements Handler {
             writeBuffer.writeByte((byte) 'd');
             writeBuffer.writeByte((byte) '5');
             writeBuffer.writeBytes(toHex(secondDigestResult));
-            channel.sendMsg(new PgMsg(Constants.PG_PASSWORD, writeBuffer.toSegment()));
+            channel.sendMsg(new PgMsg(Constants.PG_PASSWORD, writeBuffer.asSegment()));
         }catch (NoSuchAlgorithmException e) {
             throw new FrameworkException(ExceptionType.POSTGRESQL, Constants.UNREACHED);
         }
@@ -248,7 +248,7 @@ public final class PgHandler implements Handler {
         state = WAITING_CLEAR_TEXT_PASSWORD;
         try(WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer()) {
             writeBuffer.writeStr(pgConfig.getPassword());
-            channel.sendMsg(new PgMsg(Constants.PG_PASSWORD, writeBuffer.toSegment()));
+            channel.sendMsg(new PgMsg(Constants.PG_PASSWORD, writeBuffer.asSegment()));
         }
     }
 
@@ -297,7 +297,7 @@ public final class PgHandler implements Handler {
         state = CONFIGURING_ENCODING;
         try(WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer()) {
             writeBuffer.writeStr("SET client_encoding TO 'utf-8' ");
-            channel.sendMsg(new PgMsg(Constants.PG_SIMPLE_QUERY, writeBuffer.toSegment()));
+            channel.sendMsg(new PgMsg(Constants.PG_SIMPLE_QUERY, writeBuffer.asSegment()));
         }
     }
 
@@ -305,7 +305,7 @@ public final class PgHandler implements Handler {
         state = CONFIGURING_SCHEMA;
         try(WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer()) {
             writeBuffer.writeStr(STR."SET search_path TO \{schema} ");
-            channel.sendMsg(new PgMsg(Constants.PG_SIMPLE_QUERY, writeBuffer.toSegment()));
+            channel.sendMsg(new PgMsg(Constants.PG_SIMPLE_QUERY, writeBuffer.asSegment()));
         }
     }
 

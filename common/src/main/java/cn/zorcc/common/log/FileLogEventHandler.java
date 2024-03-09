@@ -120,7 +120,7 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
             for (LogEvent event : eventList) {
                 handlers.forEach(logHandler -> logHandler.process(writeBuffer, event));
             }
-            FileUtil.fwrite(writeBuffer.toSegment(), fileStream);
+            FileUtil.fwrite(writeBuffer.asSegment(), fileStream);
             currentWrittenIndex += writeBuffer.writeIndex();
         }finally {
             eventList.clear();

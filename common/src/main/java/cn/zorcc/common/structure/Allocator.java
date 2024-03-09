@@ -65,7 +65,7 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
     }
 
     /**
-     *   DirectAllocator using malloc and free for native memory allocation, each allocation were recorded into the LongList
+     *   DirectAllocator using malloc and free for native memory allocation, each allocation were recorded into the long array
      */
     final class DirectAllocator implements Allocator {
         private static final int SIZE = 8;
@@ -84,7 +84,7 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
                         pointers = new long[SIZE];
                     }
                     if(index == pointers.length) {
-                        int newCapacity = pointers.length + pointers.length >> 1;
+                        int newCapacity = pointers.length + (pointers.length >> 1);
                         if(newCapacity < 0) {
                             throw new FrameworkException(ExceptionType.CONTEXT, "Size overflow");
                         }

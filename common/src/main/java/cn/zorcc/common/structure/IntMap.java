@@ -209,7 +209,7 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
                 entry.identifier = identifier;
                 entry.value = value;
                 nodes[slot] = entry;
-                size = 1;
+                size++;
                 return ;
             }
             Entry<T> current = nodes[slot];
