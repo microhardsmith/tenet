@@ -2,15 +2,16 @@ package cn.zorcc.common.util;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
+import cn.zorcc.common.bindings.BrotliBinding;
 import cn.zorcc.common.bindings.DeflateBinding;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.structure.WriteBuffer;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.util.zip.*;
 
@@ -28,16 +29,53 @@ public final class CompressUtil {
         throw new UnsupportedOperationException();
     }
 
+    private static MemorySegment convertToNativeSegment(MemorySegment input, Allocator allocator) {
+        if(!allocator.isNative()) {
+            throw new FrameworkException(ExceptionType.COMPRESS, "Allocator must be native");
+        }
+        if(input.isNative()) {
+            return input;
+        }else {
+            long byteSize = input.byteSize();
+            MemorySegment nativeSegment = allocator.allocate(ValueLayout.JAVA_BYTE, byteSize);
+            MemorySegment.copy(input, 0L, nativeSegment, 0L, byteSize);
+            return nativeSegment;
+        }
+    }
+
+    public static MemorySegment compressUsingBrotli(MemorySegment input, int level, int windowSize, int mode, Allocator allocator) {
+        MemorySegment in = convertToNativeSegment(input, allocator);
+        level = level >= BrotliBinding.BROTLI_MIN_QUALITY && level <= BrotliBinding.BROTLI_NAX_QUALITY ? level : BrotliBinding.BROTLI_DEFAULT_QUALITY;
+        windowSize = windowSize >= BrotliBinding.BROTLI_MIN_WINDOW_BITS && windowSize <= BrotliBinding.BROTLI_MAX_WINDOW_BITS ? windowSize : BrotliBinding.BROTLI_DEFAULT_WINDOW_BITS;
+        mode = mode >= BrotliBinding.BROTLI_MODE_GENERIC && mode <= BrotliBinding.BROTLI_MODE_FONT ? mode : BrotliBinding.BROTLI_MODE_GENERIC;
+        long inBytes = in.byteSize();
+        long outBytes = BrotliBinding.encoderMaxCompressedSize(inBytes);
+        if(outBytes <= 0L) {
+            throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
+        }
+        MemorySegment outBytesPtr = allocator.allocate(ValueLayout.JAVA_LONG);
+        NativeUtil.setLong(outBytesPtr, 0L, outBytes);
+        MemorySegment out = allocator.allocate(ValueLayout.JAVA_BYTE, outBytes);
+        if (BrotliBinding.encoderCompress(level, windowSize, mode, inBytes, in, outBytesPtr, out) != BrotliBinding.BROTLI_BOOL_TRUE) {
+            throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
+        }
+        long compressed = NativeUtil.getLong(outBytesPtr, 0L);
+        return out.asSlice(0L, compressed);
+    }
+
     /**
      *   When using libdeflate, level should between DeflateBinding.LIBDEFLATE_SLOWEST_LEVEL and DeflateBinding.LIBDEFLATE_FASTEST_LEVEL
      */
-    public static MemorySegment compressUsingDeflate(MemorySegment input, int level, SegmentAllocator allocator) {
-        MemorySegment in = NativeUtil.toNativeSegment(input);
+    public static MemorySegment compressUsingDeflate(MemorySegment input, int level, Allocator allocator) {
+        MemorySegment in = convertToNativeSegment(input, allocator);
         level = level >= DeflateBinding.LIBDEFLATE_FASTEST_LEVEL && level <= DeflateBinding.LIBDEFLATE_SLOWEST_LEVEL ? level : DeflateBinding.LIBDEFLATE_DEFAULT_LEVEL;
         long inBytes = in.byteSize();
         MemorySegment compressor = DeflateBinding.allocCompressor(level);
         try{
             long outBytes = DeflateBinding.deflateCompressBound(compressor, inBytes);
+            if(outBytes <= 0L) {
+                throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
+            }
             MemorySegment out = allocator.allocate(ValueLayout.JAVA_BYTE, outBytes);
             long compressed = DeflateBinding.deflateCompress(compressor, in, inBytes, out, outBytes);
             if(compressed <= 0L) {
@@ -49,13 +87,16 @@ public final class CompressUtil {
         }
     }
 
-    public static MemorySegment compressUsingGzip(MemorySegment input, int level, SegmentAllocator allocator) {
-        MemorySegment in = NativeUtil.toNativeSegment(input);
+    public static MemorySegment compressUsingGzip(MemorySegment input, int level, Allocator allocator) {
+        MemorySegment in = convertToNativeSegment(input, allocator);
         level = level >= DeflateBinding.LIBDEFLATE_FASTEST_LEVEL && level <= DeflateBinding.LIBDEFLATE_SLOWEST_LEVEL ? level : DeflateBinding.LIBDEFLATE_DEFAULT_LEVEL;
         long inBytes = in.byteSize();
         MemorySegment compressor = DeflateBinding.allocCompressor(level);
         try{
             long outBytes = DeflateBinding.gzipCompressBound(compressor, inBytes);
+            if(outBytes <= 0L) {
+                throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
+            }
             MemorySegment out = allocator.allocate(ValueLayout.JAVA_BYTE, outBytes);
             long compressed = DeflateBinding.gzipCompress(compressor, in, inBytes, out, outBytes);
             if(compressed <= 0L) {
@@ -67,12 +108,17 @@ public final class CompressUtil {
         }
     }
 
-    public static MemorySegment decompressUsingDeflate(MemorySegment input, SegmentAllocator allocator) {
+    public static MemorySegment decompressUsingBrotli(MemorySegment input, Allocator allocator) {
+        // TODO
+        return null;
+    }
+
+    public static MemorySegment decompressUsingDeflate(MemorySegment input, Allocator allocator) {
         return decompressUsingDeflate(input, Long.MIN_VALUE, allocator);
     }
 
-    public static MemorySegment decompressUsingDeflate(MemorySegment input, long originalSize, SegmentAllocator allocator) {
-        MemorySegment in = NativeUtil.toNativeSegment(input);
+    public static MemorySegment decompressUsingDeflate(MemorySegment input, long originalSize, Allocator allocator) {
+        MemorySegment in = convertToNativeSegment(input, allocator);
         long inBytes = in.byteSize();
         MemorySegment decompressor = DeflateBinding.allocDecompressor();
         try{
@@ -101,12 +147,12 @@ public final class CompressUtil {
         }
     }
 
-    public static MemorySegment decompressUsingGzip(MemorySegment input, SegmentAllocator allocator) {
+    public static MemorySegment decompressUsingGzip(MemorySegment input, Allocator allocator) {
         return decompressUsingGzip(input, Long.MIN_VALUE, allocator);
     }
 
-    public static MemorySegment decompressUsingGzip(MemorySegment input, long originalSize, SegmentAllocator allocator) {
-        MemorySegment in = NativeUtil.toNativeSegment(input);
+    public static MemorySegment decompressUsingGzip(MemorySegment input, long originalSize, Allocator allocator) {
+        MemorySegment in = convertToNativeSegment(input, allocator);
         long inBytes = in.byteSize();
         MemorySegment decompressor = DeflateBinding.allocDecompressor();
         try{

@@ -4,7 +4,7 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 
 import java.util.Arrays;
-import java.util.List;
+import java.util.Iterator;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -13,14 +13,15 @@ import java.util.concurrent.locks.ReentrantLock;
  *   However, it's hard to design a structure which works well for both platform thread and virtual thread, ReentrantLock might be the best we could do at present time.
  */
 public final class TaskQueue<T> {
+    private static final Object[] EMPTY_ARRAY = {};
+    private final Itr<T> EMPTY_ITR = new Itr<>(EMPTY_ARRAY);
     private final Lock lock = new ReentrantLock();
-    private final int initialSize;
+    private final Object[] initialElements;
     private Object[] elements;
     private int index;
 
     public TaskQueue(int initialSize) {
-        this.initialSize = initialSize;
-        this.elements = new Object[initialSize];
+        this.initialElements = this.elements = new Object[initialSize];
         this.index = 0;
     }
 
@@ -43,20 +44,37 @@ public final class TaskQueue<T> {
         }
     }
 
+    private static class Itr<E> implements Iterator<E> {
+        private final Object[] array;
+        private int currentIndex = 0;
+
+        Itr(Object[] array) {
+            this.array = array;
+        }
+        @Override
+        public boolean hasNext() {
+            return currentIndex < array.length;
+        }
+        @SuppressWarnings("unchecked")
+        @Override
+        public E next() {
+            return (E) array[currentIndex++];
+        }
+    }
+
     /**
      *   Poll all the tasks from current task queue
      */
-    @SuppressWarnings("unchecked")
-    public List<T> elements() {
+    public Iterable<T> elements() {
         lock.lock();
         try{
             if(index > 0) {
-                List<Object> result = Arrays.stream(elements, 0, index).toList();
-                elements = new Object[initialSize];
+                Itr<T> itr = new Itr<>(Arrays.copyOfRange(elements, 0, index));
+                elements = initialElements;
                 index = 0;
-                return (List<T>) result;
+                return () -> itr;
             }else {
-                return List.of();
+                return () -> EMPTY_ITR;
             }
         }finally {
             lock.unlock();

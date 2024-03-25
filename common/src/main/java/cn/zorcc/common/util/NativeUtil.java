@@ -119,21 +119,6 @@ public final class NativeUtil {
         throw new UnsupportedOperationException();
     }
 
-    public static MemorySegment toNativeSegment(MemorySegment memorySegment) {
-        return toNativeSegment(memorySegment, autoArena);
-    }
-
-    public static MemorySegment toNativeSegment(MemorySegment memorySegment, SegmentAllocator allocator) {
-        if(memorySegment.isNative()) {
-            return memorySegment;
-        }else {
-            long byteSize = memorySegment.byteSize();
-            MemorySegment nativeSegment = allocator.allocate(ValueLayout.JAVA_BYTE, byteSize);
-            MemorySegment.copy(memorySegment, 0L, nativeSegment, 0L, byteSize);
-            return nativeSegment;
-        }
-    }
-
     /**
      *  Loading a dynamic library from the TENET_LIBRARY_PATH
      *  Note that link would probably not work well, it's recommended to just make a copy into the folder

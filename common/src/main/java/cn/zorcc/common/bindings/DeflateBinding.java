@@ -11,6 +11,9 @@ import java.lang.foreign.SymbolLookup;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 
+/**
+ *   Adding support for GZIP and Deflate compression/decompression using <a href="https://github.com/ebiggers/libdeflate"> libdeflate </a>
+ */
 public final class DeflateBinding {
     public static final int LIBDEFLATE_SUCCESS = 0;
     public static final int LIBDEFLATE_BAD_DATA = 1;

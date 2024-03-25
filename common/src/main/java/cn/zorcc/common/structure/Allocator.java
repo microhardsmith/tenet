@@ -32,11 +32,13 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
         return new SlicingAllocator(memorySegment);
     }
 
+    boolean isNative();
+
     @Override
     void close();
 
     /**
-     *   Allocator for heap memory usage, Allocator.HEAP should be used instead of creating a new one
+     *   Allocator for heap memory usage, The global HEAP instance should be used instead of creating a new one
      */
     final class HeapAllocator implements Allocator {
 
@@ -51,6 +53,11 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
                 default -> throw new FrameworkException(ExceptionType.NATIVE, STR."Unexpected alignment : \{byteAlignment}");
             };
             return memorySegment.byteSize() == byteSize ? memorySegment.asSlice(0L, byteSize) : memorySegment;
+        }
+
+        @Override
+        public boolean isNative() {
+            return false;
         }
 
         @Override
@@ -98,6 +105,11 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
         }
 
         @Override
+        public boolean isNative() {
+            return true;
+        }
+
+        @Override
         public void close() {
             final int len = index;
             for(int i = 0; i < len; i++) {
@@ -135,6 +147,11 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
                 }
                 default -> throw new FrameworkException(ExceptionType.NATIVE, STR."Unexpected alignment : \{byteAlignment}");
             }
+        }
+
+        @Override
+        public boolean isNative() {
+            return segment.isNative();
         }
 
         @Override

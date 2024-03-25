@@ -4,16 +4,20 @@ import cn.zorcc.common.network.ListenerTask;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-
 public class TaskQueueTest {
     @Test
     public void testTaskQueue() {
-        TaskQueue<ListenerTask> queue = new TaskQueue<>(10);
-        for(int i = 0; i < 100; i++) {
+        TaskQueue<ListenerTask> queue = new TaskQueue<>(1000);
+        for(int i = 0; i < 1000; i++) {
             queue.offer(new ListenerTask(null, null, null, null, null, null, null));
         }
-        List<ListenerTask> elements = queue.elements();
-        Assertions.assertEquals(elements.size(), 100);
+        Iterable<ListenerTask> elements = queue.elements();
+        int count = 0;
+        while (elements.iterator().hasNext()) {
+            ListenerTask listenerTask = elements.iterator().next();
+            Assertions.assertNull(listenerTask.provider());
+            count++;
+        }
+        Assertions.assertEquals(count, 1000);
     }
 }

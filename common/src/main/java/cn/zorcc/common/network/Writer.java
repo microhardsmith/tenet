@@ -36,7 +36,7 @@ public record Writer(
         int sequence = counter.getAndIncrement();
         return Thread.ofPlatform().name(STR."writer-\{sequence}").unstarted(() -> {
             log.info(STR."Initializing writer thread, sequence : \{sequence}");
-            try(Allocator allocator = Allocator.newDirectAllocator()){
+            try(Allocator allocator = Allocator.newDirectAllocator()) {
                 IntMap<WriterNode> nodeMap = IntMap.newTreeMap(config.getWriterMapSize());
                 MemorySegment reservedSegment = allocator.allocate(ValueLayout.JAVA_BYTE, config.getWriterBufferSize());
                 processWriterTasks(nodeMap, queue, reservedSegment);

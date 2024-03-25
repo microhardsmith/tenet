@@ -2,6 +2,7 @@ package cn.zorcc.common.jmh;
 
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.util.CompressUtil;
 import cn.zorcc.common.util.NativeUtil;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -12,7 +13,6 @@ import org.openjdk.jmh.runner.RunnerException;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
@@ -47,9 +47,9 @@ public class CompressionJmhTest extends JmhTest {
 
     @Benchmark
     public void libDeflateTest(Blackhole bh) {
-        try(Arena arena = Arena.ofConfined()) {
-            MemorySegment m1 = CompressUtil.compressUsingDeflate(originalSegment, level, arena);
-            bh.consume(CompressUtil.decompressUsingDeflate(m1, arena));
+        try(Allocator allocator = Allocator.newDirectAllocator()) {
+            MemorySegment m1 = CompressUtil.compressUsingDeflate(originalSegment, level, allocator);
+            bh.consume(CompressUtil.decompressUsingDeflate(m1, allocator));
         }
     }
 
@@ -61,9 +61,9 @@ public class CompressionJmhTest extends JmhTest {
 
     @Benchmark
     public void libGzipTest(Blackhole bh) {
-        try(Arena arena = Arena.ofConfined()) {
-            MemorySegment m1 = CompressUtil.compressUsingGzip(originalSegment, level, arena);
-            bh.consume(CompressUtil.decompressUsingGzip(m1, arena));
+        try(Allocator allocator = Allocator.newDirectAllocator()) {
+            MemorySegment m1 = CompressUtil.compressUsingGzip(originalSegment, level, allocator);
+            bh.consume(CompressUtil.decompressUsingGzip(m1, allocator));
         }
     }
 

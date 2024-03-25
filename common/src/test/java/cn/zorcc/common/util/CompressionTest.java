@@ -1,10 +1,10 @@
 package cn.zorcc.common.util;
 
 import cn.zorcc.common.bindings.DeflateBinding;
+import cn.zorcc.common.structure.Allocator;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
@@ -30,22 +30,22 @@ public class CompressionTest {
 
     @Test
     public void testLibDeflateCompress() {
-        try(Arena arena = Arena.ofConfined()) {
+        try(Allocator allocator = Allocator.newDirectAllocator()) {
             byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
             MemorySegment m = MemorySegment.ofArray(str.getBytes(StandardCharsets.UTF_8));
-            MemorySegment compressed = CompressUtil.compressUsingDeflate(m, DeflateBinding.LIBDEFLATE_FASTEST_LEVEL, arena);
-            MemorySegment decompressed = CompressUtil.decompressUsingDeflate(compressed, arena);
+            MemorySegment compressed = CompressUtil.compressUsingDeflate(m, DeflateBinding.LIBDEFLATE_FASTEST_LEVEL, allocator);
+            MemorySegment decompressed = CompressUtil.decompressUsingDeflate(compressed, allocator);
             Assertions.assertArrayEquals(bytes, decompressed.toArray(ValueLayout.JAVA_BYTE));
         }
     }
 
     @Test
     public void testLibGzipCompress() {
-        try(Arena arena = Arena.ofConfined()) {
+        try(Allocator allocator = Allocator.newDirectAllocator()) {
             byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
             MemorySegment m = MemorySegment.ofArray(str.getBytes(StandardCharsets.UTF_8));
-            MemorySegment compressed = CompressUtil.compressUsingGzip(m, DeflateBinding.LIBDEFLATE_FASTEST_LEVEL, arena);
-            MemorySegment decompressed = CompressUtil.decompressUsingGzip(compressed, arena);
+            MemorySegment compressed = CompressUtil.compressUsingGzip(m, DeflateBinding.LIBDEFLATE_FASTEST_LEVEL, allocator);
+            MemorySegment decompressed = CompressUtil.decompressUsingGzip(compressed, allocator);
             Assertions.assertArrayEquals(bytes, decompressed.toArray(ValueLayout.JAVA_BYTE));
         }
     }
