@@ -39,7 +39,7 @@ public class HttpTest {
         Thread.sleep(Long.MAX_VALUE);
     }
 
-    public static Net createHttpNet() {
+    private static Net createHttpNet() {
         ListenerConfig httpListenerConfig = new ListenerConfig();
         httpListenerConfig.setEncoderSupplier(HttpServerEncoder::new);
         httpListenerConfig.setDecoderSupplier(HttpServerDecoder::new);
@@ -51,7 +51,7 @@ public class HttpTest {
         return net;
     }
 
-    public static Net createHttpsNet() {
+    private static Net createHttpsNet() {
         ListenerConfig httpsListenerConfig = new ListenerConfig();
         httpsListenerConfig.setEncoderSupplier(HttpServerEncoder::new);
         httpsListenerConfig.setDecoderSupplier(HttpServerDecoder::new);
@@ -63,7 +63,7 @@ public class HttpTest {
         return net;
     }
 
-    public static Net createHttpAndHttpsNet() {
+    private static Net createHttpAndHttpsNet() {
         ListenerConfig httpListenerConfig = new ListenerConfig();
         httpListenerConfig.setEncoderSupplier(HttpServerEncoder::new);
         httpListenerConfig.setDecoderSupplier(HttpServerDecoder::new);

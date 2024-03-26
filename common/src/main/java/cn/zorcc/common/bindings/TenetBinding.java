@@ -15,6 +15,14 @@ public final class TenetBinding {
     private static final MethodHandle getFbfHandle;
     private static final MethodHandle getLbfHandle;
     private static final MethodHandle getNbfHandle;
+    private static final MethodHandle rpInitializeHandle;
+    private static final MethodHandle rpFinalizeHandle;
+    private static final MethodHandle rpThreadInitializeHandle;
+    private static final MethodHandle rpThreadFinalizeHandle;
+    private static final MethodHandle rpMalloc;
+    private static final MethodHandle rpRealloc;
+    private static final MethodHandle rpFree;
+
 
     static {
         SymbolLookup symbolLookup = NativeUtil.loadLibrary(Constants.TENET);
@@ -23,6 +31,13 @@ public final class TenetBinding {
         getFbfHandle = NativeUtil.methodHandle(symbolLookup, "get_fbf", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.critical(false));
         getLbfHandle = NativeUtil.methodHandle(symbolLookup, "get_lbf", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.critical(false));
         getNbfHandle = NativeUtil.methodHandle(symbolLookup, "get_nbf", FunctionDescriptor.of(ValueLayout.JAVA_INT), Linker.Option.critical(false));
+        rpInitializeHandle = NativeUtil.methodHandle(symbolLookup, "rp_initialize", FunctionDescriptor.of(ValueLayout.JAVA_INT));
+        rpFinalizeHandle= NativeUtil.methodHandle(symbolLookup, "rp_finalize", FunctionDescriptor.ofVoid());
+        rpThreadInitializeHandle = NativeUtil.methodHandle(symbolLookup, "rp_tinitialize", FunctionDescriptor.ofVoid());
+        rpThreadFinalizeHandle = NativeUtil.methodHandle(symbolLookup, "rp_tfinalize", FunctionDescriptor.ofVoid());
+        rpMalloc = NativeUtil.methodHandle(symbolLookup, "rp_malloc", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+        rpRealloc = NativeUtil.methodHandle(symbolLookup, "rp_realloc", FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+        rpFree = NativeUtil.methodHandle(symbolLookup, "rp_free", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
     }
 
     private TenetBinding() {
@@ -68,4 +83,61 @@ public final class TenetBinding {
             throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
     }
+
+    public static int rpInitialize() {
+        try{
+            return (int) rpInitializeHandle.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static void rpFinalize() {
+        try{
+            rpFinalizeHandle.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static void rpThreadInitialize() {
+        try{
+            rpThreadInitializeHandle.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static void rpThreadFinalize() {
+        try{
+            rpThreadFinalizeHandle.invokeExact();
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static MemorySegment rpMalloc(long size) {
+        try{
+            return (MemorySegment) rpFinalizeHandle.invokeExact(size);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static MemorySegment rpRealloc(MemorySegment ptr, long size) {
+        try{
+            return (MemorySegment) rpRealloc.invokeExact(ptr, size);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static void rpFree(MemorySegment ptr) {
+        try{
+            rpFree.invokeExact(ptr);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
 }
