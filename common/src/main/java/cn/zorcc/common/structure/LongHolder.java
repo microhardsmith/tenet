@@ -18,7 +18,7 @@ public final class LongHolder {
     static {
         try {
             MethodHandles.Lookup lookup = MethodHandles.lookup();
-            handle = lookup.findVarHandle(LongHolder.class, "value", long.class);
+            handle = lookup.findVarHandle(LongHolder.class, "value", long.class).withInvokeExactBehavior();
         } catch (ReflectiveOperationException e) {
             throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
         }

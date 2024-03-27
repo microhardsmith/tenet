@@ -4,6 +4,7 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Decoder;
+import cn.zorcc.common.network.Poller;
 import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.structure.ReadBuffer;
 import cn.zorcc.common.structure.WriteBuffer;
@@ -210,12 +211,12 @@ public final class HttpServerDecoder implements Decoder {
         return switch (current.getHttpHeader().get(HttpHeader.K_CONTENT_ENCODING)) {
             case null -> rawData;
             case HttpHeader.V_GZIP -> {
-                try(Allocator allocator = Allocator.newDirectAllocator()) {
+                try(Allocator allocator = Poller.localAllocator()) {
                     yield CompressUtil.decompressUsingGzip(rawData, allocator);
                 }
             }
             case HttpHeader.V_DEFLATE -> {
-                try(Allocator allocator = Allocator.newDirectAllocator()) {
+                try(Allocator allocator = Poller.localAllocator()) {
                     yield CompressUtil.decompressUsingDeflate(rawData, allocator);
                 }
             }

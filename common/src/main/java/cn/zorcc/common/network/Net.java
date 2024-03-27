@@ -4,12 +4,10 @@ import cn.zorcc.common.Clock;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.LifeCycle;
+import cn.zorcc.common.bindings.TenetBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.structure.Allocator;
-import cn.zorcc.common.structure.IntMap;
-import cn.zorcc.common.structure.TaskQueue;
-import cn.zorcc.common.structure.Wheel;
+import cn.zorcc.common.structure.*;
 import cn.zorcc.common.util.ConfigUtil;
 import cn.zorcc.common.util.NativeUtil;
 
@@ -46,6 +44,7 @@ public final class Net implements LifeCycle {
     private final Lock writeLock = readWriteLock.writeLock();
     private final Mux mux = osNetworkLibrary.createMux();
     private final Set<Provider> clientProviders = ConcurrentHashMap.newKeySet();
+    private final MemApi memApi;
     private final List<Poller> pollers;
     private final List<Writer> writers;
     private final Duration shutdownTimeout;
@@ -53,8 +52,31 @@ public final class Net implements LifeCycle {
     private final TaskQueue<ListenerTask> netQueue;
     private int state;
 
+    /**
+     *   Custom rpMalloc for Net internal usage
+     */
+    record RpMemApi() implements MemApi {
+        @Override
+        public MemorySegment allocateMemory(long byteSize) {
+            return TenetBinding.rpMalloc(byteSize);
+        }
+
+        @Override
+        public MemorySegment reallocateMemory(MemorySegment ptr, long newSize) {
+            return TenetBinding.rpRealloc(ptr, newSize);
+        }
+
+        @Override
+        public void freeMemory(MemorySegment ptr) {
+            TenetBinding.rpFree(ptr);
+        }
+    }
+
     private Thread createNetThread() {
         return Thread.ofPlatform().unstarted(() -> {
+            if(config.isEnableRpMalloc()) {
+                TenetBinding.rpThreadInitialize();
+            }
             int maxEvents = config.getMaxEvents();
             int muxTimeout = config.getMuxTimeout();
             IntMap<ListenerTask> listenerMap = IntMap.newTreeMap(config.getMapSize());
@@ -112,6 +134,9 @@ public final class Net implements LifeCycle {
                 }
             } finally {
                 serverProviders.forEach(Provider::close);
+                if(config.isEnableRpMalloc()) {
+                    TenetBinding.rpThreadFinalize();
+                }
             }
         });
     }
@@ -134,9 +159,10 @@ public final class Net implements LifeCycle {
         }
         validateConfig(config);
         this.config = config;
+        this.memApi = config.isEnableRpMalloc() ? new RpMemApi() : MemApi.DEFAULT;
         this.netQueue = new TaskQueue<>(config.getQueueSize());
-        this.pollers = IntStream.range(0, config.getPollerCount()).mapToObj(_ -> Poller.newPoller(config)).toList();
-        this.writers = IntStream.range(0, config.getWriterCount()).mapToObj(_ -> Writer.newWriter(config)).toList();
+        this.pollers = IntStream.range(0, config.getPollerCount()).mapToObj(_ -> Poller.newPoller(config, memApi)).toList();
+        this.writers = IntStream.range(0, config.getWriterCount()).mapToObj(_ -> Writer.newWriter(config, memApi)).toList();
         this.shutdownTimeout = Duration.ofSeconds(config.getGracefulShutdownTimeout());
         this.netThread = createNetThread();
     }
@@ -242,6 +268,9 @@ public final class Net implements LifeCycle {
             if(state != Constants.INITIAL) {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
+            if(config.isEnableRpMalloc() && TenetBinding.rpInitialize() < 0) {
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to initialize RpMalloc allocator");
+            }
             pollers.forEach(poller -> poller.pollerThread().start());
             writers.forEach(writer -> writer.writerThread().start());
             netThread.start();
@@ -272,6 +301,9 @@ public final class Net implements LifeCycle {
             }
             clientProviders.forEach(Provider::close);
             osNetworkLibrary.exit();
+            if(config.isEnableRpMalloc()) {
+                TenetBinding.rpFinalize();
+            }
             log.debug(STR."Exiting Net gracefully, cost : \{Duration.ofNanos(Clock.elapsed(nano)).toMillis()} ms");
             state = Constants.STOPPED;
         } catch (InterruptedException e) {

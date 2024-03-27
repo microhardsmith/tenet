@@ -38,57 +38,13 @@ public final class NativeUtil {
      *   Global dynamic library cache to avoid repeated loading
      */
     private static final Map<String, SymbolLookup> libraryCache = new ConcurrentHashMap<>();
-    private static final String MALLOC = "malloc";
-    private static final String REALLOC = "realloc";
-    private static final String FREE = "free";
-    private static final MethodHandle mallocHandle;
-    private static final MethodHandle reallocHandle;
-    private static final MethodHandle freeHandle;
-    private static final VarHandle BYTE_HANDLE = ValueLayout.JAVA_BYTE.varHandle();
-    private static final VarHandle SHORT_HANDLE = ValueLayout.JAVA_SHORT_UNALIGNED.varHandle();
-    private static final VarHandle INT_HANDLE = ValueLayout.JAVA_INT_UNALIGNED.varHandle();
-    private static final VarHandle LONG_HANDLE = ValueLayout.JAVA_LONG_UNALIGNED.varHandle();
-    private static final VarHandle FLOAT_HANDLE = ValueLayout.JAVA_FLOAT_UNALIGNED.varHandle();
-    private static final VarHandle DOUBLE_HANDLE = ValueLayout.JAVA_DOUBLE_UNALIGNED.varHandle();
-    private static final VarHandle ADDRESS_HANDLE = ValueLayout.ADDRESS_UNALIGNED.varHandle();
-
-    static {
-        String allocatorLibrary = System.getProperty(Constants.ALLOCATOR);
-        if(allocatorLibrary == null || allocatorLibrary.isBlank()) {
-            mallocHandle = NativeUtil.nativeMethodHandle(MALLOC, FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.JAVA_LONG), Linker.Option.critical(false));
-            reallocHandle = NativeUtil.nativeMethodHandle(REALLOC, FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG), Linker.Option.critical(false));
-            freeHandle = NativeUtil.nativeMethodHandle(FREE, FunctionDescriptor.ofVoid(ValueLayout.ADDRESS), Linker.Option.critical(false));
-        }else {
-            SymbolLookup symbolLookup = loadMultipleLibrary(allocatorLibrary);
-            mallocHandle = NativeUtil.methodHandle(symbolLookup, System.getProperty(MALLOC, MALLOC), FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.JAVA_LONG), Linker.Option.critical(false));
-            reallocHandle = NativeUtil.methodHandle(symbolLookup, System.getProperty(REALLOC, REALLOC), FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG), Linker.Option.critical(false));
-            freeHandle = NativeUtil.methodHandle(symbolLookup, System.getProperty(FREE, FREE), FunctionDescriptor.ofVoid(ValueLayout.ADDRESS), Linker.Option.critical(false));
-        }
-    }
-
-    public static MemorySegment malloc(long byteSize) {
-        try {
-            return (MemorySegment) mallocHandle.invokeExact(byteSize);
-        } catch (Throwable e) {
-            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED);
-        }
-    }
-
-    public static MemorySegment realloc(MemorySegment ptr, long newSize) {
-        try{
-            return (MemorySegment) reallocHandle.invokeExact(ptr, newSize);
-        } catch (Throwable e) {
-            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED);
-        }
-    }
-
-    public static void free(MemorySegment ptr) {
-        try{
-            freeHandle.invokeExact(ptr);
-        } catch (Throwable e) {
-            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED);
-        }
-    }
+    private static final VarHandle BYTE_HANDLE = ValueLayout.JAVA_BYTE.varHandle().withInvokeExactBehavior();
+    private static final VarHandle SHORT_HANDLE = ValueLayout.JAVA_SHORT_UNALIGNED.varHandle().withInvokeExactBehavior();
+    private static final VarHandle INT_HANDLE = ValueLayout.JAVA_INT_UNALIGNED.varHandle().withInvokeExactBehavior();
+    private static final VarHandle LONG_HANDLE = ValueLayout.JAVA_LONG_UNALIGNED.varHandle().withInvokeExactBehavior();
+    private static final VarHandle FLOAT_HANDLE = ValueLayout.JAVA_FLOAT_UNALIGNED.varHandle().withInvokeExactBehavior();
+    private static final VarHandle DOUBLE_HANDLE = ValueLayout.JAVA_DOUBLE_UNALIGNED.varHandle().withInvokeExactBehavior();
+    private static final VarHandle ADDRESS_HANDLE = ValueLayout.ADDRESS_UNALIGNED.varHandle().withInvokeExactBehavior();
 
     /**
      *   Detect if current program is running from a jar file

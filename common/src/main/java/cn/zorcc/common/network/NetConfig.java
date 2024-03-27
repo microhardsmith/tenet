@@ -5,6 +5,11 @@ import cn.zorcc.common.util.NativeUtil;
 
 public final class NetConfig {
     /**
+     *  TenetBinding already embedded a custom RpMalloc allocator for thread-local memory allocation
+     *  It's recommended to use RpMalloc inside the Net, Poller, and Writer for better performance
+     */
+    private boolean enableRpMalloc = true;
+    /**
      *  Max length for a single mux call
      *  For each mux, maxEvents * readBufferSize bytes of native memory were pre-allocated
      */
@@ -84,6 +89,14 @@ public final class NetConfig {
      *  if your application has to maintain thousands of connections at the same time, then you can increase this value appropriately
      */
     private int writerMapSize = 256;
+
+    public boolean isEnableRpMalloc() {
+        return enableRpMalloc;
+    }
+
+    public void setEnableRpMalloc(boolean enableRpMalloc) {
+        this.enableRpMalloc = enableRpMalloc;
+    }
 
     public int getMaxEvents() {
         return maxEvents;

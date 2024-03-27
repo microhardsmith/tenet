@@ -23,7 +23,6 @@ public final class TenetBinding {
     private static final MethodHandle rpRealloc;
     private static final MethodHandle rpFree;
 
-
     static {
         SymbolLookup symbolLookup = NativeUtil.loadLibrary(Constants.TENET);
         getStdoutHandle = NativeUtil.methodHandle(symbolLookup, "get_stdout", FunctionDescriptor.of(ValueLayout.ADDRESS), Linker.Option.critical(false));
@@ -118,7 +117,7 @@ public final class TenetBinding {
 
     public static MemorySegment rpMalloc(long size) {
         try{
-            return (MemorySegment) rpFinalizeHandle.invokeExact(size);
+            return (MemorySegment) rpMalloc.invokeExact(size);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }

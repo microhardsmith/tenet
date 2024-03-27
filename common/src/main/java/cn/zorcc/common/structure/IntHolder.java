@@ -18,7 +18,7 @@ public final class IntHolder {
     static {
         try {
             MethodHandles.Lookup lookup = MethodHandles.lookup();
-            handle = lookup.findVarHandle(IntHolder.class, "value", int.class);
+            handle = lookup.findVarHandle(IntHolder.class, "value", int.class).withInvokeExactBehavior();
         } catch (ReflectiveOperationException e) {
             throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
         }

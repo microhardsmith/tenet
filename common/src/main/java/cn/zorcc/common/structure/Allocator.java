@@ -19,10 +19,17 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
     Allocator HEAP = new HeapAllocator();
 
     /**
-     *   Creating a new Direct memory Allocator
+     *   Create a new Direct memory Allocator using target MemApi
+     */
+    static Allocator newDirectAllocator(MemApi memApi) {
+        return new DirectAllocator(memApi);
+    }
+
+    /**
+     *   Create a new Direct memory Allocator using System MemApi
      */
     static Allocator newDirectAllocator() {
-        return new DirectAllocator();
+        return newDirectAllocator(MemApi.DEFAULT);
     }
 
     /**
@@ -76,14 +83,20 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
      */
     final class DirectAllocator implements Allocator {
         private static final int SIZE = 8;
+        private final MemApi memApi;
         private long[] pointers;
         private int index = 0;
+
+        public DirectAllocator(MemApi memApi) {
+            this.memApi = memApi;
+        }
 
         @Override
         public MemorySegment allocate(long byteSize, long byteAlignment) {
             switch (Math.toIntExact(byteAlignment)) {
                 case Byte.BYTES, Short.BYTES, Integer.BYTES, Long.BYTES -> {
-                    MemorySegment ptr = NativeUtil.malloc(byteSize).reinterpret(byteSize);
+                    // if malloc returns a NULL pointer, reinterpret still works
+                    MemorySegment ptr = memApi.allocateMemory(byteSize).reinterpret(byteSize);
                     if(NativeUtil.checkNullPointer(ptr)) {
                         throw new OutOfMemoryError();
                     }
@@ -113,7 +126,7 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
         public void close() {
             final int len = index;
             for(int i = 0; i < len; i++) {
-                NativeUtil.free(MemorySegment.ofAddress(pointers[i]));
+                memApi.freeMemory(MemorySegment.ofAddress(pointers[i]));
             }
         }
     }
