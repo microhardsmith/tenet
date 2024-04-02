@@ -11,7 +11,7 @@ import java.util.Arrays;
 /**
  *   Allocator is a substitute for Arena, using malloc, realloc and free, which avoids internal checking and thus having much better performance
  */
-public sealed interface Allocator extends SegmentAllocator, AutoCloseable permits Allocator.HeapAllocator, Allocator.DirectAllocator, Allocator.SlicingAllocator {
+public sealed interface Allocator extends SegmentAllocator, AutoCloseable permits Allocator.HeapAllocator, Allocator.DirectAllocator {
 
     /**
      *   Global heap allocator
@@ -32,15 +32,20 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
         return newDirectAllocator(MemApi.DEFAULT);
     }
 
-    /**
-     *   Creating a new Slicing memory Allocator
-     */
-    static Allocator newSlicingAllocator(MemorySegment memorySegment) {
-        return new SlicingAllocator(memorySegment);
+    static void checkByteSize(long byteSize) {
+        if(byteSize <= 0L) {
+            throw new FrameworkException(ExceptionType.NATIVE, "ByteSize overflow");
+        }
     }
 
+    /**
+     *   Return if current allocator using native memory
+     */
     boolean isNative();
 
+    /**
+     *   Release all the memory allocated by current allocator
+     */
     @Override
     void close();
 
@@ -48,18 +53,15 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
      *   Allocator for heap memory usage, The global HEAP instance should be used instead of creating a new one
      */
     final class HeapAllocator implements Allocator {
-
+        // A fair amount of waste wouldn't harm the system
         @Override
         public MemorySegment allocate(long byteSize, long byteAlignment) {
-            int size = Math.toIntExact(byteSize);
+            checkByteSize(byteSize);
             MemorySegment memorySegment = switch (Math.toIntExact(byteAlignment)) {
-                case Byte.BYTES -> MemorySegment.ofArray(new byte[size]);
-                case Short.BYTES -> MemorySegment.ofArray(new short[calculateSize(byteSize, 1)]);
-                case Integer.BYTES -> MemorySegment.ofArray(new int[calculateSize(byteSize, 2)]);
-                case Long.BYTES -> MemorySegment.ofArray(new long[calculateSize(byteSize, 3)]);
+                case Byte.BYTES, Short.BYTES, Integer.BYTES, Long.BYTES -> MemorySegment.ofArray(new long[Math.toIntExact((byteSize + 7) >> 3)]);
                 default -> throw new FrameworkException(ExceptionType.NATIVE, STR."Unexpected alignment : \{byteAlignment}");
             };
-            return memorySegment.byteSize() == byteSize ? memorySegment.asSlice(0L, byteSize) : memorySegment;
+            return memorySegment.byteSize() == byteSize ? memorySegment : memorySegment.asSlice(0L, byteSize);
         }
 
         @Override
@@ -70,11 +72,6 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
         @Override
         public void close() {
             // No external operations needed for heap allocator
-        }
-
-        private static int calculateSize(long byteSize, long shift) {
-            long size = (byteSize + 1) >> shift;
-            return Math.toIntExact(size);
         }
     }
 
@@ -93,6 +90,7 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
 
         @Override
         public MemorySegment allocate(long byteSize, long byteAlignment) {
+            checkByteSize(byteSize);
             switch (Math.toIntExact(byteAlignment)) {
                 case Byte.BYTES, Short.BYTES, Integer.BYTES, Long.BYTES -> {
                     // if malloc returns a NULL pointer, reinterpret still works
@@ -128,48 +126,6 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
             for(int i = 0; i < len; i++) {
                 memApi.freeMemory(MemorySegment.ofAddress(pointers[i]));
             }
-        }
-    }
-
-    /**
-     *   Slicing allocator is a very dangerous allocator which should be directly used by developers
-     *   It always allocates memory by slicing the initial segment, and exception would be thrown if there are no enough places for that
-     *   So, it's the developers duty to make sure each allocation should be tiny and fast given back
-     */
-    record SlicingAllocator(
-            MemorySegment segment,
-            LongHolder indexHolder
-    ) implements Allocator {
-        SlicingAllocator(MemorySegment memorySegment) {
-            this(memorySegment, new LongHolder(0L));
-        }
-
-        @Override
-        public MemorySegment allocate(long byteSize, long byteAlignment) {
-            switch (Math.toIntExact(byteAlignment)) {
-                case Byte.BYTES, Short.BYTES, Integer.BYTES, Long.BYTES -> {
-                    long currentIndex = indexHolder.getValue();
-                    long address = segment.address();
-                    long offset = ((address + currentIndex + byteAlignment - 1) & (-byteAlignment)) - address;
-                    long nextIndex = offset + byteSize;
-                    if(nextIndex > segment.byteSize()) {
-                        throw new FrameworkException(ExceptionType.NATIVE, STR."SlicingAllocator overflow : \{nextIndex}");
-                    }
-                    indexHolder.setValue(nextIndex);
-                    return segment.asSlice(offset, byteSize);
-                }
-                default -> throw new FrameworkException(ExceptionType.NATIVE, STR."Unexpected alignment : \{byteAlignment}");
-            }
-        }
-
-        @Override
-        public boolean isNative() {
-            return segment.isNative();
-        }
-
-        @Override
-        public void close() {
-            // No external operations needed for slicing allocator
         }
     }
 

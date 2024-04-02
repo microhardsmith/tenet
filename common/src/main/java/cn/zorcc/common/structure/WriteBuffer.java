@@ -14,10 +14,9 @@ import java.util.Arrays;
 /**
  *   Direct memory WriteBuffer, not thread-safe, custom Resizer could be chosen to modify the default expansion mechanism
  */
-@SuppressWarnings("unused")
 public final class WriteBuffer implements AutoCloseable {
 
-    sealed interface WriteBufferPolicy permits DefaultWriteBufferPolicy, ReservedWriteBufferPolicy, HeapWriteBufferPolicy {
+    sealed interface WriteBufferPolicy permits NativeWriteBufferPolicy, ReservedWriteBufferPolicy, HeapWriteBufferPolicy {
         /**
          *   Resize target writeBuffer to contain more bytes than nextIndex, this function will not change the writeIndex of the writeBufferData
          */
@@ -31,7 +30,6 @@ public final class WriteBuffer implements AutoCloseable {
 
     private static final long MINIMAL_WRITE_BUFFER_SIZE = 8;
     private static final int DEFAULT_HEAP_BUFFER_SIZE = 32;
-    private static final long DEFAULT_DIRECT_BUFFER_SIZE = 4 * Constants.KB;
     private MemorySegment segment;
     private long writeIndex;
     private final WriteBufferPolicy policy;
@@ -42,30 +40,18 @@ public final class WriteBuffer implements AutoCloseable {
         this.policy = policy;
     }
 
-    public static WriteBuffer newDefaultWriteBuffer(MemApi memApi, long initialSize) {
+    public static WriteBuffer newNativeWriteBuffer(MemApi memApi, long initialSize) {
         if(initialSize < MINIMAL_WRITE_BUFFER_SIZE) {
             throw new FrameworkException(ExceptionType.NATIVE, "DefaultWriteBuffer exceeding minimal size");
         }
-        return new WriteBuffer(MemorySegment.NULL, new DefaultWriteBufferPolicy(memApi, initialSize));
+        return new WriteBuffer(MemorySegment.NULL, new NativeWriteBufferPolicy(memApi, initialSize));
     }
 
-    public static WriteBuffer newDefaultWriteBuffer(long initialSize) {
-        return newDefaultWriteBuffer(MemApi.DEFAULT, initialSize);
-    }
-
-    public static WriteBuffer newDefaultWriteBuffer() {
-        return newDefaultWriteBuffer(MemApi.DEFAULT, DEFAULT_DIRECT_BUFFER_SIZE);
-    }
-
-    public static WriteBuffer newReservedWriteBuffer(MemApi memApi, MemorySegment segment, boolean onHeap) {
+    public static WriteBuffer newReservedWriteBuffer(MemApi memApi, MemorySegment segment) {
         if(NativeUtil.checkNullPointer(segment)) {
             throw new FrameworkException(ExceptionType.NATIVE, "ReservedWriteBuffer couldn't be allocated with NULL pointer");
         }
-        return new WriteBuffer(segment, new ReservedWriteBufferPolicy(memApi, segment, onHeap));
-    }
-
-    public static WriteBuffer newReservedWriteBuffer(MemorySegment segment, boolean onHeap) {
-        return newReservedWriteBuffer(MemApi.DEFAULT, segment, onHeap);
+        return new WriteBuffer(segment, new ReservedWriteBufferPolicy(memApi, segment));
     }
 
     public static WriteBuffer newHeapWriteBuffer(long initialSize) {
@@ -287,24 +273,25 @@ public final class WriteBuffer implements AutoCloseable {
     }
 
     /**
-     *   Default writeBufferPolicy using malloc and free, double the memory allocated to contain the grown bytes
+     *   Native writeBufferPolicy using malloc, realloc and free, double the memory allocated to contain the grown bytes
      *   Memory were allocated when first resizing the buffer
      */
-    record DefaultWriteBufferPolicy(
+    record NativeWriteBufferPolicy(
             MemApi memApi,
             long initialSize
     ) implements WriteBufferPolicy {
         @Override
         public void resize(WriteBuffer writeBufferData, long nextIndex) {
+            final MemorySegment current = writeBufferData.segment;
             MemorySegment newNativeSegment;
-            if(writeBufferData.segment == MemorySegment.NULL) {
+            if(NativeUtil.checkNullPointer(current)) {
                 newNativeSegment = memApi.allocateMemory(Math.max(nextIndex, initialSize)).reinterpret(initialSize);
             }else {
-                long newLen = Math.max(nextIndex, writeBufferData.segment.byteSize() << 1);
+                long newLen = Math.max(nextIndex, current.byteSize() << 1);
                 if(newLen < 0L) {
                     throw new FrameworkException(ExceptionType.NATIVE, "MemorySize overflow");
                 }
-                newNativeSegment = memApi.reallocateMemory(writeBufferData.segment, newLen).reinterpret(newLen);
+                newNativeSegment = memApi.reallocateMemory(current, newLen).reinterpret(newLen);
             }
             if(NativeUtil.checkNullPointer(newNativeSegment)) {
                 throw new OutOfMemoryError();
@@ -314,7 +301,8 @@ public final class WriteBuffer implements AutoCloseable {
 
         @Override
         public void close(WriteBuffer writeBufferData) {
-            if(writeBufferData.segment != MemorySegment.NULL) {
+            final MemorySegment current = writeBufferData.segment;
+            if(!NativeUtil.checkNullPointer(current)) {
                 memApi.freeMemory(writeBufferData.segment);
             }
         }
@@ -326,33 +314,29 @@ public final class WriteBuffer implements AutoCloseable {
      */
     record ReservedWriteBufferPolicy(
             MemApi memApi,
-            MemorySegment initialSegment,
-            boolean onHeap
+            MemorySegment initialSegment
     ) implements WriteBufferPolicy {
 
         @Override
         public void resize(WriteBuffer writeBufferData, long nextIndex) {
-            long newLen = Math.max(nextIndex, writeBufferData.segment.byteSize() << 1);
+            final MemorySegment current = writeBufferData.segment;
+            long newLen = Math.max(nextIndex, current.byteSize() << 1);
             if(newLen < 0L) {
                 throw new FrameworkException(ExceptionType.NATIVE, "MemorySize overflow");
             }
-            MemorySegment newSegment;
-            if(onHeap) {
-                newSegment = Allocator.HEAP.allocate(ValueLayout.JAVA_BYTE, newLen);
-                MemorySegment.copy(writeBufferData.segment, 0L, newSegment, 0L, writeBufferData.writeIndex);
-            }else {
-                newSegment = memApi.reallocateMemory(writeBufferData.segment, newLen).reinterpret(newLen);
-                if(NativeUtil.checkNullPointer(newSegment)) {
-                    throw new OutOfMemoryError();
-                }
+            MemorySegment newSegment = current.address() == initialSegment.address() ?
+                    memApi.allocateMemory(newLen).reinterpret(newLen) :
+                    memApi.reallocateMemory(current, newLen).reinterpret(newLen);
+            if(NativeUtil.checkNullPointer(newSegment)) {
+                throw new OutOfMemoryError();
             }
             writeBufferData.segment = newSegment;
         }
 
         @Override
         public void close(WriteBuffer writeBufferData) {
-            MemorySegment current = writeBufferData.segment;
-            if(current != initialSegment && current.isNative()) {
+            final MemorySegment current = writeBufferData.segment;
+            if(current.address() != initialSegment.address()) {
                 memApi.freeMemory(current);
             }
         }
@@ -363,16 +347,17 @@ public final class WriteBuffer implements AutoCloseable {
     ) implements WriteBufferPolicy {
         @Override
         public void resize(WriteBuffer writeBufferData, long nextIndex) {
+            final MemorySegment current = writeBufferData.segment;
             MemorySegment newSegment;
-            if(writeBufferData.segment == MemorySegment.NULL) {
+            if(NativeUtil.checkNullPointer(current)) {
                 newSegment = Allocator.HEAP.allocate(ValueLayout.JAVA_BYTE, initialSize);
             }else {
-                long newLen = Math.max(nextIndex, writeBufferData.segment.byteSize() << 1);
+                long newLen = Math.max(nextIndex, current.byteSize() << 1);
                 if(newLen < 0L) {
                     throw new FrameworkException(ExceptionType.NATIVE, "MemorySize overflow");
                 }
                 newSegment = Allocator.HEAP.allocate(ValueLayout.JAVA_BYTE, newLen);
-                MemorySegment.copy(writeBufferData.segment, 0L, newSegment, 0L, writeBufferData.writeIndex);
+                MemorySegment.copy(current, 0L, newSegment, 0L, writeBufferData.writeIndex);
             }
             writeBufferData.segment = newSegment;
         }

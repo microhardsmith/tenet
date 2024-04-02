@@ -211,12 +211,12 @@ public final class HttpServerDecoder implements Decoder {
         return switch (current.getHttpHeader().get(HttpHeader.K_CONTENT_ENCODING)) {
             case null -> rawData;
             case HttpHeader.V_GZIP -> {
-                try(Allocator allocator = Poller.localAllocator()) {
+                try(Allocator allocator = Allocator.newDirectAllocator(Poller.localMemApi())) {
                     yield CompressUtil.decompressUsingGzip(rawData, allocator);
                 }
             }
             case HttpHeader.V_DEFLATE -> {
-                try(Allocator allocator = Poller.localAllocator()) {
+                try(Allocator allocator = Allocator.newDirectAllocator(Poller.localMemApi())) {
                     yield CompressUtil.decompressUsingDeflate(rawData, allocator);
                 }
             }

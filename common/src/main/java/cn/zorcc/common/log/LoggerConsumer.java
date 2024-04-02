@@ -3,8 +3,10 @@ package cn.zorcc.common.log;
 import cn.zorcc.common.AbstractLifeCycle;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
+import cn.zorcc.common.RpMalloc;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.structure.Allocator;
+import cn.zorcc.common.structure.MemApi;
 import cn.zorcc.common.structure.Wheel;
 
 import java.lang.foreign.MemorySegment;
@@ -34,9 +36,10 @@ public final class LoggerConsumer extends AbstractLifeCycle {
 
     private static Thread createConsumerThread(LogConfig logConfig) {
         return Thread.ofPlatform().name("tenet-log").unstarted(() -> {
-            try(Allocator allocator = Allocator.newDirectAllocator()) {
+            MemApi memApi = logConfig.isUsingRpMalloc() ? RpMalloc.tInitialize() : MemApi.DEFAULT;
+            try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
                 MemorySegment reserved = allocator.allocate(ValueLayout.JAVA_BYTE, logConfig.getBufferSize());
-                List<Consumer<LogEvent>> handlers = createEventHandlerList(logConfig, reserved);
+                List<Consumer<LogEvent>> handlers = createEventHandlerList(logConfig, reserved, memApi);
                 TransferQueue<LogEvent> queue = Logger.queue();
                 Wheel.wheel().addPeriodicJob(() -> {
                     if (!queue.offer(LogEvent.FLUSH_EVENT)) {
@@ -56,25 +59,28 @@ public final class LoggerConsumer extends AbstractLifeCycle {
         });
     }
 
-    private static List<Consumer<LogEvent>> createEventHandlerList(LogConfig logConfig, MemorySegment reserved) {
+    private static List<Consumer<LogEvent>> createEventHandlerList(LogConfig logConfig, MemorySegment reserved, MemApi memApi) {
         List<Consumer<LogEvent>> handlers = new ArrayList<>();
         ConsoleLogConfig consoleLogConfig = logConfig.getConsole();
         if(consoleLogConfig != null) {
-            handlers.add(new ConsoleLogEventHandler(logConfig, reserved));
+            handlers.add(new ConsoleLogEventHandler(logConfig, reserved, memApi));
         }
         FileLogConfig fileLogConfig = logConfig.getFile();
         if(fileLogConfig != null) {
-            handlers.add(new FileLogEventHandler(logConfig, reserved));
+            handlers.add(new FileLogEventHandler(logConfig, reserved, memApi));
         }
         SqliteLogConfig sqliteLogConfig = logConfig.getSqlite();
         if(sqliteLogConfig != null) {
-            handlers.add(new SqliteLogEventHandler(logConfig, reserved));
+            handlers.add(new SqliteLogEventHandler(logConfig, reserved, memApi));
         }
         return Collections.unmodifiableList(handlers);
     }
 
     @Override
     public void doInit() {
+        if(Logger.getLogConfig().isUsingRpMalloc()) {
+            RpMalloc.initialize();
+        }
         consumerThread.start();
     }
 
@@ -84,5 +90,8 @@ public final class LoggerConsumer extends AbstractLifeCycle {
             throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED);
         }
         consumerThread.join();
+        if(Logger.getLogConfig().isUsingRpMalloc()) {
+            RpMalloc.release();
+        }
     }
 }

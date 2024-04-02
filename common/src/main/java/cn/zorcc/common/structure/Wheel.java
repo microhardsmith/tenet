@@ -2,10 +2,12 @@ package cn.zorcc.common.structure;
 
 import cn.zorcc.common.*;
 import cn.zorcc.common.exception.FrameworkException;
-import org.jctools.queues.atomic.MpscUnboundedAtomicArrayQueue;
 
 import java.time.Duration;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
 
@@ -32,7 +34,7 @@ public sealed interface Wheel extends LifeCycle permits Wheel.WheelImpl {
         private final long tickNano;
         private final long bound;
         private final int cMask;
-        private final Queue<WheelTask> taskQueue;
+        private final TaskQueue<WheelTask> taskQueue;
         private final Job[] wheel;
         private final Map<Runnable, Job> jobMap = new HashMap<>();
         private final TreeSet<Job> waitSet = new TreeSet<>(Job::compareTo);
@@ -52,7 +54,7 @@ public sealed interface Wheel extends LifeCycle permits Wheel.WheelImpl {
             this.tickNano = Duration.ofMillis(tick).toNanos();
             this.bound = slots * tick;
             this.cMask = mask >> 1;
-            this.taskQueue = new MpscUnboundedAtomicArrayQueue<>(Constants.KB);
+            this.taskQueue = new TaskQueue<>(Constants.KB);
             this.wheel = new Job[slots];
             this.wheelThread = Thread.ofPlatform().name("wheel").unstarted(this::run);
         }
@@ -66,9 +68,7 @@ public sealed interface Wheel extends LifeCycle permits Wheel.WheelImpl {
 
         @Override
         public void doExit() throws InterruptedException {
-            if (!taskQueue.offer(exitTask)) {
-                throw new FrameworkException(ExceptionType.WHEEL, Constants.UNREACHED);
-            }
+            taskQueue.offer(exitTask);
             wheelThread.join();
         }
 
@@ -90,14 +90,8 @@ public sealed interface Wheel extends LifeCycle permits Wheel.WheelImpl {
             long current = Clock.current();
             WheelTask wheelTask = new WheelTask(current + delay.toMillis(), period == null ? ONE_TIME_MISSION : period.toMillis(), mission);
             WheelTask cancelTask = new WheelTask(current + delay.toMillis(), period == null ? CANCEL_ONE_TIME_MISSION : CANCEL_PERIOD_MISSION, mission);
-            if(!taskQueue.offer(wheelTask)) {
-                throw new FrameworkException(ExceptionType.WHEEL, Constants.UNREACHED);
-            }
-            return () -> {
-                if(!taskQueue.offer(cancelTask)) {
-                    throw new FrameworkException(ExceptionType.WHEEL, Constants.UNREACHED);
-                }
-            };
+            taskQueue.offer(wheelTask);
+            return () -> taskQueue.offer(cancelTask);
         }
 
 
@@ -113,11 +107,8 @@ public sealed interface Wheel extends LifeCycle permits Wheel.WheelImpl {
                 slot = (slot + 1) & mask;
 
                 // inspecting if there are tasks that should be added to the wheel
-                for( ; ;) {
-                    final WheelTask task = taskQueue.poll();
-                    if(task == null) {
-                        break;
-                    }else if(task == exitTask) {
+                for (WheelTask task : taskQueue.elements()) {
+                    if(task == exitTask) {
                         return ;
                     }else {
                         // if delay is smaller than current milli, we should run it in current slot, so we select tasks before running wheel

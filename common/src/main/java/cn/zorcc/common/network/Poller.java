@@ -2,7 +2,7 @@ package cn.zorcc.common.network;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
-import cn.zorcc.common.bindings.TenetBinding;
+import cn.zorcc.common.RpMalloc;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.structure.Allocator;
@@ -19,7 +19,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 public record Poller(
         Mux mux,
         TaskQueue<PollerTask> pollerQueue,
-        MemApi memApi,
         Thread pollerThread
 ) {
     private static final Logger log = new Logger(Poller.class);
@@ -27,11 +26,11 @@ public record Poller(
     private static final OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
     private static final ScopedValue<MemApi> MEM_SCOPE = ScopedValue.newInstance();
 
-    public static Poller newPoller(NetConfig config, MemApi memApi) {
+    public static Poller newPoller(NetConfig config) {
         Mux mux = osNetworkLibrary.createMux();
         TaskQueue<PollerTask> pollerQueue = new TaskQueue<>(config.getPollerQueueSize());
-        Thread pollerThread = createPollerThread(mux, pollerQueue, memApi, config);
-        return new Poller(mux, pollerQueue, memApi, pollerThread);
+        Thread pollerThread = createPollerThread(mux, pollerQueue, config);
+        return new Poller(mux, pollerQueue, pollerThread);
     }
 
     public void submit(PollerTask pollerTask) {
@@ -42,19 +41,17 @@ public record Poller(
     }
 
     /**
-     *   Poller could provide its local allocator for Decoder and Handler usage
+     *   Poller could provide its local mem api for Decoder and Handler usage
      */
-    public static Allocator localAllocator() {
-        return Allocator.newDirectAllocator(MEM_SCOPE.orElseThrow(() -> new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED)));
+    public static MemApi localMemApi() {
+        return MEM_SCOPE.orElseThrow(() -> new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED));
     }
 
-    private static Thread createPollerThread(Mux mux, TaskQueue<PollerTask> pollerQueue, MemApi memApi, NetConfig config) {
+    private static Thread createPollerThread(Mux mux, TaskQueue<PollerTask> pollerQueue, NetConfig config) {
         int sequence = counter.getAndIncrement();
         return Thread.ofPlatform().name(STR."poller-\{sequence}").unstarted(() -> {
             log.info(STR."Initializing poller thread, sequence : \{sequence}");
-            if(config.isEnableRpMalloc()) {
-                TenetBinding.rpThreadInitialize();
-            }
+            MemApi memApi = config.isEnableRpMalloc() ? RpMalloc.tInitialize() : MemApi.DEFAULT;
             IntMap<PollerNode> nodeMap = IntMap.newTreeMap(config.getPollerMapSize());
             ScopedValue.runWhere(MEM_SCOPE, memApi, () -> {
                 try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
@@ -70,7 +67,7 @@ public record Poller(
                     int state = Constants.RUNNING;
                     for( ; ; ) {
                         int r = osNetworkLibrary.waitMux(mux, events, maxEvents, timeout);
-                        state = processTasks(pollerQueue, nodeMap, state);
+                        state = processTasks(pollerQueue, nodeMap, state, memApi);
                         if(state == Constants.STOPPED) {
                             break ;
                         }
@@ -94,17 +91,17 @@ public record Poller(
                     log.info(STR."Exiting poller thread, sequence : \{sequence}");
                     osNetworkLibrary.exitMux(mux);
                     if(config.isEnableRpMalloc()) {
-                        TenetBinding.rpThreadFinalize();
+                        RpMalloc.tRelease();
                     }
                 }
             });
         });
     }
 
-    private static int processTasks(TaskQueue<PollerTask> pollerQueue, IntMap<PollerNode> nodeMap, int currentState) {
+    private static int processTasks(TaskQueue<PollerTask> pollerQueue, IntMap<PollerNode> nodeMap, int currentState, MemApi memApi) {
         for (PollerTask pollerTask : pollerQueue.elements()) {
             switch (pollerTask.type()) {
-                case BIND -> handleBindMsg(nodeMap, pollerTask);
+                case BIND -> handleBindMsg(nodeMap, pollerTask, memApi);
                 case UNBIND -> handleUnbindMsg(nodeMap, pollerTask);
                 case REGISTER -> handleRegisterMsg(nodeMap, pollerTask);
                 case UNREGISTER -> handleUnregisterMsg(nodeMap, pollerTask);
@@ -131,10 +128,10 @@ public record Poller(
         return currentState;
     }
 
-    private static void handleBindMsg(IntMap<PollerNode> nodeMap, PollerTask pollerTask) {
+    private static void handleBindMsg(IntMap<PollerNode> nodeMap, PollerTask pollerTask, MemApi memApi) {
         Channel channel = pollerTask.channel();
         if(pollerTask.msg() instanceof Sentry sentry) {
-            nodeMap.put(channel.socket().intValue(), new PollerNode.SentryPollerNode(nodeMap, channel, sentry));
+            nodeMap.put(channel.socket().intValue(), new PollerNode.SentryPollerNode(nodeMap, channel, sentry, memApi));
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }

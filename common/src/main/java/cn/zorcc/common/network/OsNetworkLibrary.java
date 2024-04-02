@@ -7,6 +7,7 @@ import cn.zorcc.common.bindings.TenetMacosBinding;
 import cn.zorcc.common.bindings.TenetWindowsBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.structure.Allocator;
+import cn.zorcc.common.structure.MemApi;
 import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.MemoryLayout;
@@ -67,6 +68,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
 
     /**
      *   Create a multiplexing object corresponding to the target operating system
+     *   Using system default malloc
      */
     Mux createMux();
 
@@ -76,9 +78,9 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
     MemoryLayout eventLayout();
 
     /**
-     *   Modifying the multiplexing wait status of the socket
+     *   Modifying the multiplexing wait status of the socket, using target MemApi
      */
-    int ctl(Mux mux, Socket socket, int from, int to);
+    int ctl(Mux mux, Socket socket, int from, int to, MemApi memApi);
 
     /**
      *   Start multiplexing waiting for events, return the event count that triggered
@@ -107,11 +109,13 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
 
     /**
      *   Create an ipv4 socket object
+     *   Using system default malloc
      */
     Socket createIpv4Socket();
 
     /**
      *   Create an ipv6 socket object
+     *   Using system default malloc
      */
     Socket createIpv6Socket();
 
@@ -176,9 +180,9 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
     int connect(Socket socket, MemorySegment sockAddr);
 
     /**
-     *   Accept from a server socket
+     *   Accept from a server socket, using target memApi
      */
-    Socket accept(Socket socket, MemorySegment addr);
+    Socket accept(Socket socket, MemorySegment addr, MemApi memApi);
 
     /**
      *   Recv from target socket, len should be the exact byteSize of data, return the actual bytes received
@@ -193,7 +197,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
     /**
      *   Retrieve the err-opt from the target socket
      */
-    int getErrOpt(Socket socket);
+    int getErrOpt(Socket socket, MemApi memApi);
 
     /**
      *   Shutdown the write side of a socket
@@ -223,8 +227,8 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
     /**
      *   Change the mux state
      */
-    default void ctlMux(Mux mux, Socket socket, int from, int to) {
-        check(ctl(mux, socket, from, to), "ctl mux");
+    default void ctlMux(Mux mux, Socket socket, int from, int to, MemApi memApi) {
+        check(ctl(mux, socket, from, to, memApi), "ctl mux");
     }
 
     /**
@@ -254,6 +258,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
 
     /**
      *   Create a sockAddr memorySegment, could be IPV4 or IPV6
+     *   Using system default malloc
      */
     default MemorySegment createSockAddr(Loc loc) {
         if(loc.ipType() == IpType.IPV4) {
@@ -266,21 +271,25 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
     }
 
     private MemorySegment createIpv4SockAddr(Loc loc) {
-        MemorySegment r = Allocator.HEAP.allocate(ipv4AddressSize(), ipv4AddressAlign());
-        MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? MemorySegment.NULL : Allocator.HEAP.allocateFrom(loc.ip(), StandardCharsets.UTF_8);
-        if(check(setIpv4SockAddr(r, ip, loc.shortPort()), "set ipv4 address") == 0) {
-            throw new FrameworkException(ExceptionType.NETWORK, STR."Ipv4 address is not valid : \{loc.ip()}");
+        try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
+            MemorySegment r = allocator.allocate(ipv4AddressSize(), ipv4AddressAlign());
+            MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? MemorySegment.NULL : allocator.allocateFrom(loc.ip(), StandardCharsets.UTF_8);
+            if(check(setIpv4SockAddr(r, ip, loc.shortPort()), "set ipv4 address") == 0) {
+                throw new FrameworkException(ExceptionType.NETWORK, STR."Ipv4 address is not valid : \{loc.ip()}");
+            }
+            return r;
         }
-        return r;
     }
 
     private MemorySegment createIpv6SockAddr(Loc loc) {
-        MemorySegment r = Allocator.HEAP.allocate(ipv6AddressSize(), ipv6AddressAlign());
-        MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? MemorySegment.NULL : Allocator.HEAP.allocateFrom(loc.ip(), StandardCharsets.UTF_8);
-        if(check(setIpv6SockAddr(r, ip, loc.shortPort()), "set ipv6 address") == 0) {
-            throw new FrameworkException(ExceptionType.NETWORK, STR."Ipv6 address is not valid : \{loc.ip()}");
+        try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
+            MemorySegment r = allocator.allocate(ipv6AddressSize(), ipv6AddressAlign());
+            MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? MemorySegment.NULL : allocator.allocateFrom(loc.ip(), StandardCharsets.UTF_8);
+            if(check(setIpv6SockAddr(r, ip, loc.shortPort()), "set ipv6 address") == 0) {
+                throw new FrameworkException(ExceptionType.NETWORK, STR."Ipv6 address is not valid : \{loc.ip()}");
+            }
+            return r;
         }
-        return r;
     }
 
     /**
@@ -318,6 +327,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
 
     /**
      *   Let the server-side bind and listen
+     *   Using system default allocator
      */
     default void bindAndListen(Socket socket, Loc loc, int backlog) {
         MemorySegment addr = createSockAddr(loc);
@@ -328,41 +338,45 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
     /**
      *   Accept a connection, note that IPV6 is compatible with IPV4, so even if Loc is IPV6 based, it may also accept IPV4 connection
      */
-    default SocketAndLoc accept(Loc loc, Socket socket, SocketConfig socketConfig) {
+    default SocketAndLoc accept(Loc loc, Socket socket, SocketConfig socketConfig, MemApi memApi) {
         return switch (loc.ipType()) {
-            case IPV4 -> acceptIpv4Connection(socket, socketConfig);
-            case IPV6 -> acceptIpv6Connection(socket, socketConfig);
+            case IPV4 -> acceptIpv4Connection(socket, socketConfig, memApi);
+            case IPV6 -> acceptIpv6Connection(socket, socketConfig, memApi);
             case null -> throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         };
     }
 
     String IPV4_MAPPED_FORMAT = "::ffff:";
     int IPV4_PREFIX_LENGTH = IPV4_MAPPED_FORMAT.length();
-    private SocketAndLoc acceptIpv6Connection(Socket socket, SocketConfig socketConfig) {
-        MemorySegment clientAddr = Allocator.HEAP.allocate(ipv6AddressSize(), ipv6AddressAlign());
-        MemorySegment address = Allocator.HEAP.allocate(ValueLayout.JAVA_BYTE, ipv6AddressLen());
-        Socket clientSocket = accept(socket, clientAddr);
-        configureClientSocket(clientSocket, socketConfig);
-        check(getIpv6Address(clientAddr, address), "get client's ipv6 address");
-        String ip = address.getString(0L, StandardCharsets.UTF_8);
-        int port = 0xFFFF & getIpv6Port(clientAddr);
-        if(ip.startsWith(IPV4_MAPPED_FORMAT)) {
-            return new SocketAndLoc(clientSocket, new Loc(IpType.IPV4, ip.substring(IPV4_PREFIX_LENGTH), port));
-        }else {
-            return new SocketAndLoc(clientSocket, new Loc(IpType.IPV6, ip, port));
+    private SocketAndLoc acceptIpv6Connection(Socket socket, SocketConfig socketConfig, MemApi memApi) {
+        try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
+            MemorySegment clientAddr = allocator.allocate(ipv6AddressSize(), ipv6AddressAlign());
+            MemorySegment address = allocator.allocate(ValueLayout.JAVA_BYTE, ipv6AddressLen());
+            Socket clientSocket = accept(socket, clientAddr, memApi);
+            configureClientSocket(clientSocket, socketConfig);
+            check(getIpv6Address(clientAddr, address), "get client's ipv6 address");
+            String ip = address.getString(0L, StandardCharsets.UTF_8);
+            int port = 0xFFFF & getIpv6Port(clientAddr);
+            if(ip.startsWith(IPV4_MAPPED_FORMAT)) {
+                return new SocketAndLoc(clientSocket, new Loc(IpType.IPV4, ip.substring(IPV4_PREFIX_LENGTH), port));
+            }else {
+                return new SocketAndLoc(clientSocket, new Loc(IpType.IPV6, ip, port));
+            }
         }
     }
 
-    private SocketAndLoc acceptIpv4Connection(Socket socket, SocketConfig socketConfig) {
-        MemorySegment clientAddr = Allocator.HEAP.allocate(ipv4AddressSize(), ipv4AddressAlign());
-        MemorySegment address = Allocator.HEAP.allocate(ValueLayout.JAVA_BYTE, ipv4AddressLen());
-        Socket clientSocket = accept(socket, clientAddr);
-        configureClientSocket(clientSocket, socketConfig);
-        check(getIpv4Address(clientAddr, address), "get client's ipv4 address");
-        String ip = address.getString(0L, StandardCharsets.UTF_8);
-        int port = 0xFFFF & getIpv4Port(clientAddr);
-        Loc clientLoc = new Loc(IpType.IPV4, ip, port);
-        return new SocketAndLoc(clientSocket, clientLoc);
+    private SocketAndLoc acceptIpv4Connection(Socket socket, SocketConfig socketConfig, MemApi memApi) {
+        try(Allocator allocator = Allocator.newDirectAllocator(memApi)){
+            MemorySegment clientAddr = allocator.allocate(ipv4AddressSize(), ipv4AddressAlign());
+            MemorySegment address = allocator.allocate(ValueLayout.JAVA_BYTE, ipv4AddressLen());
+            Socket clientSocket = accept(socket, clientAddr, memApi);
+            configureClientSocket(clientSocket, socketConfig);
+            check(getIpv4Address(clientAddr, address), "get client's ipv4 address");
+            String ip = address.getString(0L, StandardCharsets.UTF_8);
+            int port = 0xFFFF & getIpv4Port(clientAddr);
+            Loc clientLoc = new Loc(IpType.IPV4, ip, port);
+            return new SocketAndLoc(clientSocket, clientLoc);
+        }
     }
 
     OsNetworkLibrary CURRENT = switch (NativeUtil.ostype()) {
@@ -473,9 +487,11 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
 
         @Override
         public Mux createMux() {
-            MemorySegment ptr = Allocator.HEAP.allocate(ValueLayout.ADDRESS);
-            check(TenetWindowsBinding.epollCreate(ptr), "wepoll_create");
-            return Mux.win(NativeUtil.getAddress(ptr, 0L));
+            try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
+                MemorySegment ptr = allocator.allocate(ValueLayout.ADDRESS);
+                check(TenetWindowsBinding.epollCreate(ptr), "wepoll_create");
+                return Mux.win(NativeUtil.getAddress(ptr, 0L));
+            }
         }
 
         @Override
@@ -485,16 +501,20 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
 
         @Override
         public Socket createIpv4Socket() {
-            MemorySegment ptr = Allocator.HEAP.allocate(ValueLayout.JAVA_LONG);
-            check(TenetWindowsBinding.ipv4SocketCreate(ptr), "ipv4 socket create");
-            return new Socket(NativeUtil.getLong(ptr, 0L));
+            try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
+                MemorySegment ptr = allocator.allocate(ValueLayout.JAVA_LONG);
+                check(TenetWindowsBinding.ipv4SocketCreate(ptr), "ipv4 socket create");
+                return new Socket(NativeUtil.getLong(ptr, 0L));
+            }
         }
 
         @Override
         public Socket createIpv6Socket() {
-            MemorySegment ptr = Allocator.HEAP.allocate(ValueLayout.JAVA_LONG);
-            check(TenetWindowsBinding.ipv6SocketCreate(ptr), "ipv6 socket create");
-            return new Socket(NativeUtil.getLong(ptr, 0L));
+            try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
+                MemorySegment ptr = allocator.allocate(ValueLayout.JAVA_LONG);
+                check(TenetWindowsBinding.ipv6SocketCreate(ptr), "ipv6 socket create");
+                return new Socket(NativeUtil.getLong(ptr, 0L));
+            }
         }
 
         @Override
@@ -533,7 +553,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
         }
 
         @Override
-        public int ctl(Mux mux, Socket socket, int from, int to) {
+        public int ctl(Mux mux, Socket socket, int from, int to, MemApi memApi) {
             if(from == to) {
                 return 0;
             }
@@ -544,10 +564,12 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
             }else {
                 int target = ((to & Constants.NET_R) != Constants.NET_NONE ? (Constants.EPOLL_IN | Constants.EPOLL_RDHUP) : 0) |
                         ((to & Constants.NET_W) != Constants.NET_NONE ? Constants.EPOLL_OUT : 0);
-                MemorySegment ev = Allocator.HEAP.allocate(epollEventLayout);
-                NativeUtil.setInt(ev, eventsOffset, target);
-                NativeUtil.setLong(ev, dataOffset + sockOffset, fd);
-                return TenetWindowsBinding.epollCtl(winHandle, from == Constants.NET_NONE ? Constants.EPOLL_CTL_ADD : Constants.EPOLL_CTL_MOD, fd, ev);
+                try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
+                    MemorySegment ev = allocator.allocate(epollEventLayout);
+                    NativeUtil.setInt(ev, eventsOffset, target);
+                    NativeUtil.setLong(ev, dataOffset + sockOffset, fd);
+                    return TenetWindowsBinding.epollCtl(winHandle, from == Constants.NET_NONE ? Constants.EPOLL_CTL_ADD : Constants.EPOLL_CTL_MOD, fd, ev);
+                }
             }
         }
 
@@ -587,11 +609,13 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
         }
 
         @Override
-        public Socket accept(Socket socket, MemorySegment addr) {
-            MemorySegment ptr = Allocator.HEAP.allocate(ValueLayout.JAVA_LONG);
-            check(TenetWindowsBinding.accept(socket.longValue(), ptr, addr, (int) addr.byteSize()), "accept");
-            long socketFd = NativeUtil.getLong(ptr, 0L);
-            return new Socket(socketFd);
+        public Socket accept(Socket socket, MemorySegment addr, MemApi memApi) {
+            try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
+                MemorySegment ptr = allocator.allocate(ValueLayout.JAVA_LONG);
+                check(TenetWindowsBinding.accept(socket.longValue(), ptr, addr, (int) addr.byteSize()), "accept");
+                long socketFd = NativeUtil.getLong(ptr, 0L);
+                return new Socket(socketFd);
+            }
         }
 
         @Override
@@ -615,11 +639,13 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
         }
 
         @Override
-        public int getErrOpt(Socket socket) {
-            MemorySegment ptr = Allocator.HEAP.allocate(ValueLayout.JAVA_INT);
-            NativeUtil.setInt(ptr, 0L, -1);
-            check(TenetWindowsBinding.getErrOpt(socket.longValue(), ptr), "get socket err opt");
-            return NativeUtil.getInt(ptr, 0L);
+        public int getErrOpt(Socket socket, MemApi memApi) {
+            try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
+                MemorySegment ptr = allocator.allocate(ValueLayout.JAVA_INT);
+                NativeUtil.setInt(ptr, 0L, -1);
+                check(TenetWindowsBinding.getErrOpt(socket.longValue(), ptr), "get socket err opt");
+                return NativeUtil.getInt(ptr, 0L);
+            }
         }
 
         @Override
@@ -797,7 +823,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
         }
 
         @Override
-        public int ctl(Mux mux, Socket socket, int from, int to) {
+        public int ctl(Mux mux, Socket socket, int from, int to, MemApi memApi) {
             if(from == to) {
                 return 0;
             }
@@ -808,10 +834,12 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
             }else {
                 int target = ((to & Constants.NET_R) != Constants.NET_NONE ? (Constants.EPOLL_IN | Constants.EPOLL_RDHUP) : 0) |
                         ((to & Constants.NET_W) != Constants.NET_NONE ? Constants.EPOLL_OUT : 0);
-                MemorySegment ev = Allocator.HEAP.allocate(epollEventLayout);
-                NativeUtil.setInt(ev, eventsOffset, target);
-                NativeUtil.setInt(ev, dataOffset + fdOffset, fd);
-                return TenetLinuxBinding.epollCtl(epfd, from == Constants.NET_NONE ? Constants.EPOLL_CTL_ADD : Constants.EPOLL_CTL_MOD, fd, ev);
+                try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
+                    MemorySegment ev = allocator.allocate(epollEventLayout);
+                    NativeUtil.setInt(ev, eventsOffset, target);
+                    NativeUtil.setInt(ev, dataOffset + fdOffset, fd);
+                    return TenetLinuxBinding.epollCtl(epfd, from == Constants.NET_NONE ? Constants.EPOLL_CTL_ADD : Constants.EPOLL_CTL_MOD, fd, ev);
+                }
             }
         }
 
@@ -851,7 +879,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
         }
 
         @Override
-        public Socket accept(Socket socket, MemorySegment addr) {
+        public Socket accept(Socket socket, MemorySegment addr, MemApi memApi) {
             int fd = check(TenetLinuxBinding.accept(socket.intValue(), addr, (int) addr.byteSize()), "accept");
             return new Socket(fd);
         }
@@ -877,11 +905,13 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
         }
 
         @Override
-        public int getErrOpt(Socket socket) {
-            MemorySegment ptr = Allocator.HEAP.allocate(ValueLayout.JAVA_INT);
-            NativeUtil.setInt(ptr, 0L, -1);
-            check(TenetLinuxBinding.getErrOpt(socket.intValue(), ptr), "get socket err opt");
-            return NativeUtil.getInt(ptr, 0L);
+        public int getErrOpt(Socket socket, MemApi memApi) {
+            try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
+                MemorySegment ptr = allocator.allocate(ValueLayout.JAVA_INT);
+                NativeUtil.setInt(ptr, 0L, -1);
+                check(TenetLinuxBinding.getErrOpt(socket.intValue(), ptr), "get socket err opt");
+                return NativeUtil.getInt(ptr, 0L);
+            }
         }
 
         @Override
@@ -1065,29 +1095,31 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
         }
 
         @Override
-        public int ctl(Mux mux, Socket socket, int from, int to) {
+        public int ctl(Mux mux, Socket socket, int from, int to, MemApi memApi) {
             if(from == to) {
                 return 0;
             }
             int kqfd = mux.kqfd();
             long fd = socket.longValue();
             int index = 0;
-            MemorySegment ptr = Allocator.HEAP.allocate(MemoryLayout.sequenceLayout(2, keventLayout));
-            int r1 = from & Constants.NET_R, r2 = to & Constants.NET_R;
-            if(r1 != r2) {
-                NativeUtil.setLong(ptr, identOffset, fd);
-                NativeUtil.setShort(ptr, filterOffset, Constants.EVFILT_READ);
-                NativeUtil.setShort(ptr, flagsOffset, r1 == Constants.NET_NONE ? Constants.EV_ADD : Constants.EV_DELETE);
-                index++;
+            try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
+                MemorySegment ptr = allocator.allocate(MemoryLayout.sequenceLayout(2, keventLayout));
+                int r1 = from & Constants.NET_R, r2 = to & Constants.NET_R;
+                if(r1 != r2) {
+                    NativeUtil.setLong(ptr, identOffset, fd);
+                    NativeUtil.setShort(ptr, filterOffset, Constants.EVFILT_READ);
+                    NativeUtil.setShort(ptr, flagsOffset, r1 == Constants.NET_NONE ? Constants.EV_ADD : Constants.EV_DELETE);
+                    index++;
+                }
+                int w1 = from & Constants.NET_W, w2 = to & Constants.NET_W;
+                if(w1 != w2) {
+                    NativeUtil.setLong(ptr, index * keventSize + identOffset, fd);
+                    NativeUtil.setShort(ptr, index * keventSize + filterOffset, Constants.EVFILT_WRITE);
+                    NativeUtil.setShort(ptr, index * keventSize + flagsOffset, w1 == Constants.NET_NONE ? Constants.EV_ADD : Constants.EV_DELETE);
+                    index++;
+                }
+                return TenetMacosBinding.keventCtl(kqfd, ptr, index);
             }
-            int w1 = from & Constants.NET_W, w2 = to & Constants.NET_W;
-            if(w1 != w2) {
-                NativeUtil.setLong(ptr, index * keventSize + identOffset, fd);
-                NativeUtil.setShort(ptr, index * keventSize + filterOffset, Constants.EVFILT_WRITE);
-                NativeUtil.setShort(ptr, index * keventSize + flagsOffset, w1 == Constants.NET_NONE ? Constants.EV_ADD : Constants.EV_DELETE);
-                index++;
-            }
-            return TenetMacosBinding.keventCtl(kqfd, ptr, index);
         }
 
         @Override
@@ -1124,7 +1156,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
         }
 
         @Override
-        public Socket accept(Socket socket, MemorySegment addr) {
+        public Socket accept(Socket socket, MemorySegment addr, MemApi memApi) {
             int fd = check(TenetMacosBinding.accept(socket.intValue(), addr, (int) addr.byteSize()), "accept");
             return new Socket(fd);
         }
@@ -1150,11 +1182,13 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
         }
 
         @Override
-        public int getErrOpt(Socket socket) {
-            MemorySegment ptr = Allocator.HEAP.allocate(ValueLayout.JAVA_INT);
-            NativeUtil.setInt(ptr, 0L, -1);
-            check(TenetMacosBinding.getErrOpt(socket.intValue(), ptr), "get socket err opt");
-            return NativeUtil.getInt(ptr, 0L);
+        public int getErrOpt(Socket socket, MemApi memApi) {
+            try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
+                MemorySegment ptr = allocator.allocate(ValueLayout.JAVA_INT);
+                NativeUtil.setInt(ptr, 0L, -1);
+                check(TenetMacosBinding.getErrOpt(socket.intValue(), ptr), "get socket err opt");
+                return NativeUtil.getInt(ptr, 0L);
+            }
         }
 
         @Override

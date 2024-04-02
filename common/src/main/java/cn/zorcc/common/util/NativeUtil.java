@@ -21,7 +21,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class NativeUtil {
     public static final Arena globalArena = Arena.global();
-    public static final Arena autoArena = Arena.ofAuto();
     /**
      *   Current operating system name
      */
@@ -177,6 +176,9 @@ public final class NativeUtil {
         return memorySegment == null || memorySegment.address() == 0;
     }
 
+    /**
+     *   Convert an intValue to its ASCII byte form
+     */
     public static byte toAsciiByte(int i) {
         return (byte) (i + 48);
     }

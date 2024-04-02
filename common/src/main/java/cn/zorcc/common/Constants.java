@@ -106,7 +106,7 @@ public final class Constants {
     public static final String LOG_FILE_TYPE = ".log";
     public static final String SQLITE_FILE_TYPE = ".db";
     /**
-     *  Ansi格式的带颜色的控制台字符控制
+     *  Ansi color control
      */
     public static final MemorySegment ANSI_PREFIX = MemorySegment.ofArray("\033[".getBytes(StandardCharsets.UTF_8));
     public static final MemorySegment ANSI_SUFFIX = MemorySegment.ofArray("\033[0m".getBytes(StandardCharsets.UTF_8)); // 4 bytes

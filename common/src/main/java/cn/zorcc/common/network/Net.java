@@ -1,10 +1,6 @@
 package cn.zorcc.common.network;
 
-import cn.zorcc.common.Clock;
-import cn.zorcc.common.Constants;
-import cn.zorcc.common.ExceptionType;
-import cn.zorcc.common.LifeCycle;
-import cn.zorcc.common.bindings.TenetBinding;
+import cn.zorcc.common.*;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.structure.*;
@@ -19,6 +15,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
@@ -44,7 +41,7 @@ public final class Net implements LifeCycle {
     private final Lock writeLock = readWriteLock.writeLock();
     private final Mux mux = osNetworkLibrary.createMux();
     private final Set<Provider> clientProviders = ConcurrentHashMap.newKeySet();
-    private final MemApi memApi;
+    private final List<ListenerTask> pendingTasks = new CopyOnWriteArrayList<>();
     private final List<Poller> pollers;
     private final List<Writer> writers;
     private final Duration shutdownTimeout;
@@ -52,36 +49,14 @@ public final class Net implements LifeCycle {
     private final TaskQueue<ListenerTask> netQueue;
     private int state;
 
-    /**
-     *   Custom rpMalloc for Net internal usage
-     */
-    record RpMemApi() implements MemApi {
-        @Override
-        public MemorySegment allocateMemory(long byteSize) {
-            return TenetBinding.rpMalloc(byteSize);
-        }
-
-        @Override
-        public MemorySegment reallocateMemory(MemorySegment ptr, long newSize) {
-            return TenetBinding.rpRealloc(ptr, newSize);
-        }
-
-        @Override
-        public void freeMemory(MemorySegment ptr) {
-            TenetBinding.rpFree(ptr);
-        }
-    }
-
     private Thread createNetThread() {
         return Thread.ofPlatform().unstarted(() -> {
-            if(config.isEnableRpMalloc()) {
-                TenetBinding.rpThreadInitialize();
-            }
+            MemApi memApi = config.isEnableRpMalloc() ? RpMalloc.tInitialize() : MemApi.DEFAULT;
             int maxEvents = config.getMaxEvents();
             int muxTimeout = config.getMuxTimeout();
             IntMap<ListenerTask> listenerMap = IntMap.newTreeMap(config.getMapSize());
             Set<Provider> serverProviders = new HashSet<>();
-            try(Allocator allocator = Allocator.newDirectAllocator()) {
+            try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
                 Timeout timeout = Timeout.of(allocator, muxTimeout);
                 MemorySegment events = allocator.allocate(MemoryLayout.sequenceLayout(maxEvents, osNetworkLibrary.eventLayout()));
                 int counter = 0;
@@ -110,7 +85,7 @@ public final class Net implements LifeCycle {
                             Loc serverLoc = listenerTask.loc();
                             SocketAndLoc socketAndLoc;
                             try{
-                                socketAndLoc = osNetworkLibrary.accept(serverLoc, serverSocket, listenerTask.socketConfig());
+                                socketAndLoc = osNetworkLibrary.accept(serverLoc, serverSocket, listenerTask.socketConfig(), memApi);
                             }catch (RuntimeException e) {
                                 log.error(STR."Failed to accept connection on \{ serverLoc }", e);
                                 continue ;
@@ -126,7 +101,7 @@ public final class Net implements LifeCycle {
                             Channel channel = Channel.newChannel(clientSocket, encoder, decoder, handler, poller, writer, clientLoc);
                             Sentry sentry = listenerTask.provider().create(channel);
                             poller.submit(new PollerTask(PollerTaskType.BIND, channel, sentry));
-                            osNetworkLibrary.ctlMux(poller.mux(), clientSocket, Constants.NET_NONE, Constants.NET_W);
+                            osNetworkLibrary.ctlMux(poller.mux(), clientSocket, Constants.NET_NONE, Constants.NET_W, memApi);
                         }else {
                             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
                         }
@@ -135,7 +110,7 @@ public final class Net implements LifeCycle {
             } finally {
                 serverProviders.forEach(Provider::close);
                 if(config.isEnableRpMalloc()) {
-                    TenetBinding.rpThreadFinalize();
+                    RpMalloc.tRelease();
                 }
             }
         });
@@ -159,10 +134,9 @@ public final class Net implements LifeCycle {
         }
         validateConfig(config);
         this.config = config;
-        this.memApi = config.isEnableRpMalloc() ? new RpMemApi() : MemApi.DEFAULT;
         this.netQueue = new TaskQueue<>(config.getQueueSize());
-        this.pollers = IntStream.range(0, config.getPollerCount()).mapToObj(_ -> Poller.newPoller(config, memApi)).toList();
-        this.writers = IntStream.range(0, config.getWriterCount()).mapToObj(_ -> Writer.newWriter(config, memApi)).toList();
+        this.pollers = IntStream.range(0, config.getPollerCount()).mapToObj(_ -> Poller.newPoller(config)).toList();
+        this.writers = IntStream.range(0, config.getWriterCount()).mapToObj(_ -> Writer.newWriter(config)).toList();
         this.shutdownTimeout = Duration.ofSeconds(config.getGracefulShutdownTimeout());
         this.netThread = createNetThread();
     }
@@ -188,6 +162,9 @@ public final class Net implements LifeCycle {
         ConfigUtil.checkParam(config.getPollerMapSize(), 16, 16 * Constants.KB);
     }
 
+    /**
+     *   Register a listener to current Net instance, the server would be listening when the Net instance got initialized
+     */
     public void serve(ListenerConfig listenerConfig) {
         readLock.lock();
         try{
@@ -202,10 +179,7 @@ public final class Net implements LifeCycle {
             SocketConfig socketConfig = Objects.requireNonNull(listenerConfig.getSocketConfig());
             Socket socket = osNetworkLibrary.createSocket(loc);
             osNetworkLibrary.configureServerSocket(socket, loc, socketConfig);
-            ListenerTask listenerTask = new ListenerTask(encoderSupplier, decoderSupplier, handlerSupplier, provider, loc, socket, socketConfig);
-            netQueue.offer(listenerTask);
-            osNetworkLibrary.bindAndListen(socket, loc, config.getBacklog());
-            osNetworkLibrary.ctlMux(mux, socket, Constants.NET_NONE, Constants.NET_R);
+            pendingTasks.add(new ListenerTask(encoderSupplier, decoderSupplier, handlerSupplier, provider, loc, socket, socketConfig));
         } finally {
             readLock.unlock();
         }
@@ -231,13 +205,13 @@ public final class Net implements LifeCycle {
             int r = osNetworkLibrary.connect(socket, sockAddr);
             if(r == 0) {
                 poller.submit(new PollerTask(PollerTaskType.BIND, channel, sentry));
-                osNetworkLibrary.ctlMux(poller.mux(), socket, Constants.NET_NONE, Constants.NET_W);
+                osNetworkLibrary.ctlMux(poller.mux(), socket, Constants.NET_NONE, Constants.NET_W, MemApi.DEFAULT);
             }else if(r < 0){
                 int errno = Math.abs(r);
                 if (errno == osNetworkLibrary.connectBlockCode()) {
                     poller.submit(new PollerTask(PollerTaskType.BIND, channel, sentry));
                     Wheel.wheel().addJob(() -> poller.submit(new PollerTask(PollerTaskType.UNBIND, channel, null)), duration);
-                    osNetworkLibrary.ctlMux(poller.mux(), socket, Constants.NET_NONE, Constants.NET_W);
+                    osNetworkLibrary.ctlMux(poller.mux(), socket, Constants.NET_NONE, Constants.NET_W, MemApi.DEFAULT);
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to connect, errno : \{errno}");
                 }
@@ -268,11 +242,16 @@ public final class Net implements LifeCycle {
             if(state != Constants.INITIAL) {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
-            if(config.isEnableRpMalloc() && TenetBinding.rpInitialize() < 0) {
-                throw new FrameworkException(ExceptionType.NETWORK, "Failed to initialize RpMalloc allocator");
+            if(config.isEnableRpMalloc()) {
+                RpMalloc.initialize();
             }
             pollers.forEach(poller -> poller.pollerThread().start());
             writers.forEach(writer -> writer.writerThread().start());
+            pendingTasks.forEach(listenerTask -> {
+                netQueue.offer(listenerTask);
+                osNetworkLibrary.bindAndListen(listenerTask.socket(), listenerTask.loc(), config.getBacklog());
+                osNetworkLibrary.ctlMux(mux, listenerTask.socket(), Constants.NET_NONE, Constants.NET_R, MemApi.DEFAULT);
+            });
             netThread.start();
             state = Constants.RUNNING;
         } finally {
@@ -302,7 +281,7 @@ public final class Net implements LifeCycle {
             clientProviders.forEach(Provider::close);
             osNetworkLibrary.exit();
             if(config.isEnableRpMalloc()) {
-                TenetBinding.rpFinalize();
+                RpMalloc.release();
             }
             log.debug(STR."Exiting Net gracefully, cost : \{Duration.ofNanos(Clock.elapsed(nano)).toMillis()} ms");
             state = Constants.STOPPED;

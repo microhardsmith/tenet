@@ -5,6 +5,7 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.bindings.TenetBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.structure.Allocator;
+import cn.zorcc.common.structure.MemApi;
 import cn.zorcc.common.structure.WriteBuffer;
 import cn.zorcc.common.util.FileUtil;
 
@@ -30,10 +31,11 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
     private final long maxFileSize;
     private final long maxRecordingTime;
     private final MemorySegment reserved;
+    private final MemApi memApi;
     private long currentCreateTime;
     private long currentWrittenIndex;
     private MemorySegment fileStream;
-    public FileLogEventHandler(LogConfig logConfig, MemorySegment m) {
+    public FileLogEventHandler(LogConfig logConfig, MemorySegment reserved, MemApi memApi) {
         try{
             FileLogConfig config = logConfig.getFile();
             List<LogHandler> logHandlers = Logger.createLogHandlers(logConfig.getLogFormat(), s -> switch (s) {
@@ -50,16 +52,17 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
                     writeBuffer.writeSegment(throwable);
                 }
             });
-            handlers = logHandlers;
-            dir = FileUtil.normalizePath(config.getDir() == null || config.getDir().isEmpty() ? System.getProperty("user.dir") : config.getDir());
+            this.handlers = logHandlers;
+            this.dir = FileUtil.normalizePath(config.getDir() == null || config.getDir().isEmpty() ? System.getProperty("user.dir") : config.getDir());
             Path dirPath = Path.of(dir);
             if(!Files.exists(dirPath)) {
                 Files.createDirectory(dirPath);
             }
-            flushThreshold = config.getFlushThreshold() <= 0 ? Integer.MIN_VALUE : config.getFlushThreshold();
-            maxFileSize = config.getMaxFileSize() <= 0 ? Long.MIN_VALUE : config.getMaxFileSize();
-            maxRecordingTime = config.getMaxRecordingTime() <= 0 ? Long.MIN_VALUE : config.getMaxRecordingTime();
-            reserved = m;
+            this.flushThreshold = config.getFlushThreshold() <= 0 ? Integer.MIN_VALUE : config.getFlushThreshold();
+            this.maxFileSize = config.getMaxFileSize() <= 0 ? Long.MIN_VALUE : config.getMaxFileSize();
+            this.maxRecordingTime = config.getMaxRecordingTime() <= 0 ? Long.MIN_VALUE : config.getMaxRecordingTime();
+            this.reserved = reserved;
+            this.memApi = memApi;
             openNewLogOutputFile();
         }catch (IOException e) {
             throw new FrameworkException(ExceptionType.LOG, "Unable to create log file");
@@ -79,15 +82,16 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
         if(Files.exists(Path.of(absolutePath))) {
             throw new FrameworkException(ExceptionType.LOG, "Target log file already exist");
         }
-        Allocator allocator = Allocator.newSlicingAllocator(reserved);
-        MemorySegment path = allocator.allocateFrom(absolutePath);
-        MemorySegment mode = allocator.allocateFrom("a");
-        fileStream = FileUtil.fopen(path, mode);
-        if (FileUtil.setvbuf(fileStream, MemorySegment.NULL, TenetBinding.nbf(), 0) != 0) {
-            throw new FrameworkException(ExceptionType.LOG, "Failed to set filestream to nbf mode");
+        try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
+            MemorySegment path = allocator.allocateFrom(absolutePath);
+            MemorySegment mode = allocator.allocateFrom("a");
+            fileStream = FileUtil.fopen(path, mode);
+            if (FileUtil.setvbuf(fileStream, MemorySegment.NULL, TenetBinding.nbf(), 0) != 0) {
+                throw new FrameworkException(ExceptionType.LOG, "Failed to set filestream to nbf mode");
+            }
+            currentCreateTime = now.toInstant(Constants.LOCAL_ZONE_OFFSET).toEpochMilli();
+            currentWrittenIndex = 0;
         }
-        currentCreateTime = now.toInstant(Constants.LOCAL_ZONE_OFFSET).toEpochMilli();
-        currentWrittenIndex = 0;
     }
 
     @Override
@@ -116,7 +120,7 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
     }
 
     private void flush() {
-        try(WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(reserved, false)) {
+        try(WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(memApi, reserved)) {
             for (LogEvent event : eventList) {
                 handlers.forEach(logHandler -> logHandler.process(writeBuffer, event));
             }

@@ -4,13 +4,12 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.structure.IntMap;
+import cn.zorcc.common.structure.MemApi;
 import cn.zorcc.common.structure.Wheel;
 import cn.zorcc.common.structure.WriteBuffer;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Collection;
@@ -54,7 +53,8 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
     final class ProtocolWriterNode implements WriterNode {
         private static final Logger log = new Logger(ProtocolWriterNode.class);
         private record Task(
-                MemorySegment memorySegment,
+                MemorySegment base,
+                MemorySegment data,
                 WriterCallback writerCallback
         ) {
 
@@ -63,6 +63,7 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
         private final IntMap<WriterNode> nodeMap;
         private final Channel channel;
         private final Protocol protocol;
+        private final MemApi memApi;
         /**
          *   Tasks exist means current channel is not writable, incoming data should be wrapped into tasks list first, normally it's null
          */
@@ -72,10 +73,11 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
          */
         private Duration timeout;
 
-        public ProtocolWriterNode(IntMap<WriterNode> nodeMap, Channel channel, Protocol protocol) {
+        public ProtocolWriterNode(IntMap<WriterNode> nodeMap, Channel channel, Protocol protocol, MemApi memApi) {
             this.nodeMap = nodeMap;
             this.channel = channel;
             this.protocol = protocol;
+            this.memApi = memApi;
         }
 
         @Override
@@ -92,8 +94,9 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
                         return ;
                     }
                     if(writeBuffer.writeIndex() > 0L) {
-                        sendMsg(writeBuffer, writerCallback);
+                        sendMsg(writeBuffer, reserved, writerCallback);
                     }else if(writerCallback != null) {
+                        // if nothing needs to be written, assume that's a success move
                         writerCallback.invokeOnSuccess(channel);
                     }
                 }
@@ -115,8 +118,9 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
                         return ;
                     }
                     if(writeBuffer.writeIndex() > 0L) {
-                        sendMsg(writeBuffer, writerCallback);
+                        sendMsg(writeBuffer, reserved, writerCallback);
                     }else if(writerCallback != null) {
+                        // if nothing needs to be written, assume that's a success move
                         writerCallback.invokeOnSuccess(channel);
                     }
                 }
@@ -135,7 +139,8 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
                         }
                         return ;
                     }
-                    MemorySegment data = task.memorySegment();
+                    MemorySegment base = task.base();
+                    MemorySegment data = task.data();
                     WriterCallback writerCallback = task.writerCallback();
                     long len = data.byteSize();
                     long r;
@@ -155,11 +160,14 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
                         }
                     }
                     if(r == len) {
+                        // msg has been successfully transferred
+                        memApi.freeMemory(base);
                         if(writerCallback != null) {
                             writerCallback.invokeOnSuccess(channel);
                         }
                     }else {
-                        taskQueue.addFirst(new Task(data, writerCallback));
+                        // partly transferred, waiting for next signal
+                        taskQueue.addFirst(new Task(base, data, writerCallback));
                         if(r < 0L) {
                             handleEvent(Math.toIntExact(-r));
                         }
@@ -188,21 +196,22 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
         }
 
         /**
-         *   If current channel is not writable, then the message would be written into a heap buffer for more efficiency
+         *   If current channel is not writable, then the message would be written into a new allocated memory, which would save us a memcpy()
          */
         private WriteBuffer newWriteBuffer(MemorySegment reserved) {
             if(taskQueue == null) {
-                return WriteBuffer.newReservedWriteBuffer(reserved, true);
+                return WriteBuffer.newReservedWriteBuffer(memApi, reserved);
             }else {
-                return WriteBuffer.newHeapWriteBuffer(reserved.byteSize());
+                return WriteBuffer.newNativeWriteBuffer(memApi, reserved.byteSize());
             }
         }
 
         /**
          *   Send msg over the channel, invoking its callback if successful, otherwise copy the data locally for channel to become writable
          */
-        private void sendMsg(WriteBuffer writeBuffer, WriterCallback writerCallback) {
-            MemorySegment data = writeBuffer.asSegment();
+        private void sendMsg(WriteBuffer writeBuffer, MemorySegment reserved, WriterCallback writerCallback) {
+            final MemorySegment base = writeBuffer.asSegment();
+            MemorySegment data = base;
             if(taskQueue == null) {
                 long len = data.byteSize();
                 long r;
@@ -222,26 +231,30 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
                     }
                 }
                 if(r == len) {
+                    // msg has been successfully transferred
                     if(writerCallback != null) {
                         writerCallback.invokeOnSuccess(channel);
                     }
                 }else {
+                    // store the data locally
                     taskQueue = new ArrayDeque<>();
-                    copyLocally(data, writerCallback);
+                    if(base.address() == reserved.address()) {
+                        // data still in reserved, manually copy it
+                        MemorySegment newData = memApi.allocateMemory(len).reinterpret(len);
+                        MemorySegment.copy(data, 0L, newData, 0L, len);
+                        taskQueue.addLast(new Task(base, newData, writerCallback));
+                    }else {
+                        // data could be reused
+                        taskQueue.addLast(new Task(base, data, writerCallback));
+                    }
                     if(r < 0L) {
                         handleEvent(Math.toIntExact(-r));
                     }
                 }
             }else {
-                copyLocally(data, writerCallback);
+                // here we know that data must not be reserved, so we could directly cache it
+                taskQueue.addLast(new Task(base, data, writerCallback));
             }
-        }
-
-        private void copyLocally(MemorySegment segment, WriterCallback writerCallback) {
-            long size = segment.byteSize();
-            MemorySegment memorySegment = Allocator.HEAP.allocate(ValueLayout.JAVA_BYTE, size);
-            MemorySegment.copy(segment, 0, memorySegment, 0, size);
-            taskQueue.addLast(new Task(memorySegment, writerCallback));
         }
 
         private void handleEvent(int r) {
@@ -257,6 +270,7 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
         private void ctl(int expected) {
             channel.state().transform(state -> {
                 if((state & Constants.NET_PC) != 0) {
+                    // Poller has been closed, and it's not writable, so let's just close the Writer as well
                     clearTaskQueue();
                     closeProtocol();
                     checkPotentialExit();
@@ -264,7 +278,7 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
                     int from = state & Constants.NET_RW;
                     int to = from | expected;
                     if(to != from) {
-                        osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), from, to);
+                        osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), from, to, memApi);
                         state += (to - from);
                     }
                 }
@@ -281,9 +295,11 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
             }
         }
 
+        /**
+         *   When shutdown is invoked, taskQueue must be null
+         */
         private void shutdown(Duration duration) {
             if(nodeMap.remove(channel.socket().intValue(), this)) {
-                assert taskQueue == null;
                 channel.state().transform(current -> {
                     if((current & Constants.NET_PC) != 0) {
                         closeProtocol();
@@ -324,6 +340,7 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
         private void clearTaskQueue() {
             if(taskQueue != null) {
                 taskQueue.forEach(task -> {
+                    memApi.freeMemory(task.base());
                     WriterCallback writerCallback = task.writerCallback();
                     if(writerCallback != null) {
                         writerCallback.invokeOnFailure(channel);

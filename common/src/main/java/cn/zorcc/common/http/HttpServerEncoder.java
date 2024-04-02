@@ -5,6 +5,7 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.bindings.DeflateBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Encoder;
+import cn.zorcc.common.network.Writer;
 import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.structure.WriteBuffer;
 import cn.zorcc.common.util.CompressUtil;
@@ -25,7 +26,7 @@ public final class HttpServerEncoder implements Encoder {
     private void encodeHttpResponse(WriteBuffer writeBuffer, HttpResponse httpResponse) {
         writeBuffer.writeBytes(httpResponse.getVersion().getBytes(StandardCharsets.UTF_8));
         writeBuffer.writeByte(Constants.SPACE);
-        writeBuffer.writeSegment(HttpStatus.getHttpStatusSegment(httpResponse.getStatus()));
+        writeBuffer.writeBytes(httpResponse.getStatus().content());
         writeBuffer.writeBytes(Constants.HTTP_LINE_SEP);
         HttpHeader headers = httpResponse.getHeaders();
         MemorySegment rawData = httpResponse.getData();
@@ -36,13 +37,13 @@ public final class HttpServerEncoder implements Encoder {
             case NONE -> rawData;
             case GZIP -> {
                 headers.put(HttpHeader.K_CONTENT_ENCODING, HttpHeader.V_GZIP);
-                try(Allocator allocator = Allocator.newDirectAllocator()) {
+                try(Allocator allocator = Allocator.newDirectAllocator(Writer.localMemApi())) {
                     yield CompressUtil.compressUsingGzip(rawData, DeflateBinding.LIBDEFLATE_DEFAULT_LEVEL, allocator);
                 }
             }
             case DEFLATE -> {
                 headers.put(HttpHeader.K_CONTENT_ENCODING, HttpHeader.V_DEFLATE);
-                try(Allocator allocator = Allocator.newDirectAllocator()) {
+                try(Allocator allocator = Allocator.newDirectAllocator(Writer.localMemApi())) {
                     yield CompressUtil.compressUsingDeflate(rawData, DeflateBinding.LIBDEFLATE_DEFAULT_LEVEL, allocator);
                 }
             }

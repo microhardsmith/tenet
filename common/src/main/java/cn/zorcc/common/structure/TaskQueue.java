@@ -5,6 +5,7 @@ import cn.zorcc.common.exception.FrameworkException;
 
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.Objects;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -12,7 +13,7 @@ import java.util.concurrent.locks.ReentrantLock;
  *   Task queue is a queue for multiple producer and single consumer pattern, normal MPSCQueue would heavily use spinWait() and linked list for performance boost
  *   However, it's hard to design a structure which works well for both platform thread and virtual thread, ReentrantLock might be the best we could do at present time.
  */
-public final class TaskQueue<T> {
+public final class TaskQueue<T extends Record> {
     private static final Object[] EMPTY_ARRAY = {};
     private final Itr<T> EMPTY_ITR = new Itr<>(EMPTY_ARRAY);
     private final Lock lock = new ReentrantLock();
@@ -29,6 +30,7 @@ public final class TaskQueue<T> {
      *   Submit a task to current task queue
      */
     public void offer(T element) {
+        Objects.requireNonNull(element);
         lock.lock();
         try{
             if(index == elements.length) {
@@ -63,7 +65,7 @@ public final class TaskQueue<T> {
     }
 
     /**
-     *   Poll all the tasks from current task queue
+     *   Poll all the tasks from current task queue, the result are guaranteed to contain non-null elements
      */
     public Iterable<T> elements() {
         lock.lock();

@@ -5,10 +5,7 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.structure.IntHolder;
-import cn.zorcc.common.structure.IntMap;
-import cn.zorcc.common.structure.ReadBuffer;
-import cn.zorcc.common.structure.WriteBuffer;
+import cn.zorcc.common.structure.*;
 
 import java.lang.foreign.MemorySegment;
 import java.time.Duration;
@@ -50,7 +47,8 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
     record SentryPollerNode(
             IntMap<PollerNode> nodeMap,
             Channel channel,
-            Sentry sentry
+            Sentry sentry,
+            MemApi memApi
     ) implements PollerNode {
         private static final Logger log = new Logger(SentryPollerNode.class);
 
@@ -109,7 +107,7 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
             IntHolder channelState = channel.state();
             int current = channelState.getValue();
             if(current != expected) {
-                osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), current, expected);
+                osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), current, expected, memApi);
                 channelState.setValue(expected);
             }
         }
@@ -124,7 +122,7 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
             }
             ctl(Constants.NET_R);
             Protocol protocol = sentry.toProtocol();
-            ProtocolPollerNode protocolPollerNode = new ProtocolPollerNode(nodeMap, channel, protocol);
+            ProtocolPollerNode protocolPollerNode = new ProtocolPollerNode(nodeMap, channel, protocol, memApi);
             nodeMap.replace(channel.socket().intValue(), this, protocolPollerNode);
             channel.writer().submit(new WriterTask(WriterTaskType.INITIATE, channel, protocol, null));
         }
@@ -158,15 +156,17 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
         private final IntMap<PollerNode> nodeMap;
         private final Channel channel;
         private final Protocol protocol;
+        private final MemApi memApi;
         private List<Object> entityList = new ArrayList<>(MAX_LIST_SIZE);
         private WriteBuffer tempBuffer;
         private IntMap<TaggedMsg> msgMap;
         private Carrier carrier;
 
-        public ProtocolPollerNode(IntMap<PollerNode> nodeMap, Channel channel, Protocol protocol) {
+        public ProtocolPollerNode(IntMap<PollerNode> nodeMap, Channel channel, Protocol protocol, MemApi memApi) {
             this.nodeMap = nodeMap;
             this.channel = channel;
             this.protocol = protocol;
+            this.memApi = memApi;
         }
 
         @Override
@@ -269,7 +269,7 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
             channel.state().transform(state -> {
                 int current = state & Constants.NET_RW;
                 if(current != expected) {
-                    osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), current, expected);
+                    osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), current, expected, memApi);
                     return expected - current + state;
                 }else {
                     return state;
@@ -366,7 +366,7 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
                 channel.state().transform(state -> {
                     int current = state & Constants.NET_RW;
                     if(current != Constants.NET_NONE) {
-                        osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), current, Constants.NET_NONE);
+                        osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), current, Constants.NET_NONE, memApi);
                         state -= (current - Constants.NET_NONE);
                     }
                     if((state & Constants.NET_WC) == Constants.NET_WC) {

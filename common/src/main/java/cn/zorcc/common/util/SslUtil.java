@@ -5,6 +5,7 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.bindings.SslBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.structure.Allocator;
+import cn.zorcc.common.structure.MemApi;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
@@ -42,20 +43,22 @@ public final class SslUtil {
         }
     }
 
-    private static String getErrDescription() {
-        MemorySegment buf = Allocator.HEAP.allocate(ERR_STRING_LENGTH);
-        SslBinding.errString(SslBinding.errGet(), buf, buf.byteSize());
-        return buf.getString(0L, StandardCharsets.UTF_8);
+    private static String getErrDescription(MemApi memApi) {
+        try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
+            MemorySegment buf = allocator.allocate(ERR_STRING_LENGTH);
+            SslBinding.errString(SslBinding.errGet(), buf, buf.byteSize());
+            return buf.getString(0L, StandardCharsets.UTF_8);
+        }
     }
 
     /**
      *   Throw an exception based on err code and operation
      */
-    public static int throwException(int err, String operation) {
+    public static int throwException(int err, String operation, MemApi memApi) {
         if(err == Constants.SSL_ERROR_SSL){
-            throw new FrameworkException(ExceptionType.NETWORK, STR."\{operation} failed with SSL_ERROR_SSL, message : \{getErrDescription()}");
+            throw new FrameworkException(ExceptionType.NETWORK, STR."\{operation} failed with SSL_ERROR_SSL, message : \{getErrDescription(memApi)}");
         }else if(err == Constants.SSL_ERROR_SYSCALL) {
-            throw new FrameworkException(ExceptionType.NETWORK, STR."\{operation} failed with SSL_ERROR_SYSCALL, message : \{getErrDescription()}");
+            throw new FrameworkException(ExceptionType.NETWORK, STR."\{operation} failed with SSL_ERROR_SYSCALL, message : \{getErrDescription(memApi)}");
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }

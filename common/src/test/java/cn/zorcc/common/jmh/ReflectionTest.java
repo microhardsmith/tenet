@@ -1,11 +1,6 @@
 package cn.zorcc.common.jmh;
 
-import cn.zorcc.common.Constants;
-import cn.zorcc.common.ExceptionType;
-import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.util.ReflectUtil;
 import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.infra.Blackhole;
 

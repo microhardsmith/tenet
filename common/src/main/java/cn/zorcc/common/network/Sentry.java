@@ -55,7 +55,7 @@ public interface Sentry {
 
         @Override
         public int onWritableEvent() {
-            int errOpt = osNetworkLibrary.getErrOpt(channel.socket());
+            int errOpt = osNetworkLibrary.getErrOpt(channel.socket(), Poller.localMemApi());
             if(errOpt == 0) {
                 return Constants.NET_UPDATE;
             }else {
@@ -109,13 +109,13 @@ public interface Sentry {
                 return handshake();
             }else {
                 Socket socket = channel.socket();
-                int errOpt = osNetworkLibrary.getErrOpt(socket);
+                int errOpt = osNetworkLibrary.getErrOpt(socket, Poller.localMemApi());
                 if(errOpt == 0) {
                     int r = SslBinding.sslSetFd(ssl, socket.intValue());
                     if(r == 1) {
                         return handshake();
                     }else {
-                        return SslUtil.throwException(SslBinding.sslGetErr(ssl, r), "SSL_set_fd()");
+                        return SslUtil.throwException(SslBinding.sslGetErr(ssl, r), "SSL_set_fd()", Poller.localMemApi());
                     }
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to establish connection, err opt : \{errOpt}");
@@ -151,7 +151,7 @@ public interface Sentry {
                     sslState.setValue(sslState().getValue() | WANT_WRITE);
                     return Constants.NET_W;
                 }else {
-                    return SslUtil.throwException(err, "SSL_handshake()");
+                    return SslUtil.throwException(err, "SSL_handshake()", Poller.localMemApi());
                 }
             }
         }

@@ -2,11 +2,13 @@ package cn.zorcc.common.structure;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
+import cn.zorcc.common.bindings.SystemBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.util.NativeUtil;
 
-import java.lang.foreign.*;
-import java.lang.invoke.MethodHandle;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.nio.ByteOrder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -16,19 +18,11 @@ import java.util.List;
  *   Direct memory ReadBuffer, not thread-safe, ReadBuffer is read-only, shouldn't be modified directly
  *   Note that writeIndex is a mutable field, because
  */
-@SuppressWarnings("unused")
 public final class ReadBuffer {
-    private static final MethodHandle strlen;
+
     private final MemorySegment segment;
     private final long size;
     private long readIndex;
-
-    static {
-        Linker linker = Linker.nativeLinker();
-        SymbolLookup symbolLookup = linker.defaultLookup();
-        MemorySegment ptr = symbolLookup.find("strnlen").orElseThrow(() -> new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED));
-        strlen = linker.downcallHandle(ptr, FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG), Linker.Option.critical(true));
-    }
 
     public ReadBuffer(MemorySegment segment) {
         this.segment = segment;
@@ -150,40 +144,110 @@ public final class ReadBuffer {
     }
 
     /**
-     *   Read until target several separators occurred in the readBuffer
-     *   If no separators were found in the sequence, no bytes would be read and null would be returned
+     *   Shift current readIndex to the searchIndex with offset, return the searched bytes
      */
-    public byte[] readUntil(byte[] separators) {
-        for(long cur = readIndex; cur <= size - separators.length; cur++) {
-            if(NativeUtil.matches(segment, cur, separators)) {
-                byte[] result = cur == readIndex ? Constants.EMPTY_BYTES : segment.asSlice(readIndex, cur - readIndex).toArray(ValueLayout.JAVA_BYTE);
-                readIndex = cur + separators.length;
-                return result;
-            }
-        }
-        return null;
+    private byte[] shiftData(long searchIndex, long shift) {
+        byte[] result = searchIndex == readIndex ? Constants.EMPTY_BYTES : segment.asSlice(readIndex, searchIndex - readIndex).toArray(ValueLayout.JAVA_BYTE);
+        readIndex = searchIndex + shift;
+        return result;
     }
 
-    public byte[] readUntil(byte b) {
-        for(long cur = readIndex; cur < size; cur++) {
-            if(segment.get(ValueLayout.JAVA_BYTE, cur) == b) {
-                byte[] result = cur == readIndex ? Constants.EMPTY_BYTES : segment.asSlice(readIndex, cur - readIndex).toArray(ValueLayout.JAVA_BYTE);
-                readIndex = cur + 1;
-                return result;
-            }
-        }
-        return null;
+    /**
+     *   Creating a byte search pattern with SIMD inside a register algorithm
+     */
+    public static long compilePattern(byte b) {
+        long pattern = b & 0xFFL;
+        return pattern
+                | (pattern << 8)
+                | (pattern << 16)
+                | (pattern << 24)
+                | (pattern << 32)
+                | (pattern << 40)
+                | (pattern << 48)
+                | (pattern << 56);
     }
 
-    public byte[] readUntil(byte b1, byte b2) {
-        for(long cur = readIndex; cur < size; cur++) {
-            if(segment.get(ValueLayout.JAVA_BYTE, cur) == b1 && cur < size - 1 && segment.get(ValueLayout.JAVA_BYTE, cur + 1) == b2) {
-                byte[] result = cur == readIndex ? Constants.EMPTY_BYTES : segment.asSlice(readIndex, cur - readIndex).toArray(ValueLayout.JAVA_BYTE);
-                readIndex = cur + 2;
-                return result;
+    private static int searchPattern(long data, long pattern) {
+        long input = data ^ pattern;
+        long tmp = (input & 0x7F7F7F7F7F7F7F7FL) + 0x7F7F7F7F7F7F7F7FL;
+        tmp = ~(tmp | input | 0x7F7F7F7F7F7F7F7FL);
+        return (ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN ? Long.numberOfLeadingZeros(tmp) : Long.numberOfTrailingZeros(tmp)) >>> 3;
+    }
+
+    private static long linearSearch(MemorySegment segment, long startIndex, long endIndex, byte target) {
+        for(long cur = startIndex; cur < endIndex; cur++) {
+            if(NativeUtil.getByte(segment, cur) == target) {
+                return cur;
             }
         }
-        return null;
+        return Long.MIN_VALUE;
+    }
+
+    public byte[] readUntil(byte sep) {
+        long searchIndex = linearSearch(segment, readIndex, size, sep);
+        return searchIndex < 0 ? null : shiftData(searchIndex, 1L);
+    }
+
+    private static long linearSearch(MemorySegment segment, long startIndex, long endIndex, byte target1, byte target2) {
+        for(long cur = startIndex; cur < endIndex; cur++) {
+            if(NativeUtil.getByte(segment, cur) == target1 && cur < endIndex - 1 && NativeUtil.getByte(segment, cur + 1) == target2) {
+                return cur;
+            }
+        }
+        return Long.MIN_VALUE;
+    }
+
+    public byte[] readUntil(byte firstSep, byte secondSep) {
+        long searchIndex = linearSearch(segment, readIndex, size, firstSep, secondSep);
+        return searchIndex < 0 ? null : shiftData(searchIndex, 2L);
+    }
+
+    private static long searchFirstByte(MemorySegment segment, long startIndex, long endIndex, long pattern, byte target) {
+        final long available = endIndex - startIndex;
+        if(available < Long.BYTES) {
+            return linearSearch(segment, startIndex, endIndex, target);
+        }
+        // check the first part
+        int r = searchPattern(NativeUtil.getLong(segment, startIndex), pattern);
+        if(r < Long.BYTES) {
+            return startIndex + r;
+        }
+        // check the middle part
+        final long address = segment.address();
+        long index = Long.BYTES - ((address + startIndex) & (Long.BYTES - 1)) + startIndex;
+        for( ; index <= endIndex - Long.BYTES; index += Long.BYTES) {
+            r = searchPattern(NativeUtil.getLong(segment, index), pattern);
+            if(r < Long.BYTES) {
+                return index + r;
+            }
+        }
+        // check the last part
+        if(index < endIndex) {
+            r = searchPattern(NativeUtil.getLong(segment, endIndex - Long.BYTES), pattern);
+            if(r < Long.BYTES) {
+                return endIndex - Long.BYTES + r;
+            }
+        }
+        return Long.MIN_VALUE;
+    }
+
+    public byte[] readPattern(long pattern, byte sep) {
+        long searchIndex = searchFirstByte(segment, readIndex, size, pattern, sep);
+        return searchIndex < 0 ? null : shiftData(searchIndex, 1L);
+    }
+
+    public byte[] readPattern(long pattern, byte firstSep, byte secondSep) {
+        long startIndex = readIndex;
+        for( ; ; ) {
+            long index = searchFirstByte(segment, startIndex, size, pattern, firstSep);
+            if(index < 0) {
+                return null;
+            }else if(index < size - 1 && NativeUtil.getByte(segment, index + 1) == secondSep) {
+                return shiftData(index, 2L);
+            }else {
+                startIndex = index + 1;
+            }
+        }
     }
 
     /**
@@ -191,7 +255,7 @@ public final class ReadBuffer {
      */
     public String readStr(Charset charset) {
         long available = size - readIndex;
-        long r = strlen(segment.asSlice(readIndex, available), available);
+        long r = SystemBinding.strlen(segment.asSlice(readIndex, available), available);
         if(r == available) {
             return null;
         }
@@ -204,15 +268,6 @@ public final class ReadBuffer {
 
     public String readStr() {
         return readStr(StandardCharsets.UTF_8);
-    }
-
-
-    private static long strlen(MemorySegment ptr, long available) {
-        try{
-            return (long) strlen.invokeExact(ptr, available);
-        }catch (Throwable throwable) {
-            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED);
-        }
     }
 
     /**

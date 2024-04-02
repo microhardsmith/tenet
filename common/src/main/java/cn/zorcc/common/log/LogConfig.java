@@ -4,7 +4,11 @@ import cn.zorcc.common.Constants;
 
 public final class LogConfig {
     /**
-     *   Global buffer size allocated for the logging thread
+     *   It's recommended to use RpMalloc for better allocation performance
+     */
+    private boolean usingRpMalloc;
+    /**
+     *   Global buffer size allocated for current logging thread
      */
     private long bufferSize = Constants.MB;
     /**
@@ -39,6 +43,14 @@ public final class LogConfig {
      *   Whether using sqlite log output
      */
     private SqliteLogConfig sqlite;
+
+    public boolean isUsingRpMalloc() {
+        return usingRpMalloc;
+    }
+
+    public void setUsingRpMalloc(boolean usingRpMalloc) {
+        this.usingRpMalloc = usingRpMalloc;
+    }
 
     public long getBufferSize() {
         return bufferSize;

@@ -17,7 +17,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
 
-public class CompressionJmhTest extends JmhTest {
+public class CompressionTest extends JmhTest {
     @Param({"/small.json", "medium.json", "/large.json"})
     private String jsonFile;
     @Param({"1", "5", "9"})
@@ -27,7 +27,7 @@ public class CompressionJmhTest extends JmhTest {
 
     @Setup
     public void setup() {
-        try(InputStream stream = CompressionJmhTest.class.getResourceAsStream(jsonFile)) {
+        try(InputStream stream = CompressionTest.class.getResourceAsStream(jsonFile)) {
             assert stream != null;
             this.original = stream.readAllBytes();
             this.originalSegment = NativeUtil.globalArena.allocate(ValueLayout.JAVA_BYTE, original.length);
@@ -68,7 +68,7 @@ public class CompressionJmhTest extends JmhTest {
     }
 
     public static void main(String[] args) throws RunnerException {
-        runTest(CompressionJmhTest.class);
+        runTest(CompressionTest.class);
     }
 
 }

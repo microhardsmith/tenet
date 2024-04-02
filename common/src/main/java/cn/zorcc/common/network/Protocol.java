@@ -154,7 +154,7 @@ public interface Protocol {
                         }
                         return 0;
                     }else {
-                        return SslUtil.throwException(err, "SSL_read()");
+                        return SslUtil.throwException(err, "SSL_read()", Poller.localMemApi());
                     }
                 }else {
                     return received;
@@ -194,7 +194,7 @@ public interface Protocol {
                         next |= SEND_WANT_WRITE;
                         return -Constants.NET_PW;
                     }else {
-                        return SslUtil.throwException(err, "SSL_write()");
+                        return SslUtil.throwException(err, "SSL_write()", Writer.localMemApi());
                     }
                 }else {
                     return written;

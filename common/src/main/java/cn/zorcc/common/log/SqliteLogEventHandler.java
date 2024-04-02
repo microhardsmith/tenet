@@ -5,6 +5,7 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.sqlite.SqliteConn;
 import cn.zorcc.common.structure.Allocator;
+import cn.zorcc.common.structure.MemApi;
 import cn.zorcc.common.structure.WriteBuffer;
 import cn.zorcc.common.util.FileUtil;
 
@@ -41,25 +42,27 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
     private final long maxRowCount;
     private final long maxRecordingTime;
     private final MemorySegment reserved;
+    private final MemApi memApi;
     private long currentCreateTime;
     private long currentRowCount = 0;
     private SqliteConn sqliteConn;
     private MemorySegment stmt;
 
-    public SqliteLogEventHandler(LogConfig logConfig, MemorySegment m) {
+    public SqliteLogEventHandler(LogConfig logConfig, MemorySegment m, MemApi memApi) {
         try{
             SqliteLogConfig config = logConfig.getSqlite();
-            dir = FileUtil.normalizePath(config.getDir() == null || config.getDir().isEmpty() ? System.getProperty("user.dir") : config.getDir());
+            this.dir = FileUtil.normalizePath(config.getDir() == null || config.getDir().isEmpty() ? System.getProperty("user.dir") : config.getDir());
             Path dirPath = Path.of(dir);
             if(!Files.exists(dirPath)) {
                 Files.createDirectory(dirPath);
             }
-            flushThreshold = config.getFlushThreshold() <= 0 ? Integer.MIN_VALUE : config.getFlushThreshold();
-            maxRowCount = config.getMaxRowCount() <= 0 ? Long.MIN_VALUE : config.getMaxRowCount();
-            maxRecordingTime = config.getMaxRecordingTime() <= 0 ? Long.MIN_VALUE : config.getMaxRecordingTime();
-            reserved = m;
+            this.flushThreshold = config.getFlushThreshold() <= 0 ? Integer.MIN_VALUE : config.getFlushThreshold();
+            this.maxRowCount = config.getMaxRowCount() <= 0 ? Long.MIN_VALUE : config.getMaxRowCount();
+            this.maxRecordingTime = config.getMaxRecordingTime() <= 0 ? Long.MIN_VALUE : config.getMaxRecordingTime();
+            this.reserved = m;
+            this.memApi = memApi;
             openNewSqliteDatabase();
-        }catch (IOException e) {
+        } catch (IOException e) {
             throw new FrameworkException(ExceptionType.LOG, "Unable to create sqlite database");
         }
     }
@@ -76,16 +79,17 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
         }
         final SqliteConn oldConn = sqliteConn;
         final MemorySegment oldStmt = stmt;
-        Allocator allocator = Allocator.newSlicingAllocator(reserved);
-        sqliteConn = new SqliteConn(path);
-        sqliteConn.exec(allocator.allocateFrom(TABLE_CREATE_SQL));
-        stmt = sqliteConn.preparePersistentStatement(allocator.allocateFrom(LOG_INSERT_SQL));
-        if(oldStmt != null && oldConn != null) {
-            oldConn.finalize(oldStmt);
-            oldConn.close();
+        try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
+            sqliteConn = new SqliteConn(path);
+            sqliteConn.exec(allocator.allocateFrom(TABLE_CREATE_SQL));
+            stmt = sqliteConn.preparePersistentStatement(allocator.allocateFrom(LOG_INSERT_SQL));
+            if(oldStmt != null && oldConn != null) {
+                oldConn.finalize(oldStmt);
+                oldConn.close();
+            }
+            currentCreateTime = instant.toEpochMilli();
+            currentRowCount = 0;
         }
-        currentCreateTime = instant.toEpochMilli();
-        currentRowCount = 0;
     }
 
     @Override
@@ -116,7 +120,7 @@ public final class SqliteLogEventHandler implements Consumer<LogEvent> {
         if(!eventList.isEmpty()) {
             sqliteConn.begin();
             for (LogEvent logEvent : eventList) {
-                try(WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(reserved, false)) {
+                try(WriteBuffer writeBuffer = WriteBuffer.newReservedWriteBuffer(memApi, reserved)) {
                     sqliteConn.bindLong(stmt, 1, logEvent.timestamp());
                     sqliteConn.bindText(stmt, 2, wrapText(writeBuffer, logEvent.level()));
                     sqliteConn.bindText(stmt, 3, wrapText(writeBuffer, logEvent.className()));

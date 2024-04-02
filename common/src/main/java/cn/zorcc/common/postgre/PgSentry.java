@@ -5,6 +5,7 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.bindings.SslBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Channel;
+import cn.zorcc.common.network.Poller;
 import cn.zorcc.common.network.Protocol;
 import cn.zorcc.common.network.Sentry;
 import cn.zorcc.common.structure.Allocator;
@@ -63,24 +64,26 @@ public final class PgSentry implements Sentry {
             sslState.setValue(current & (~WANT_WRITE));
             return handshake();
         }else {
-            int errOpt = osNetworkLibrary.getErrOpt(channel.socket());
+            int errOpt = osNetworkLibrary.getErrOpt(channel.socket(), Poller.localMemApi());
             if(errOpt != 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to establish postgresql connection, err opt : \{errOpt}");
             }
-            MemorySegment segment = Allocator.HEAP.allocate(ValueLayout.JAVA_INT, 2);
-            segment.set(ValueLayout.JAVA_INT, 0L, 8);
-            segment.set(ValueLayout.JAVA_INT, 4L, 80877103);
-            long len = segment.byteSize();
-            long sent = osNetworkLibrary.send(channel.socket(), segment, len);
-            if(sent == len) {
-                sslState.setValue(current | WAITING_SSL);
-                return Constants.NET_IGNORED;
-            }else if(sent < len) {
-                throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to send SSL request, only \{sent} bytes got written, consider this connection unfunctionally");
-            }else if(sent < 0L) {
-                throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to send SSL request, errno : \{Math.abs(sent)}");
-            }else {
-                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+            try(Allocator allocator = Allocator.newDirectAllocator(Poller.localMemApi())) {
+                MemorySegment segment = allocator.allocate(ValueLayout.JAVA_INT, 2);
+                segment.set(ValueLayout.JAVA_INT, 0L, 8);
+                segment.set(ValueLayout.JAVA_INT, 4L, 80877103);
+                long len = segment.byteSize();
+                long sent = osNetworkLibrary.send(channel.socket(), segment, len);
+                if(sent == len) {
+                    sslState.setValue(current | WAITING_SSL);
+                    return Constants.NET_IGNORED;
+                }else if(sent < len) {
+                    throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to send SSL request, only \{sent} bytes got written, consider this connection unfunctionally");
+                }else if(sent < 0L) {
+                    throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to send SSL request, errno : \{Math.abs(sent)}");
+                }else {
+                    throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+                }
             }
         }
     }

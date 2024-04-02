@@ -2,7 +2,7 @@ package cn.zorcc.common.network;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
-import cn.zorcc.common.bindings.TenetBinding;
+import cn.zorcc.common.RpMalloc;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.structure.Allocator;
@@ -17,17 +17,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public record Writer(
         BlockingQueue<WriterTask> writerQueue,
-        MemApi memApi,
         Thread writerThread
 ) {
     private static final Logger log = new Logger(Writer.class);
     private static final AtomicInteger counter = new AtomicInteger(0);
     private static final ScopedValue<MemApi> MEM_SCOPE = ScopedValue.newInstance();
 
-    public static Writer newWriter(NetConfig config, MemApi memApi) {
+    public static Writer newWriter(NetConfig config) {
         BlockingQueue<WriterTask> queue = new LinkedTransferQueue<>();
-        Thread writerThread = createWriterThread(config, memApi, queue);
-        return new Writer(queue, memApi, writerThread);
+        Thread writerThread = createWriterThread(config, queue);
+        return new Writer(queue, writerThread);
     }
 
     public void submit(WriterTask writerTask) {
@@ -37,42 +36,40 @@ public record Writer(
     }
 
     /**
-     *   Writer could provide its local allocator for Encoder usage
+     *   Writer could provide its local mem api for Encoder usage
      */
-    public static Allocator localAllocator() {
-        return Allocator.newDirectAllocator(MEM_SCOPE.orElseThrow(() -> new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED)));
+    public static MemApi localMemApi() {
+        return MEM_SCOPE.orElseThrow(() -> new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED));
     }
 
-    private static Thread createWriterThread(NetConfig config, MemApi memApi, BlockingQueue<WriterTask> queue) {
+    private static Thread createWriterThread(NetConfig config, BlockingQueue<WriterTask> queue) {
         int sequence = counter.getAndIncrement();
         return Thread.ofPlatform().name(STR."writer-\{sequence}").unstarted(() -> {
             log.info(STR."Initializing writer thread, sequence : \{sequence}");
-            if(config.isEnableRpMalloc()) {
-                TenetBinding.rpThreadInitialize();
-            }
+            MemApi memApi = config.isEnableRpMalloc() ? RpMalloc.tInitialize() : MemApi.DEFAULT;
             ScopedValue.runWhere(MEM_SCOPE, memApi, () -> {
                 try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
                     IntMap<WriterNode> nodeMap = IntMap.newTreeMap(config.getWriterMapSize());
                     MemorySegment reservedSegment = allocator.allocate(ValueLayout.JAVA_BYTE, config.getWriterBufferSize());
-                    processWriterTasks(nodeMap, queue, reservedSegment);
+                    processWriterTasks(nodeMap, queue, reservedSegment, memApi);
                 }catch (InterruptedException i) {
                     throw new FrameworkException(ExceptionType.NETWORK, "Writer thread interrupted", i);
                 }finally {
                     log.info(STR."Exiting writer thread, sequence : \{sequence}");
                     if(config.isEnableRpMalloc()) {
-                        TenetBinding.rpThreadFinalize();
+                        RpMalloc.tRelease();
                     }
                 }
             });
         });
     }
 
-    private static void processWriterTasks(IntMap<WriterNode> nodeMap, BlockingQueue<WriterTask> queue, MemorySegment reserved) throws InterruptedException {
+    private static void processWriterTasks(IntMap<WriterNode> nodeMap, BlockingQueue<WriterTask> queue, MemorySegment reserved, MemApi memApi) throws InterruptedException {
         int state = Constants.RUNNING;
         for( ; ; ) {
             WriterTask writerTask = queue.take();
             switch (writerTask.type()) {
-                case INITIATE -> handleInitiateMsg(nodeMap, writerTask);
+                case INITIATE -> handleInitiateMsg(nodeMap, writerTask, memApi);
                 case SINGLE_MSG -> handleSingleMsg(nodeMap, writerTask, reserved);
                 case MULTIPLE_MSG -> handleMultipleMsg(nodeMap, writerTask, reserved);
                 case WRITABLE -> handleWritable(nodeMap, writerTask);
@@ -97,11 +94,11 @@ public record Writer(
         }
     }
 
-    private static void handleInitiateMsg(IntMap<WriterNode> nodeMap, WriterTask writerTask) {
+    private static void handleInitiateMsg(IntMap<WriterNode> nodeMap, WriterTask writerTask, MemApi memApi) {
         Object msg = writerTask.msg();
         if(msg instanceof Protocol protocol) {
             Channel channel = writerTask.channel();
-            WriterNode writerNode = new WriterNode.ProtocolWriterNode(nodeMap, channel, protocol);
+            WriterNode writerNode = new WriterNode.ProtocolWriterNode(nodeMap, channel, protocol, memApi);
             nodeMap.put(channel.socket().intValue(), writerNode);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
