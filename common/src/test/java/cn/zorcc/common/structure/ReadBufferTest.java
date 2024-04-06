@@ -69,27 +69,27 @@ public class ReadBufferTest {
     public void testReadUntil() {
         for(int i = 0; i < 1000; i++) {
             ReadBuffer r = createReadBufferWithOneSep(i, Constants.NUT);
-            byte[] bytes = r.readUntil(Constants.NUT);
-            Assertions.assertNotNull(bytes);
-            Assertions.assertEquals(bytes.length, i);
+            MemorySegment segment = r.readUntil(Constants.NUT);
+            Assertions.assertNotNull(segment);
+            Assertions.assertEquals(segment.byteSize(), i);
         }
         for(int i = 0; i < 1000; i++) {
             ReadBuffer r = createReadBufferWithOneSep(1000, i, Constants.NUT);
-            byte[] bytes = r.readUntil(Constants.NUT);
-            Assertions.assertNotNull(bytes);
-            Assertions.assertEquals(bytes.length, i);
+            MemorySegment segment = r.readUntil(Constants.NUT);
+            Assertions.assertNotNull(segment);
+            Assertions.assertEquals(segment.byteSize(), i);
         }
         for(int i = 0; i < 1000; i++) {
             ReadBuffer r = createReadBufferWithTwoSep(i, Constants.CR, Constants.LF);
-            byte[] bytes = r.readUntil(Constants.CR, Constants.LF);
-            Assertions.assertNotNull(bytes);
-            Assertions.assertEquals(bytes.length, i);
+            MemorySegment segment = r.readUntil(Constants.CR, Constants.LF);
+            Assertions.assertNotNull(segment);
+            Assertions.assertEquals(segment.byteSize(), i);
         }
         for(int i = 0; i < 1000; i++) {
             ReadBuffer r = createReadBufferWithTwoSep(1000, i, Constants.CR, Constants.LF);
-            byte[] bytes = r.readUntil(Constants.CR, Constants.LF);
-            Assertions.assertNotNull(bytes);
-            Assertions.assertEquals(bytes.length, i);
+            MemorySegment segment = r.readUntil(Constants.CR, Constants.LF);
+            Assertions.assertNotNull(segment);
+            Assertions.assertEquals(segment.byteSize(), i);
         }
     }
 
@@ -98,28 +98,28 @@ public class ReadBufferTest {
         long pattern = ReadBuffer.compilePattern(Constants.NUT);
         for(int i = 0; i < 1000; i++) {
             ReadBuffer r = createReadBufferWithOneSep(i, Constants.NUT);
-            byte[] bytes = r.readPattern(pattern, Constants.NUT);
-            Assertions.assertNotNull(bytes);
-            Assertions.assertEquals(bytes.length, (long) i);
+            MemorySegment segment = r.readPattern(pattern, Constants.NUT);
+            Assertions.assertNotNull(segment);
+            Assertions.assertEquals(segment.byteSize(), i);
         }
         for(int i = 0; i < 1000; i++) {
             ReadBuffer r = createReadBufferWithOneSep(1000, i, Constants.NUT);
-            byte[] bytes = r.readPattern(pattern, Constants.NUT);
-            Assertions.assertNotNull(bytes);
-            Assertions.assertEquals(bytes.length, i);
+            MemorySegment segment = r.readPattern(pattern, Constants.NUT);
+            Assertions.assertNotNull(segment);
+            Assertions.assertEquals(segment.byteSize(), i);
         }
         long pattern2 = ReadBuffer.compilePattern(Constants.CR);
         for(int i = 0; i < 1000; i++) {
             ReadBuffer r = createReadBufferWithTwoSep(i, Constants.CR, Constants.LF);
-            byte[] bytes = r.readPattern(pattern2, Constants.CR, Constants.LF);
-            Assertions.assertNotNull(bytes);
-            Assertions.assertEquals(bytes.length, i);
+            MemorySegment segment = r.readPattern(pattern2, Constants.CR, Constants.LF);
+            Assertions.assertNotNull(segment);
+            Assertions.assertEquals(segment.byteSize(), i);
         }
         for(int i = 0; i < 1000; i++) {
             ReadBuffer r = createReadBufferWithTwoSep(1000, i, Constants.CR, Constants.LF);
-            byte[] bytes = r.readPattern(pattern2, Constants.CR, Constants.LF);
-            Assertions.assertNotNull(bytes);
-            Assertions.assertEquals(bytes.length, i);
+            MemorySegment segment = r.readPattern(pattern2, Constants.CR, Constants.LF);
+            Assertions.assertNotNull(segment);
+            Assertions.assertEquals(segment.byteSize(), i);
         }
     }
 
@@ -129,8 +129,8 @@ public class ReadBufferTest {
         MemorySegment segment = Allocator.HEAP.allocate(11);
         segment.asSlice(0, 10).fill(Constants.CR);
         NativeUtil.setByte(segment, 10, Constants.LF);
-        byte[] bytes = new ReadBuffer(segment).readPattern(pattern, Constants.CR, Constants.LF);
-        Assertions.assertNotNull(bytes);
-        Assertions.assertEquals(bytes.length, 9);
+        MemorySegment s = new ReadBuffer(segment).readPattern(pattern, Constants.CR, Constants.LF);
+        Assertions.assertNotNull(s);
+        Assertions.assertEquals(s.byteSize(), 9);
     }
 }

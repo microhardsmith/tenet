@@ -4,6 +4,7 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.OsType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.structure.Allocator;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
@@ -91,7 +92,8 @@ public final class NativeUtil {
         if(Files.exists(Path.of(defaultPath))) {
             return defaultPath;
         }
-        if(defaultPath.startsWith(Constants.LIB)) {
+        // Naming convention for Windows/Linux users
+        if(fileName.startsWith(Constants.LIB)) {
             fileName = fileName.substring(Constants.LIB.length());
         }else {
             fileName = Constants.LIB + fileName;
@@ -172,8 +174,13 @@ public final class NativeUtil {
         return linker.downcallHandle(method, functionDescriptor, options);
     }
 
+    /**
+     *   Check if a memorySegment is a Null Pointer
+     *   Note that heap segment always got an address of Zero, so this function shouldn't be used on heap segment
+     */
     public static boolean checkNullPointer(MemorySegment memorySegment) {
-        return memorySegment == null || memorySegment.address() == 0;
+        MemorySegment m = Objects.requireNonNull(memorySegment);
+        return m.isNative() && m.address() == 0L;
     }
 
     /**
@@ -249,7 +256,37 @@ public final class NativeUtil {
         return (MemorySegment) ADDRESS_HANDLE.get(m, offset);
     }
 
-    public void setAddress(MemorySegment m, long offset, MemorySegment address) {
+    public static void setAddress(MemorySegment m, long offset, MemorySegment address) {
         ADDRESS_HANDLE.set(m, offset, address);
     }
+
+    /**
+     *   Convert a native segment to heap segment
+     */
+    public static MemorySegment toHeap(MemorySegment nativeSegment) {
+        if(!nativeSegment.isNative()) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED);
+        }
+        if(checkNullPointer(nativeSegment)) {
+            return MemorySegment.NULL;
+        }
+        long len = nativeSegment.byteSize();
+        MemorySegment heapSegment = Allocator.HEAP.allocate(ValueLayout.JAVA_BYTE, len);
+        MemorySegment.copy(nativeSegment, 0L, heapSegment, 0L, len);
+        return heapSegment;
+    }
+
+    /**
+     *   Convert a heap segment to native segment
+     */
+    public static MemorySegment toNative(MemorySegment heapSegment, Allocator allocator) {
+        if(heapSegment.isNative() || !allocator.isNative()) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED);
+        }
+        long len = heapSegment.byteSize();
+        MemorySegment nativeSegment = allocator.allocate(ValueLayout.JAVA_BYTE, len);
+        MemorySegment.copy(heapSegment, 0L, nativeSegment, 0L, len);
+        return nativeSegment;
+    }
+
 }

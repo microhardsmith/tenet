@@ -25,7 +25,7 @@ public final class Constants {
     public static final String DEFLATE = "libdeflate";
     public static final String BROTLI_COMMON = "libbrotlicommon";
     public static final String BROTLI_ENC = "libbrotlienc";
-    public static final String BROTLI_DEC = "libbrotildec";
+    public static final String BROTLI_DEC = "libbrotlidec";
     public static final String SQLITE = "libsqlite";
     public static final String DUCKDB = "libduckdb";
     public static final String ALLOCATOR = "allocator";

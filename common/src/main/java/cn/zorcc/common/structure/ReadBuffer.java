@@ -146,8 +146,8 @@ public final class ReadBuffer {
     /**
      *   Shift current readIndex to the searchIndex with offset, return the searched bytes
      */
-    private byte[] shiftData(long searchIndex, long shift) {
-        byte[] result = searchIndex == readIndex ? Constants.EMPTY_BYTES : segment.asSlice(readIndex, searchIndex - readIndex).toArray(ValueLayout.JAVA_BYTE);
+    private MemorySegment shiftData(long searchIndex, long shift) {
+        MemorySegment result = searchIndex == readIndex ? MemorySegment.NULL : segment.asSlice(readIndex, searchIndex - readIndex);
         readIndex = searchIndex + shift;
         return result;
     }
@@ -174,35 +174,45 @@ public final class ReadBuffer {
         return (ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN ? Long.numberOfLeadingZeros(tmp) : Long.numberOfTrailingZeros(tmp)) >>> 3;
     }
 
-    private static long linearSearch(MemorySegment segment, long startIndex, long endIndex, byte target) {
-        for(long cur = startIndex; cur < endIndex; cur++) {
+    /**
+     *   LinearSearch the target memorySegment, from startIndex to endIndex, of target byte, return its index, or -1 if not found
+     */
+    public static long linearSearch(MemorySegment segment, long startIndex, long endIndex, byte target) {
+        final int start = Math.toIntExact(startIndex);
+        final int end = Math.toIntExact(endIndex);
+        for(int cur = start; cur < end; cur++) {
             if(NativeUtil.getByte(segment, cur) == target) {
                 return cur;
             }
         }
-        return Long.MIN_VALUE;
+        return -1;
     }
 
-    public byte[] readUntil(byte sep) {
+    public MemorySegment readUntil(byte sep) {
         long searchIndex = linearSearch(segment, readIndex, size, sep);
         return searchIndex < 0 ? null : shiftData(searchIndex, 1L);
     }
 
     private static long linearSearch(MemorySegment segment, long startIndex, long endIndex, byte target1, byte target2) {
-        for(long cur = startIndex; cur < endIndex; cur++) {
+        final int start = Math.toIntExact(startIndex);
+        final int end = Math.toIntExact(endIndex);
+        for(int cur = start; cur < end; cur++) {
             if(NativeUtil.getByte(segment, cur) == target1 && cur < endIndex - 1 && NativeUtil.getByte(segment, cur + 1) == target2) {
                 return cur;
             }
         }
-        return Long.MIN_VALUE;
+        return -1;
     }
 
-    public byte[] readUntil(byte firstSep, byte secondSep) {
+    public MemorySegment readUntil(byte firstSep, byte secondSep) {
         long searchIndex = linearSearch(segment, readIndex, size, firstSep, secondSep);
         return searchIndex < 0 ? null : shiftData(searchIndex, 2L);
     }
 
-    private static long searchFirstByte(MemorySegment segment, long startIndex, long endIndex, long pattern, byte target) {
+    /**
+     *   Search target segment for target byte using SIMD inside a register algorithm, return -1 if not found or startIndex > endIndex
+     */
+    public static long patternSearch(MemorySegment segment, long startIndex, long endIndex, long pattern, byte target) {
         final long available = endIndex - startIndex;
         if(available < Long.BYTES) {
             return linearSearch(segment, startIndex, endIndex, target);
@@ -214,8 +224,9 @@ public final class ReadBuffer {
         }
         // check the middle part
         final long address = segment.address();
-        long index = Long.BYTES - ((address + startIndex) & (Long.BYTES - 1)) + startIndex;
-        for( ; index <= endIndex - Long.BYTES; index += Long.BYTES) {
+        int index = Math.toIntExact(Long.BYTES - ((address + startIndex) & (Long.BYTES - 1)) + startIndex);
+        int end = Math.toIntExact(endIndex - Long.BYTES);
+        for( ; index <= end; index += Long.BYTES) {
             r = searchPattern(NativeUtil.getLong(segment, index), pattern);
             if(r < Long.BYTES) {
                 return index + r;
@@ -228,26 +239,31 @@ public final class ReadBuffer {
                 return endIndex - Long.BYTES + r;
             }
         }
-        return Long.MIN_VALUE;
+        return -1;
     }
 
-    public byte[] readPattern(long pattern, byte sep) {
-        long searchIndex = searchFirstByte(segment, readIndex, size, pattern, sep);
+    public static long patternSearch(MemorySegment segment, long startIndex, long endIndex, long pattern, byte target1, byte target2) {
+        long s = startIndex;
+        for( ; ; ) {
+            long index = patternSearch(segment, s, endIndex, pattern, target1);
+            if(index < 0) {
+                return -1;
+            }else if(index < endIndex - 1 && NativeUtil.getByte(segment, index + 1) == target2) {
+                return index;
+            }else {
+                s = index + 1;
+            }
+        }
+    }
+
+    public MemorySegment readPattern(long pattern, byte sep) {
+        long searchIndex = patternSearch(segment, readIndex, size, pattern, sep);
         return searchIndex < 0 ? null : shiftData(searchIndex, 1L);
     }
 
-    public byte[] readPattern(long pattern, byte firstSep, byte secondSep) {
-        long startIndex = readIndex;
-        for( ; ; ) {
-            long index = searchFirstByte(segment, startIndex, size, pattern, firstSep);
-            if(index < 0) {
-                return null;
-            }else if(index < size - 1 && NativeUtil.getByte(segment, index + 1) == secondSep) {
-                return shiftData(index, 2L);
-            }else {
-                startIndex = index + 1;
-            }
-        }
+    public MemorySegment readPattern(long pattern, byte firstSep, byte secondSep) {
+        long searchIndex = patternSearch(segment, readIndex, size, pattern, firstSep, secondSep);
+        return searchIndex < 0 ? null : shiftData(searchIndex, 2L);
     }
 
     /**

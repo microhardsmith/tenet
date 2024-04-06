@@ -2,11 +2,9 @@ package cn.zorcc.common.http;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
-import cn.zorcc.common.bindings.DeflateBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Encoder;
 import cn.zorcc.common.network.Writer;
-import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.structure.WriteBuffer;
 import cn.zorcc.common.util.CompressUtil;
 
@@ -37,20 +35,15 @@ public final class HttpServerEncoder implements Encoder {
             case NONE -> rawData;
             case GZIP -> {
                 headers.put(HttpHeader.K_CONTENT_ENCODING, HttpHeader.V_GZIP);
-                try(Allocator allocator = Allocator.newDirectAllocator(Writer.localMemApi())) {
-                    yield CompressUtil.compressUsingGzip(rawData, DeflateBinding.LIBDEFLATE_DEFAULT_LEVEL, allocator);
-                }
+                yield CompressUtil.compressUsingGzip(rawData, Writer.localMemApi());
             }
             case DEFLATE -> {
                 headers.put(HttpHeader.K_CONTENT_ENCODING, HttpHeader.V_DEFLATE);
-                try(Allocator allocator = Allocator.newDirectAllocator(Writer.localMemApi())) {
-                    yield CompressUtil.compressUsingDeflate(rawData, DeflateBinding.LIBDEFLATE_DEFAULT_LEVEL, allocator);
-                }
+                yield CompressUtil.compressUsingDeflate(rawData, Writer.localMemApi());
             }
             case BROTLI -> {
-                // TODO add brotli implementation
-                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-            }
+                headers.put(HttpHeader.K_CONTENT_ENCODING, HttpHeader.V_BR);
+                yield CompressUtil.compressUsingBrotli(rawData, Writer.localMemApi());            }
         };
         headers.put(HttpHeader.K_CONTENT_LENGTH, String.valueOf(data.byteSize()));
         headers.encode(writeBuffer);

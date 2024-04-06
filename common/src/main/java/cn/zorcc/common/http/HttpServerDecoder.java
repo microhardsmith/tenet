@@ -5,12 +5,13 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.network.Decoder;
 import cn.zorcc.common.network.Poller;
-import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.structure.ReadBuffer;
 import cn.zorcc.common.structure.WriteBuffer;
 import cn.zorcc.common.util.CompressUtil;
+import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -32,6 +33,10 @@ public final class HttpServerDecoder implements Decoder {
         INCOMPLETE
     }
 
+    private static final long SPACE_PATTERN = ReadBuffer.compilePattern(Constants.SPACE);
+    private static final long CR_PATTERN = ReadBuffer.compilePattern(Constants.CR);
+    private static final long COLON_PATTERN = ReadBuffer.compilePattern(Constants.COLON);
+    private static final long CHUNKED_DATA_INITIAL_SIZE = 4 * Constants.KB;
     private DecodingStatus decodingStatus = DecodingStatus.INITIAL;
     private int len;
     private WriteBuffer tempBuffer;
@@ -42,6 +47,7 @@ public final class HttpServerDecoder implements Decoder {
             switch (tryDecode(readBuffer)) {
                 case FINISHED -> {
                     entityList.add(current);
+                    current = null; // help GC
                     if(readBuffer.available() > 0L) {
                         throw new FrameworkException(ExceptionType.HTTP, "Http pipeline was not supported");
                     }
@@ -69,11 +75,13 @@ public final class HttpServerDecoder implements Decoder {
 
     private ResultStatus tryDecodeInitial(ReadBuffer readBuffer) {
         current = new HttpRequest();
-        byte[] bytes = readBuffer.readUntil(Constants.SPACE);
-        if (bytes == null) {
+        MemorySegment segment = readBuffer.readPattern(SPACE_PATTERN, Constants.SPACE);
+        if (segment == null) {
             return ResultStatus.INCOMPLETE;
+        } else if(segment == MemorySegment.NULL) {
+            throw new FrameworkException(ExceptionType.HTTP, "Unresolved http method");
         }
-        String methodStr = new String(bytes, StandardCharsets.UTF_8);
+        String methodStr = new String(segment.toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8);
         switch (methodStr) {
             case "GET" -> current.setMethod(HttpMethod.Get);
             case "POST" -> current.setMethod(HttpMethod.Post);
@@ -88,35 +96,35 @@ public final class HttpServerDecoder implements Decoder {
     }
 
     private ResultStatus tryDecodeUri(ReadBuffer readBuffer) {
-        byte[] bytes = readBuffer.readUntil(Constants.SPACE);
-        if (bytes == null) {
+        MemorySegment segment = readBuffer.readPattern(SPACE_PATTERN, Constants.SPACE);
+        if (segment == null) {
             return ResultStatus.INCOMPLETE;
-        } else if (bytes == Constants.EMPTY_BYTES) {
+        } else if (segment == MemorySegment.NULL) {
             throw new FrameworkException(ExceptionType.HTTP, "Unresolved http uri");
         }
-        current.setUri(new String(bytes, StandardCharsets.UTF_8));
+        current.setUri(new String(segment.toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8));
         decodingStatus = DecodingStatus.DECODING_VERSION;
         return ResultStatus.CONTINUE;
     }
 
     private ResultStatus tryDecodeVersion(ReadBuffer readBuffer) {
-        byte[] bytes = readBuffer.readUntil(Constants.CR, Constants.LF);
-        if (bytes == null) {
+        MemorySegment segment = readBuffer.readPattern(CR_PATTERN, Constants.CR, Constants.LF);
+        if (segment == null) {
             return ResultStatus.INCOMPLETE;
-        } else if (bytes == Constants.EMPTY_BYTES) {
+        } else if (segment == MemorySegment.NULL) {
             throw new FrameworkException(ExceptionType.HTTP, "Unresolved http version");
         }
-        current.setVersion(new String(bytes, StandardCharsets.UTF_8));
+        current.setVersion(new String(segment.toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8));
         decodingStatus = DecodingStatus.DECODING_HEADER;
         return ResultStatus.CONTINUE;
     }
 
     private ResultStatus tryDecodeHeader(ReadBuffer readBuffer) {
-        byte[] bytes = readBuffer.readUntil(Constants.CR, Constants.LF);
+        MemorySegment segment = readBuffer.readPattern(CR_PATTERN, Constants.CR, Constants.LF);
         HttpHeader httpHeader = current.getHttpHeader();
-        if (bytes == null) {
+        if (segment == null) {
             return ResultStatus.INCOMPLETE;
-        } else if (bytes == Constants.EMPTY_BYTES) {
+        } else if (segment == MemorySegment.NULL) {
             String contentLength = httpHeader.get(HttpHeader.K_CONTENT_LENGTH);
             if(contentLength != null) {
                 len = Integer.parseInt(contentLength);
@@ -124,41 +132,44 @@ public final class HttpServerDecoder implements Decoder {
                 return ResultStatus.CONTINUE;
             }
             String transferEncoding = httpHeader.get(HttpHeader.K_TRANSFER_ENCODING);
-            if(HttpHeader.V_CHUNKED.equals(transferEncoding)){
-                tempBuffer = WriteBuffer.newHeapWriteBuffer(4 * Constants.KB);
+            if(HttpHeader.V_CHUNKED.equals(transferEncoding)) {
+                // creating a temp buffer area to store the chunked data would be wise
+                tempBuffer = WriteBuffer.newNativeWriteBuffer(Poller.localMemApi(), CHUNKED_DATA_INITIAL_SIZE);
                 decodingStatus = DecodingStatus.DECODING_CHUNKED_DATA_LENGTH;
                 return ResultStatus.CONTINUE;
             }
             decodingStatus = DecodingStatus.INITIAL;
             return ResultStatus.FINISHED;
         }
-        for (int i = 0; i < bytes.length - 1; i++) {
-            if (bytes[i] == Constants.COLON && bytes[i + 1] == Constants.SPACE) {
-                String key = new String(bytes, 0, i);
-                String value = new String(bytes, i + 2, bytes.length - i - 2);
-                httpHeader.put(key, value);
-                return ResultStatus.CONTINUE;
-            }
+        long splitIndex = ReadBuffer.patternSearch(segment, 0L, segment.byteSize(), COLON_PATTERN, Constants.COLON, Constants.SPACE);
+        if(splitIndex < 0) {
+            throw new FrameworkException(ExceptionType.HTTP, "Http Header wrong format");
         }
-        throw new FrameworkException(ExceptionType.HTTP, "Http Header wrong format");
+        String key = new String(segment.asSlice(0, splitIndex).toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8);
+        String value = new String(segment.asSlice(splitIndex + 2, segment.byteSize() - splitIndex - 2).toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8);
+        httpHeader.put(key, value);
+        return ResultStatus.CONTINUE;
     }
 
     private ResultStatus tryDecodeFixedData(ReadBuffer readBuffer) {
-        if (readBuffer.size() - readBuffer.readIndex() < len) {
+        long available = readBuffer.available();
+        if (available < len) {
             return ResultStatus.INCOMPLETE;
         }
-        current.setData(tryDecompress(readBuffer.readHeapSegment(len)));
+        current.setData(assignData(readBuffer.readSegment(len)));
         decodingStatus = DecodingStatus.INITIAL;
         return ResultStatus.FINISHED;
     }
 
 
     private ResultStatus tryDecodeChunkedDataFinal(ReadBuffer readBuffer) {
-        byte[] bytes = readBuffer.readUntil(Constants.CR, Constants.LF);
-        if(bytes == null) {
+        MemorySegment segment = readBuffer.readPattern(CR_PATTERN, Constants.CR, Constants.LF);
+        if(segment == null) {
             return ResultStatus.INCOMPLETE;
-        }else if (bytes == Constants.EMPTY_BYTES) {
-            current.setData(tryDecompress(tempBuffer.asSegment()));
+        }else if (segment == MemorySegment.NULL) {
+            current.setData(assignData(tempBuffer.asSegment()));
+            tempBuffer.close();
+            tempBuffer = null; // help GC
             decodingStatus = DecodingStatus.INITIAL;
             return ResultStatus.FINISHED;
         }else {
@@ -167,13 +178,13 @@ public final class HttpServerDecoder implements Decoder {
     }
 
     private ResultStatus tryDecodeChunkedDataLen(ReadBuffer readBuffer) {
-        byte[] bytes = readBuffer.readUntil(Constants.CR, Constants.LF);
-        if(bytes == null) {
+        MemorySegment segment = readBuffer.readPattern(CR_PATTERN, Constants.CR, Constants.LF);
+        if(segment == null) {
             return ResultStatus.INCOMPLETE;
-        }else if (bytes == Constants.EMPTY_BYTES) {
+        }else if (segment == MemorySegment.NULL) {
             throw new FrameworkException(ExceptionType.HTTP, "Unresolved http chunked data length");
         }
-        len = getTransferredLength(bytes);
+        len = getTransferredLength(segment);
         decodingStatus = len == 0 ? DecodingStatus.DECODING_CHUNKED_FINAL : DecodingStatus.DECODING_CHUNKED_DATA;
         return ResultStatus.CONTINUE;
     }
@@ -183,7 +194,7 @@ public final class HttpServerDecoder implements Decoder {
             return ResultStatus.INCOMPLETE;
         }
         MemorySegment data = readBuffer.readSegment(len);
-        if(readBuffer.readUntil(Constants.CR, Constants.LF) != Constants.EMPTY_BYTES) {
+        if(readBuffer.readPattern(CR_PATTERN, Constants.CR, Constants.LF) != MemorySegment.NULL) {
             throw new FrameworkException(ExceptionType.HTTP, "Unresolved http chunked data");
         }
         tempBuffer.writeSegment(data);
@@ -191,9 +202,11 @@ public final class HttpServerDecoder implements Decoder {
         return ResultStatus.CONTINUE;
     }
 
-    private static int getTransferredLength(byte[] bytes) {
+    private static int getTransferredLength(MemorySegment segment) {
         int ret = 0;
-        for (byte b : bytes) {
+        int len = Math.toIntExact(segment.byteSize());
+        for (int i = 0; i < len; i++) {
+            byte b = NativeUtil.getByte(segment, i);
             if(b >= Constants.B_ZERO && b <= Constants.B_NINE) {
                 ret = (ret << 4) + b - Constants.B_ZERO;
             }else if(b >= Constants.B_a && b <= Constants.B_f) {
@@ -207,19 +220,19 @@ public final class HttpServerDecoder implements Decoder {
         return ret;
     }
 
-    private MemorySegment tryDecompress(MemorySegment rawData) {
+    /**
+     *   Assigning data to current HttpRequest, the rawData and compression data would be required as Native memory, and the returned MemorySegment would be guaranteed to be on-heap memory
+     */
+    private MemorySegment assignData(MemorySegment rawData) {
+        assert rawData.isNative();
         return switch (current.getHttpHeader().get(HttpHeader.K_CONTENT_ENCODING)) {
-            case null -> rawData;
-            case HttpHeader.V_GZIP -> {
-                try(Allocator allocator = Allocator.newDirectAllocator(Poller.localMemApi())) {
-                    yield CompressUtil.decompressUsingGzip(rawData, allocator);
-                }
-            }
-            case HttpHeader.V_DEFLATE -> {
-                try(Allocator allocator = Allocator.newDirectAllocator(Poller.localMemApi())) {
-                    yield CompressUtil.decompressUsingDeflate(rawData, allocator);
-                }
-            }
+            case null -> NativeUtil.toHeap(rawData);
+            case HttpHeader.V_GZIP ->
+                    CompressUtil.decompressUsingGzip(rawData, Poller.localMemApi());
+            case HttpHeader.V_DEFLATE ->
+                    CompressUtil.decompressUsingDeflate(rawData, Poller.localMemApi());
+            case HttpHeader.V_BR ->
+                    CompressUtil.decompressUsingBrotli(rawData, Poller.localMemApi());
             default -> throw new FrameworkException(ExceptionType.HTTP, "Unsupported compression type detected");
         };
     }

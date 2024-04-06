@@ -82,6 +82,14 @@ public final class WriteBuffer implements AutoCloseable {
         writeIndex = nextIndex;
     }
 
+    public void writeByte(byte b1, byte b2) {
+        long nextIndex = writeIndex + Byte.BYTES << 1;
+        resize(nextIndex);
+        NativeUtil.setByte(segment, writeIndex, b1);
+        NativeUtil.setByte(segment, writeIndex + Byte.BYTES, b2);
+        writeIndex = nextIndex;
+    }
+
     public void writeBytes(byte[] b, int off, int len) {
         if(len < 0 || off + len > b.length) {
             throw new FrameworkException(ExceptionType.NATIVE, "Index out of bound");

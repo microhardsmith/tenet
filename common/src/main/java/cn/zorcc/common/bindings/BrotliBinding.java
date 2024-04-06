@@ -38,19 +38,35 @@ public final class BrotliBinding {
     public static final int BROTLI_MIN_QUALITY = 0;
     public static final int BROTLI_DEFAULT_QUALITY = 11;
     public static final int BROTLI_NAX_QUALITY = 11;
+    /**
+     *   BROTLI_DECODER_RESULT
+     */
+    public static final int BROTLI_DECODER_RESULT_ERROR = 0;
+    public static final int BROTLI_DECODER_RESULT_SUCCESS = 1;
+    public static final int BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT = 2;
+    public static final int BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT = 3;
 
 
     private static final MethodHandle encoderMaxCompressedSize;
     private static final MethodHandle encoderCompress;
+    private static final MethodHandle decoderCreateInstance;
+    private static final MethodHandle decoderDestroyInstance;
+    private static final MethodHandle decoderDecompressStream;
 
     static {
-        SymbolLookup brotliCommon = NativeUtil.loadLibrary(Constants.BROTLI_COMMON);
+        SymbolLookup _ = NativeUtil.loadLibrary(Constants.BROTLI_COMMON);
         SymbolLookup brotliEnc = NativeUtil.loadLibrary(Constants.BROTLI_ENC);
         SymbolLookup brotliDec = NativeUtil.loadLibrary(Constants.BROTLI_DEC);
         encoderMaxCompressedSize = NativeUtil.methodHandle(brotliEnc, "BrotliEncoderMaxCompressedSize",
                 FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.JAVA_LONG));
         encoderCompress = NativeUtil.methodHandle(brotliEnc, "BrotliEncoderCompress",
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+        decoderCreateInstance = NativeUtil.methodHandle(brotliDec, "BrotliDecoderCreateInstance",
+                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+        decoderDestroyInstance = NativeUtil.methodHandle(brotliDec, "BrotliDecoderDestroyInstance",
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+        decoderDecompressStream = NativeUtil.methodHandle(brotliDec, "BrotliDecoderDecompressStream",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
     }
 
     private BrotliBinding() {
@@ -72,4 +88,32 @@ public final class BrotliBinding {
             throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
         }
     }
+
+    public static MemorySegment decoderCreateInstance(MemorySegment allocFunc, MemorySegment freeFunc, MemorySegment opaque) {
+        try {
+            return (MemorySegment) decoderCreateInstance.invokeExact(allocFunc, freeFunc, opaque);
+        } catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
+        }
+    }
+
+    public static void decoderDestroyInstance(MemorySegment state) {
+        try {
+            decoderDestroyInstance.invokeExact(state);
+        } catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
+        }
+    }
+
+    public static int decoderDecompressStream(MemorySegment state, MemorySegment availableIn, MemorySegment nextIn, MemorySegment availableOut, MemorySegment nextOut, MemorySegment totalOut) {
+        try {
+            return (int) decoderDecompressStream.invokeExact(state, availableIn, nextIn, availableOut, nextOut, totalOut);
+        } catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
+        }
+    }
+
+
+
+
 }

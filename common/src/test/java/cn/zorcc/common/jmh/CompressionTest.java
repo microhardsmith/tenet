@@ -2,7 +2,7 @@ package cn.zorcc.common.jmh;
 
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
-import cn.zorcc.common.structure.Allocator;
+import cn.zorcc.common.structure.MemApi;
 import cn.zorcc.common.util.CompressUtil;
 import cn.zorcc.common.util.NativeUtil;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -47,10 +47,8 @@ public class CompressionTest extends JmhTest {
 
     @Benchmark
     public void libDeflateTest(Blackhole bh) {
-        try(Allocator allocator = Allocator.newDirectAllocator()) {
-            MemorySegment m1 = CompressUtil.compressUsingDeflate(originalSegment, level, allocator);
-            bh.consume(CompressUtil.decompressUsingDeflate(m1, allocator));
-        }
+        MemorySegment m1 = CompressUtil.compressUsingDeflate(originalSegment, level, MemApi.DEFAULT);
+        bh.consume(CompressUtil.decompressUsingDeflate(m1, MemApi.DEFAULT));
     }
 
     @Benchmark
@@ -61,10 +59,8 @@ public class CompressionTest extends JmhTest {
 
     @Benchmark
     public void libGzipTest(Blackhole bh) {
-        try(Allocator allocator = Allocator.newDirectAllocator()) {
-            MemorySegment m1 = CompressUtil.compressUsingGzip(originalSegment, level, allocator);
-            bh.consume(CompressUtil.decompressUsingGzip(m1, allocator));
-        }
+        MemorySegment m1 = CompressUtil.compressUsingGzip(originalSegment, level, MemApi.DEFAULT);
+        bh.consume(CompressUtil.decompressUsingGzip(m1,MemApi.DEFAULT));
     }
 
     public static void main(String[] args) throws RunnerException {
