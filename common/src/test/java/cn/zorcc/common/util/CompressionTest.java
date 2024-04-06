@@ -12,7 +12,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.zip.Deflater;
 
 public class CompressionTest {
+
     private static final String str = "hello world".repeat(100);
+
     @Test
     public void testJdkDeflateCompress() {
         byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
@@ -77,6 +79,18 @@ public class CompressionTest {
             MemorySegment decompressed2 = CompressUtil.decompressUsingBrotli(NativeUtil.toNative(compressed, allocator), compressed.byteSize(), MemApi.DEFAULT);
             byte[] decompressedBytes2 = decompressed2.toArray(ValueLayout.JAVA_BYTE);
             Assertions.assertArrayEquals(bytes, decompressedBytes2);
+        }
+    }
+
+    @Test
+    public void testZstdCompress() {
+        try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
+            byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
+            MemorySegment m = allocator.allocateFrom(ValueLayout.JAVA_BYTE, bytes);
+            MemorySegment compressed = CompressUtil.compressUsingZstd(m, MemApi.DEFAULT);
+            MemorySegment decompressed = CompressUtil.decompressUsingZstd(NativeUtil.toNative(compressed, allocator), MemApi.DEFAULT);
+            byte[] decompressedBytes = decompressed.toArray(ValueLayout.JAVA_BYTE);
+            Assertions.assertArrayEquals(bytes, decompressedBytes);
         }
     }
 }

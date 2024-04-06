@@ -233,6 +233,8 @@ public final class HttpServerDecoder implements Decoder {
                     CompressUtil.decompressUsingDeflate(rawData, Poller.localMemApi());
             case HttpHeader.V_BR ->
                     CompressUtil.decompressUsingBrotli(rawData, Poller.localMemApi());
+            case HttpHeader.V_ZSTD ->
+                    CompressUtil.decompressUsingZstd(rawData, Poller.localMemApi());
             default -> throw new FrameworkException(ExceptionType.HTTP, "Unsupported compression type detected");
         };
     }

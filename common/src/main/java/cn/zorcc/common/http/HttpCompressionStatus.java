@@ -7,5 +7,6 @@ public enum HttpCompressionStatus {
     NONE,
     GZIP,
     DEFLATE,
-    BROTLI
+    BROTLI,
+    ZSTD
 }

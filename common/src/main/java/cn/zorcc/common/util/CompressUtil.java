@@ -4,6 +4,7 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.bindings.BrotliBinding;
 import cn.zorcc.common.bindings.DeflateBinding;
+import cn.zorcc.common.bindings.ZstdBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.structure.MemApi;
@@ -30,6 +31,28 @@ public final class CompressUtil {
 
     private CompressUtil() {
         throw new UnsupportedOperationException();
+    }
+
+    public static MemorySegment compressUsingZstd(MemorySegment input, MemApi memApi) {
+        return compressUsingZstd(input, ZstdBinding.ZSTD_DEFAULT_LEVEL, memApi);
+    }
+
+    public static MemorySegment compressUsingZstd(MemorySegment input, int level, MemApi memApi) {
+        if(!input.isNative()) {
+            throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
+        }
+        level = level < ZstdBinding.ZSTD_MIN_LEVEL || level > ZstdBinding.ZSTD_MAX_LEVEL ? ZstdBinding.ZSTD_DEFAULT_LEVEL : level;
+        long upperBound = ZstdBinding.zstdCompressBound(input.byteSize());
+        if(ZstdBinding.zstdIsError(upperBound) == 1) {
+            throw new FrameworkException(ExceptionType.COMPRESS, "Failed to fetch ZSTD upper bound");
+        }
+        MemorySegment out = memApi.allocateMemory(upperBound).reinterpret(upperBound);
+        try{
+            long decompressedSize = ZstdBinding.zstdCompress(out, out.byteSize(), input, input.byteSize(), level);
+            return NativeUtil.toHeap(decompressedSize == out.byteSize() ? out : out.asSlice(0L, decompressedSize));
+        } finally {
+            memApi.freeMemory(out);
+        }
     }
 
     public static MemorySegment compressUsingBrotli(MemorySegment input, MemApi memApi) {
@@ -115,11 +138,35 @@ public final class CompressUtil {
         }
     }
 
+    public static MemorySegment decompressUsingZstd(MemorySegment input, MemApi memApi) {
+        if(!input.isNative()) {
+            throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
+        }
+        long decompressedSize = ZstdBinding.zstdGetFrameContentSize(input, input.byteSize());
+        if(decompressedSize <= 0L) {
+            throw new FrameworkException(ExceptionType.COMPRESS, "Unable to fetch ZSTD decompressed size");
+        }
+        MemorySegment out = memApi.allocateMemory(decompressedSize).reinterpret(decompressedSize);
+        try{
+            long len = ZstdBinding.zstdDecompress(out, out.byteSize(), input, input.byteSize());
+            if(decompressedSize == len) {
+                return NativeUtil.toHeap(out);
+            }else {
+                throw new FrameworkException(ExceptionType.COMPRESS, "Failed to decompress ZSTD frame, the uncompressed length is unknown");
+            }
+        } finally {
+            memApi.freeMemory(out);
+        }
+    }
+
     public static MemorySegment decompressUsingBrotli(MemorySegment input, MemApi memApi) {
         return decompressUsingBrotli(input, Long.MIN_VALUE, memApi);
     }
 
     public static MemorySegment decompressUsingBrotli(MemorySegment input, long chunkSize, MemApi memApi) {
+        if(!input.isNative()) {
+            throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
+        }
         MemorySegment state = BrotliBinding.decoderCreateInstance(MemorySegment.NULL, MemorySegment.NULL, MemorySegment.NULL);
         if(NativeUtil.checkNullPointer(state)) {
             throw new FrameworkException(ExceptionType.COMPRESS, "Failed to initialize brotli decoder state");

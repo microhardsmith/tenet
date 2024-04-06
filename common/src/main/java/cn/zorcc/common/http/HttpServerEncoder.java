@@ -43,7 +43,12 @@ public final class HttpServerEncoder implements Encoder {
             }
             case BROTLI -> {
                 headers.put(HttpHeader.K_CONTENT_ENCODING, HttpHeader.V_BR);
-                yield CompressUtil.compressUsingBrotli(rawData, Writer.localMemApi());            }
+                yield CompressUtil.compressUsingBrotli(rawData, Writer.localMemApi());
+            }
+            case ZSTD -> {
+                headers.put(HttpHeader.K_CONTENT_ENCODING, HttpHeader.V_ZSTD);
+                yield CompressUtil.compressUsingZstd(rawData, Writer.localMemApi());
+            }
         };
         headers.put(HttpHeader.K_CONTENT_LENGTH, String.valueOf(data.byteSize()));
         headers.encode(writeBuffer);

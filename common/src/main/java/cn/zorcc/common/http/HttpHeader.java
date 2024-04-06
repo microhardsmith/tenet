@@ -18,6 +18,7 @@ public final class HttpHeader {
     public static final String V_GZIP = "gzip";
     public static final String V_DEFLATE = "deflate";
     public static final String V_BR = "br";
+    public static final String V_ZSTD = "zstd";
     public static final String K_CONNECTION = "Connection";
     public static final String K_KEEP_ALIVE = "Keep-Alive";
     public static final String V_KEEP_ALIVE = "keep-alive";
