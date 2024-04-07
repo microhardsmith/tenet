@@ -1,10 +1,14 @@
 package cn.zorcc.common.sqlite;
 
 import cn.zorcc.common.structure.Allocator;
+import cn.zorcc.common.structure.MemApi;
 
 import java.lang.foreign.MemorySegment;
 import java.util.function.Consumer;
 
+/**
+ *   TODO removal
+ */
 public final class DiscoveryWriteMsgHandler implements Consumer<SqliteMsg> {
     private final SqliteConn conn;
     private final MemorySegment insertStmt;
@@ -13,7 +17,7 @@ public final class DiscoveryWriteMsgHandler implements Consumer<SqliteMsg> {
     private final MemorySegment deleteStmt;
     public DiscoveryWriteMsgHandler(SqliteConn conn) {
         this.conn = conn;
-        try(Allocator allocator = Allocator.newDirectAllocator()) {
+        try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
             conn.exec(allocator.allocateFrom(SqliteConstants.CREATE_DISCOVERY_TABLE_SQL));
             this.insertStmt = conn.preparePersistentStatement(allocator.allocateFrom(SqliteConstants.INSERT_DISCOVERY_SQL));
             this.selectIdStmt = conn.preparePersistentStatement(allocator.allocateFrom(SqliteConstants.SELECT_ID_DISCOVERY_SQL));

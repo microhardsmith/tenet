@@ -14,6 +14,7 @@ import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
+import java.util.function.Consumer;
 
 /**
  *   Platform independent native interface for Network operation
@@ -260,35 +261,35 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
      *   Create a sockAddr memorySegment, could be IPV4 or IPV6
      *   Using system default malloc
      */
-    default MemorySegment createSockAddr(Loc loc) {
+    default void useSockAddr(Loc loc, MemApi memApi, Consumer<MemorySegment> consumer) {
         if(loc.ipType() == IpType.IPV4) {
-            return createIpv4SockAddr(loc);
+            createIpv4SockAddr(loc, memApi, consumer);
         }else if(loc.ipType() == IpType.IPV6) {
-            return createIpv6SockAddr(loc);
+            createIpv6SockAddr(loc, memApi, consumer);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }
 
-    private MemorySegment createIpv4SockAddr(Loc loc) {
-        try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
+    private void createIpv4SockAddr(Loc loc, MemApi memApi, Consumer<MemorySegment> consumer) {
+        try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
             MemorySegment r = allocator.allocate(ipv4AddressSize(), ipv4AddressAlign());
             MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? MemorySegment.NULL : allocator.allocateFrom(loc.ip(), StandardCharsets.UTF_8);
             if(check(setIpv4SockAddr(r, ip, loc.shortPort()), "set ipv4 address") == 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, STR."Ipv4 address is not valid : \{loc.ip()}");
             }
-            return r;
+            consumer.accept(r);
         }
     }
 
-    private MemorySegment createIpv6SockAddr(Loc loc) {
-        try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
+    private void createIpv6SockAddr(Loc loc, MemApi memApi, Consumer<MemorySegment> consumer) {
+        try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
             MemorySegment r = allocator.allocate(ipv6AddressSize(), ipv6AddressAlign());
             MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? MemorySegment.NULL : allocator.allocateFrom(loc.ip(), StandardCharsets.UTF_8);
             if(check(setIpv6SockAddr(r, ip, loc.shortPort()), "set ipv6 address") == 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, STR."Ipv6 address is not valid : \{loc.ip()}");
             }
-            return r;
+            consumer.accept(r);
         }
     }
 
@@ -329,10 +330,11 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
      *   Let the server-side bind and listen
      *   Using system default allocator
      */
-    default void bindAndListen(Socket socket, Loc loc, int backlog) {
-        MemorySegment addr = createSockAddr(loc);
-        check(bind(socket, addr), "bind");
-        check(listen(socket, backlog), "listen");
+    default void bindAndListen(Socket socket, Loc loc, MemApi memApi, int backlog) {
+        useSockAddr(loc, memApi, addr -> {
+            check(bind(socket, addr), "bind");
+            check(listen(socket, backlog), "listen");
+        });
     }
 
     /**

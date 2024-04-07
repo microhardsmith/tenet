@@ -19,17 +19,10 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
     Allocator HEAP = new HeapAllocator();
 
     /**
-     *   Create a new Direct memory Allocator using target MemApi
+     *   Create a new Direct memory Allocator using target MemApi, using DirectAllocator is a dangerous move, and should always be used as try-with-resources term
      */
     static Allocator newDirectAllocator(MemApi memApi) {
         return new DirectAllocator(memApi);
-    }
-
-    /**
-     *   Create a new Direct memory Allocator using System MemApi
-     */
-    static Allocator newDirectAllocator() {
-        return newDirectAllocator(MemApi.DEFAULT);
     }
 
     static void checkByteSize(long byteSize) {
@@ -57,11 +50,16 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
         @Override
         public MemorySegment allocate(long byteSize, long byteAlignment) {
             checkByteSize(byteSize);
-            MemorySegment memorySegment = switch (Math.toIntExact(byteAlignment)) {
-                case Byte.BYTES, Short.BYTES, Integer.BYTES, Long.BYTES -> MemorySegment.ofArray(new long[Math.toIntExact((byteSize + 7) >> 3)]);
+            switch (Math.toIntExact(byteAlignment)) {
+                case Byte.BYTES -> {
+                    return MemorySegment.ofArray(new byte[Math.toIntExact(byteSize)]); // This is quite important, which makes the byte allocation will always be backed by a byte[] which could be fetched by heapBase()
+                }
+                case Short.BYTES, Integer.BYTES, Long.BYTES -> {
+                    MemorySegment m = MemorySegment.ofArray(new long[Math.toIntExact((byteSize + 7) >> 3)]);
+                    return m.byteSize() == byteSize ? m : m.asSlice(0L, byteSize);
+                }
                 default -> throw new FrameworkException(ExceptionType.NATIVE, STR."Unexpected alignment : \{byteAlignment}");
-            };
-            return memorySegment.byteSize() == byteSize ? memorySegment : memorySegment.asSlice(0L, byteSize);
+            }
         }
 
         @Override

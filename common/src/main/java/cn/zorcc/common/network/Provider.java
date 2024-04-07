@@ -5,6 +5,7 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.bindings.SslBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.structure.Allocator;
+import cn.zorcc.common.structure.MemApi;
 import cn.zorcc.common.util.NativeUtil;
 import cn.zorcc.common.util.SslUtil;
 
@@ -41,7 +42,7 @@ public interface Provider {
 
     static SslProvider newSslClientProvider(String caFiles, String caPaths) {
         MemorySegment ctx = createCtx();
-        try (Allocator allocator = Allocator.newDirectAllocator()) {
+        try (Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
             if(caFiles != null && !caFiles.isBlank()) {
                 for (String caFile : caFiles.split(",")) {
                     MemorySegment file = allocator.allocateFrom(caFile.trim());
@@ -68,7 +69,7 @@ public interface Provider {
 
     static SslProvider newSslServerProvider(String publicKeyFile, String privateKeyFile) {
         MemorySegment ctx = createCtx();
-        try(Allocator allocator = Allocator.newDirectAllocator()) {
+        try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
             MemorySegment publicKey = allocator.allocateFrom(publicKeyFile, StandardCharsets.UTF_8);
             if (SslBinding.setPublicKey(ctx, publicKey, Constants.SSL_FILETYPE_PEM) <= 0) {
                 throw new FrameworkException(ExceptionType.NETWORK, "SSL server public key is invalid");

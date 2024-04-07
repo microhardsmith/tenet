@@ -51,14 +51,19 @@ public final class WriteBuffer implements AutoCloseable {
         if(NativeUtil.checkNullPointer(segment)) {
             throw new FrameworkException(ExceptionType.NATIVE, "ReservedWriteBuffer couldn't be allocated with NULL pointer");
         }
+        if(!segment.isNative()) {
+            throw new FrameworkException(ExceptionType.NATIVE, "ReservedWriteBuffer must be native");
+        }
         return new WriteBuffer(segment, new ReservedWriteBufferPolicy(memApi, segment));
     }
+
+    private static final MemorySegment EMPTY_HEAP = MemorySegment.ofArray(new byte[0]);
 
     public static WriteBuffer newHeapWriteBuffer(long initialSize) {
         if(initialSize <= MINIMAL_WRITE_BUFFER_SIZE) {
             throw new FrameworkException(ExceptionType.NATIVE, "HeapWriteBuffer exceeding minimal size");
         }
-        return new WriteBuffer(MemorySegment.NULL, new HeapWriteBufferPolicy(initialSize));
+        return new WriteBuffer(EMPTY_HEAP, new HeapWriteBufferPolicy(initialSize));
     }
 
     public static WriteBuffer newHeapWriteBuffer() {
@@ -83,7 +88,7 @@ public final class WriteBuffer implements AutoCloseable {
     }
 
     public void writeByte(byte b1, byte b2) {
-        long nextIndex = writeIndex + Byte.BYTES << 1;
+        long nextIndex = writeIndex + Byte.BYTES * 2;
         resize(nextIndex);
         NativeUtil.setByte(segment, writeIndex, b1);
         NativeUtil.setByte(segment, writeIndex + Byte.BYTES, b2);
@@ -255,7 +260,7 @@ public final class WriteBuffer implements AutoCloseable {
     /**
      *   Converts current writeBuffer to an array
      */
-    public byte[] asArray() {
+    public byte[] asByteArray() {
         final int currentSize = Math.toIntExact(writeIndex);
         if(currentSize == 0) {
             return Constants.EMPTY_BYTES;
@@ -317,8 +322,7 @@ public final class WriteBuffer implements AutoCloseable {
     }
 
     /**
-     *   Reserved writeBufferPolicy, the initial memorySegment must be native memory, will be reserved and never released
-     *   if onHeap, the expanded memory will be allocated on heap, or it will be realloc()
+     *   Reserved writeBufferPolicy, the initial memorySegment must be native memory, which would be reserved and never released
      */
     record ReservedWriteBufferPolicy(
             MemApi memApi,
@@ -350,6 +354,9 @@ public final class WriteBuffer implements AutoCloseable {
         }
     }
 
+    /**
+     *   Allocating all the segments on heap, using byte[] abstraction
+     */
     record HeapWriteBufferPolicy(
             long initialSize
     ) implements WriteBufferPolicy {
@@ -357,8 +364,8 @@ public final class WriteBuffer implements AutoCloseable {
         public void resize(WriteBuffer writeBufferData, long nextIndex) {
             final MemorySegment current = writeBufferData.segment;
             MemorySegment newSegment;
-            if(NativeUtil.checkNullPointer(current)) {
-                newSegment = Allocator.HEAP.allocate(ValueLayout.JAVA_BYTE, initialSize);
+            if(current == EMPTY_HEAP) {
+                newSegment = Allocator.HEAP.allocate(ValueLayout.JAVA_BYTE, Math.max(nextIndex, initialSize));
             }else {
                 long newLen = Math.max(nextIndex, current.byteSize() << 1);
                 if(newLen < 0L) {

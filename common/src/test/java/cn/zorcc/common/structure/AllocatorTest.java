@@ -15,7 +15,7 @@ public class AllocatorTest {
 
     @Test
     public void testDirectAllocator() {
-        try(Allocator allocator = Allocator.newDirectAllocator()) {
+        try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
             for(int i = 0; i < 100; i++) {
                 MemorySegment segment = allocator.allocate(ValueLayout.JAVA_INT);
                 Assertions.assertEquals(segment.address() % 8, 0);

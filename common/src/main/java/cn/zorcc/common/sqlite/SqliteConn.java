@@ -5,6 +5,7 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.bindings.SqliteBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.structure.Allocator;
+import cn.zorcc.common.structure.MemApi;
 import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.Arena;
@@ -43,7 +44,7 @@ public final class SqliteConn implements AutoCloseable {
     }
 
     private static MemorySegment openDatabase(String filePath) {
-        try(Allocator allocator = Allocator.newDirectAllocator()) {
+        try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
             MemorySegment ppDb = allocator.allocate(ValueLayout.ADDRESS);
             MemorySegment f = allocator.allocateFrom(filePath);
             int r = SqliteBinding.open(f, ppDb, SqliteConn.DEFAULT_OPEN_FLAGS);
@@ -74,7 +75,7 @@ public final class SqliteConn implements AutoCloseable {
     }
 
     public List<SqliteMetadata> fetchingMetadata() {
-        try(Allocator allocator = Allocator.newDirectAllocator()) {
+        try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
             List<SqliteMetadata> result = new ArrayList<>();
             MemorySegment stmt = prepareNormalizeStatement(allocator.allocateFrom(FETCH_METADATA));
             for( ; ; ) {

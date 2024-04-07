@@ -53,7 +53,7 @@ public final class LoggerConsumer extends AbstractLifeCycle {
                         break;
                     }
                 }
-            }catch (InterruptedException e) {
+            } catch (InterruptedException e) {
                 throw new FrameworkException(ExceptionType.LOG, Constants.UNREACHED, e);
             }
         });

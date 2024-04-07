@@ -15,18 +15,24 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.util.function.Function;
 import java.util.zip.*;
 
 /**
- *   This class provide easy access to gzip and deflate compression and decompression using JDK's implementation or libdeflate's implementation
- *   In general, JDK's implementation is a little bit faster when dataset is small, could be twice slower if the dataset was larger
- *   The compression and decompression speed of gzip and deflate algorithm are quite slow compared to other technic like zstd
- *   When using compression and decompression, the lifecycle of a native segment must be well taken care of, so all the API are forced to be consuming the native segments and return heap segments
- *   thus caller wouldn't be worrying about the lifecycle of the returned segment
+ *   Compression and Decompression utilities for deflate, gzip, brotli and zstd
+ *   All the methods require input to be native memory, the lifecycle of input memory are not managed, it's the caller's duty to keep them safe
+ *   Don't try to expose the compressed or decompressed segment when using the consumerFunction, which would cause memory leak
  */
 @SuppressWarnings("unused")
 public final class CompressUtil {
+    /**
+     *   Default compression chunk size, grow on demand
+     */
     private static final int CHUNK_SIZE = 4 * Constants.KB;
+
+    /**
+     *   Estimate compression ratio, grow on demand
+     */
     private static final int ESTIMATE_RATIO = 3;
 
     private CompressUtil() {
@@ -38,6 +44,14 @@ public final class CompressUtil {
     }
 
     public static MemorySegment compressUsingZstd(MemorySegment input, int level, MemApi memApi) {
+        return compressUsingZstd(input, level, memApi, NativeUtil::toHeap);
+    }
+
+    public static <T> T compressUsingZstd(MemorySegment input, MemApi memApi, Function<MemorySegment, T> consumerFunction) {
+        return compressUsingZstd(input, ZstdBinding.ZSTD_DEFAULT_LEVEL, memApi, consumerFunction);
+    }
+
+    public static <T> T compressUsingZstd(MemorySegment input, int level, MemApi memApi, Function<MemorySegment, T> consumerFunction) {
         if(!input.isNative()) {
             throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
         }
@@ -49,7 +63,7 @@ public final class CompressUtil {
         MemorySegment out = memApi.allocateMemory(upperBound).reinterpret(upperBound);
         try{
             long decompressedSize = ZstdBinding.zstdCompress(out, out.byteSize(), input, input.byteSize(), level);
-            return NativeUtil.toHeap(decompressedSize == out.byteSize() ? out : out.asSlice(0L, decompressedSize));
+            return consumerFunction.apply(decompressedSize == out.byteSize() ? out : out.asSlice(0L, decompressedSize));
         } finally {
             memApi.freeMemory(out);
         }
@@ -60,6 +74,14 @@ public final class CompressUtil {
     }
 
     public static MemorySegment compressUsingBrotli(MemorySegment input, int level, int windowSize, int mode, MemApi memApi) {
+        return compressUsingBrotli(input, level, windowSize, mode, memApi, NativeUtil::toHeap);
+    }
+
+    public static <T> T compressUsingBrotli(MemorySegment input, MemApi memApi, Function<MemorySegment, T> consumerFunction) {
+        return compressUsingBrotli(input, BrotliBinding.BROTLI_DEFAULT_QUALITY, BrotliBinding.BROTLI_DEFAULT_WINDOW_BITS, BrotliBinding.BROTLI_MODE_GENERIC, memApi, consumerFunction);
+    }
+
+    public static <T> T compressUsingBrotli(MemorySegment input, int level, int windowSize, int mode, MemApi memApi, Function<MemorySegment, T> consumerFunction) {
         if(!input.isNative()) {
             throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
         }
@@ -79,7 +101,7 @@ public final class CompressUtil {
                 throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
             }
             long compressed = NativeUtil.getLong(outBytesPtr, 0L);
-            return NativeUtil.toHeap(out.asSlice(0L, compressed));
+            return consumerFunction.apply(compressed == out.byteSize() ? out : out.asSlice(0L, compressed));
         }
     }
 
@@ -91,6 +113,14 @@ public final class CompressUtil {
      *   When using libdeflate, level should between DeflateBinding.LIBDEFLATE_SLOWEST_LEVEL and DeflateBinding.LIBDEFLATE_FASTEST_LEVEL
      */
     public static MemorySegment compressUsingDeflate(MemorySegment input, int level, MemApi memApi) {
+        return compressUsingDeflate(input, level, memApi, NativeUtil::toHeap);
+    }
+
+    public static <T> T compressUsingDeflate(MemorySegment input, MemApi memApi, Function<MemorySegment, T> consumerFunction) {
+        return compressUsingDeflate(input, DeflateBinding.LIBDEFLATE_DEFAULT_LEVEL, memApi, consumerFunction);
+    }
+
+    public static <T> T compressUsingDeflate(MemorySegment input, int level, MemApi memApi, Function<MemorySegment, T> consumerFunction) {
         if(!input.isNative()) {
             throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
         }
@@ -106,7 +136,7 @@ public final class CompressUtil {
             if(compressed <= 0L) {
                 throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
             }
-            return NativeUtil.toHeap(out.asSlice(0L, compressed));
+            return consumerFunction.apply(compressed == out.byteSize() ? out : out.asSlice(0L, compressed));
         }finally {
             DeflateBinding.freeCompressor(compressor);
         }
@@ -117,6 +147,14 @@ public final class CompressUtil {
     }
 
     public static MemorySegment compressUsingGzip(MemorySegment input, int level, MemApi memApi) {
+        return compressUsingGzip(input, level, memApi, NativeUtil::toHeap);
+    }
+
+    public static <T> T compressUsingGzip(MemorySegment input, MemApi memApi, Function<MemorySegment, T> consumerFunction) {
+        return compressUsingGzip(input, DeflateBinding.LIBDEFLATE_DEFAULT_LEVEL, memApi, consumerFunction);
+    }
+
+    public static <T> T compressUsingGzip(MemorySegment input, int level, MemApi memApi, Function<MemorySegment, T> consumerFunction) {
         if(!input.isNative()) {
             throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
         }
@@ -132,13 +170,17 @@ public final class CompressUtil {
             if(compressed <= 0L) {
                 throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
             }
-            return NativeUtil.toHeap(out.asSlice(0L, compressed));
+            return consumerFunction.apply(compressed == out.byteSize() ? out : out.asSlice(0L, compressed));
         }finally {
             DeflateBinding.freeCompressor(compressor);
         }
     }
 
     public static MemorySegment decompressUsingZstd(MemorySegment input, MemApi memApi) {
+        return decompressUsingZstd(input, memApi, NativeUtil::toHeap);
+    }
+
+    public static <T> T decompressUsingZstd(MemorySegment input, MemApi memApi, Function<MemorySegment, T> consumerFunction) {
         if(!input.isNative()) {
             throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
         }
@@ -150,7 +192,7 @@ public final class CompressUtil {
         try{
             long len = ZstdBinding.zstdDecompress(out, out.byteSize(), input, input.byteSize());
             if(decompressedSize == len) {
-                return NativeUtil.toHeap(out);
+                return consumerFunction.apply(out);
             }else {
                 throw new FrameworkException(ExceptionType.COMPRESS, "Failed to decompress ZSTD frame, the uncompressed length is unknown");
             }
@@ -164,6 +206,14 @@ public final class CompressUtil {
     }
 
     public static MemorySegment decompressUsingBrotli(MemorySegment input, long chunkSize, MemApi memApi) {
+        return decompressUsingBrotli(input, chunkSize, memApi, NativeUtil::toHeap);
+    }
+
+    public static <T> T decompressUsingBrotli(MemorySegment input, MemApi memApi, Function<MemorySegment, T> consumerFunction) {
+        return decompressUsingBrotli(input, Long.MIN_VALUE, memApi, consumerFunction);
+    }
+
+    public static <T> T decompressUsingBrotli(MemorySegment input, long chunkSize, MemApi memApi, Function<MemorySegment, T> consumerFunction) {
         if(!input.isNative()) {
             throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
         }
@@ -190,10 +240,10 @@ public final class CompressUtil {
                         long unusedOutput = NativeUtil.getLong(outputSize, 0L);
                         MemorySegment data = unusedOutput == 0L ? out : out.asSlice(0L, out.byteSize() - unusedOutput);
                         if(writeBuffer.writeIndex() == 0L) {
-                            return NativeUtil.toHeap(data);
+                            return consumerFunction.apply(data);
                         } else {
                             writeBuffer.writeSegment(data);
-                            return NativeUtil.toHeap(writeBuffer.asSegment());
+                            return consumerFunction.apply(writeBuffer.asSegment());
                         }
                     }
                     case BrotliBinding.BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT -> throw new FrameworkException(ExceptionType.COMPRESS, "Input not sufficient");
@@ -218,7 +268,16 @@ public final class CompressUtil {
     }
 
     public static MemorySegment decompressUsingDeflate(MemorySegment input, long originalSize, MemApi memApi) {
-        return decompressUsingLibDeflate(input, originalSize, memApi, (decompressor, in, out, actualOutBytes) -> DeflateBinding.deflateDecompress(decompressor, in, in.byteSize(), out, out.byteSize(), actualOutBytes));
+        return decompressUsingDeflate(input, originalSize, memApi, NativeUtil::toHeap);
+    }
+
+    public static <T> T decompressUsingDeflate(MemorySegment input, MemApi memApi, Function<MemorySegment, T> consumerFunction) {
+        return decompressUsingDeflate(input, Long.MIN_VALUE, memApi, consumerFunction);
+    }
+
+    public static <T> T decompressUsingDeflate(MemorySegment input, long originalSize, MemApi memApi, Function<MemorySegment, T> consumerFunction) {
+        return decompressUsingLibDeflate(input, originalSize, memApi,
+                (decompressor, in, out, actualOutBytes) -> DeflateBinding.deflateDecompress(decompressor, in, in.byteSize(), out, out.byteSize(), actualOutBytes), consumerFunction);
     }
 
     public static MemorySegment decompressUsingGzip(MemorySegment input, MemApi memApi) {
@@ -226,7 +285,16 @@ public final class CompressUtil {
     }
 
     public static MemorySegment decompressUsingGzip(MemorySegment input, long originalSize, MemApi memApi) {
-        return decompressUsingLibDeflate(input, originalSize, memApi, (decompressor, in, out, actualOutBytes) -> DeflateBinding.gzipDecompress(decompressor, in, in.byteSize(), out, out.byteSize(), actualOutBytes));
+        return decompressUsingGzip(input, originalSize, memApi, NativeUtil::toHeap);
+    }
+
+    public static <T> T decompressUsingGzip(MemorySegment input, MemApi memApi, Function<MemorySegment, T> consumerFunction) {
+        return decompressUsingGzip(input, Long.MIN_VALUE, memApi, consumerFunction);
+    }
+
+    public static <T> T decompressUsingGzip(MemorySegment input, long originalSize, MemApi memApi, Function<MemorySegment, T> consumerFunction) {
+        return decompressUsingLibDeflate(input, originalSize, memApi,
+                (decompressor, in, out, actualOutBytes) -> DeflateBinding.gzipDecompress(decompressor, in, in.byteSize(), out, out.byteSize(), actualOutBytes), consumerFunction);
     }
 
 
@@ -238,24 +306,24 @@ public final class CompressUtil {
     /**
      *   original size is the data-length of uncompressed segment, if unknown before, should be set as 0 or a negative number
      */
-    private static MemorySegment decompressUsingLibDeflate(MemorySegment input, long originalSize, MemApi memApi, LibDeflateDecompressor libDeflateDecompressor) {
+    private static <T> T decompressUsingLibDeflate(MemorySegment input, long originalSize, MemApi memApi, LibDeflateDecompressor libDeflateDecompressor, Function<MemorySegment, T> consumerFunction) {
         if(!input.isNative()) {
             throw new FrameworkException(ExceptionType.COMPRESS, Constants.UNREACHED);
         }
         if(originalSize > 0L) {
-            return decompressUsingLibDeflateWithKnownSize(input, originalSize, memApi, libDeflateDecompressor);
+            return decompressUsingLibDeflateWithKnownSize(input, originalSize, memApi, libDeflateDecompressor, consumerFunction);
         } else {
-            return decompressUsingLibDeflateWithUnKnownSize(input, originalSize, memApi, libDeflateDecompressor);
+            return decompressUsingLibDeflateWithUnKnownSize(input, originalSize, memApi, libDeflateDecompressor, consumerFunction);
         }
     }
 
-    private static MemorySegment decompressUsingLibDeflateWithKnownSize(MemorySegment input, long originalSize, MemApi memApi, LibDeflateDecompressor libDeflateDecompressor) {
+    private static <T> T decompressUsingLibDeflateWithKnownSize(MemorySegment input, long originalSize, MemApi memApi, LibDeflateDecompressor libDeflateDecompressor, Function<MemorySegment, T> consumerFunction) {
         MemorySegment decompressor = DeflateBinding.allocDecompressor();
         MemorySegment out = memApi.allocateMemory(originalSize).reinterpret(originalSize);
         try {
             switch (libDeflateDecompressor.decompress(decompressor, input, out, MemorySegment.NULL)) {
                 case DeflateBinding.LIBDEFLATE_SUCCESS -> {
-                    return NativeUtil.toHeap(out);
+                    return consumerFunction.apply(out);
                 }
                 case DeflateBinding.LIBDEFLATE_BAD_DATA -> throw new FrameworkException(ExceptionType.COMPRESS, "Bad data");
                 case DeflateBinding.LIBDEFLATE_SHORT_OUTPUT -> throw new FrameworkException(ExceptionType.COMPRESS, "Fewer originalSize expected");
@@ -267,7 +335,7 @@ public final class CompressUtil {
         }
     }
 
-    private static MemorySegment decompressUsingLibDeflateWithUnKnownSize(MemorySegment input, long originalSize, MemApi memApi, LibDeflateDecompressor libDeflateDecompressor) {
+    private static <T> T decompressUsingLibDeflateWithUnKnownSize(MemorySegment input, long originalSize, MemApi memApi, LibDeflateDecompressor libDeflateDecompressor, Function<MemorySegment, T> consumerFunction) {
         MemorySegment decompressor = DeflateBinding.allocDecompressor();
         long initialOutSize = input.byteSize() * ESTIMATE_RATIO; // we could just estimate a size, and grow it on demand
         MemorySegment out = memApi.allocateMemory(initialOutSize).reinterpret(initialOutSize);
@@ -277,7 +345,7 @@ public final class CompressUtil {
                 switch (libDeflateDecompressor.decompress(decompressor, input, out, actualOutBytes)) {
                     case DeflateBinding.LIBDEFLATE_SUCCESS -> {
                         long written = actualOutBytes.get(ValueLayout.JAVA_LONG, 0L);
-                        return NativeUtil.toHeap(out.byteSize() == written ? out : out.asSlice(0L, written));
+                        return consumerFunction.apply(out.byteSize() == written ? out : out.asSlice(0L, written));
                     }
                     case DeflateBinding.LIBDEFLATE_BAD_DATA -> throw new FrameworkException(ExceptionType.COMPRESS, "Bad data");
                     case DeflateBinding.LIBDEFLATE_INSUFFICIENT_SPACE -> {
@@ -320,7 +388,7 @@ public final class CompressUtil {
             while ((bytesRead = gzipIn.read(buffer)) != -1) {
                 writeBuffer.writeBytes(buffer, 0, bytesRead);
             }
-            return writeBuffer.asArray();
+            return writeBuffer.asByteArray();
         }catch (IOException e) {
             throw new FrameworkException(ExceptionType.COMPRESS, "Unable to perform gzip decompression", e);
         }
@@ -341,7 +409,7 @@ public final class CompressUtil {
                 int len = deflater.deflate(buffer);
                 writeBuffer.writeBytes(buffer, 0, len);
             }
-            return writeBuffer.asArray();
+            return writeBuffer.asByteArray();
         } finally {
             deflater.end();
         }
@@ -356,7 +424,7 @@ public final class CompressUtil {
                 int decompressLen = inflater.inflate(buffer);
                 writeBuffer.writeBytes(buffer, 0, decompressLen);
             }
-            return writeBuffer.asArray();
+            return writeBuffer.asByteArray();
         }catch (DataFormatException e) {
             throw new FrameworkException(ExceptionType.COMPRESS, "Unable to perform deflate decompression", e);
         }finally {

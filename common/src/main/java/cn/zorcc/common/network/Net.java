@@ -201,23 +201,24 @@ public final class Net implements LifeCycle {
                 clientProviders.add(provider);
             }
             Sentry sentry = provider.create(channel);
-            MemorySegment sockAddr = osNetworkLibrary.createSockAddr(loc);
-            int r = osNetworkLibrary.connect(socket, sockAddr);
-            if(r == 0) {
-                poller.submit(new PollerTask(PollerTaskType.BIND, channel, sentry));
-                osNetworkLibrary.ctlMux(poller.mux(), socket, Constants.NET_NONE, Constants.NET_W, MemApi.DEFAULT);
-            }else if(r < 0){
-                int errno = Math.abs(r);
-                if (errno == osNetworkLibrary.connectBlockCode()) {
+            osNetworkLibrary.useSockAddr(loc, MemApi.DEFAULT, sockAddr -> {
+                int r = osNetworkLibrary.connect(socket, sockAddr);
+                if(r == 0) {
                     poller.submit(new PollerTask(PollerTaskType.BIND, channel, sentry));
-                    Wheel.wheel().addJob(() -> poller.submit(new PollerTask(PollerTaskType.UNBIND, channel, null)), duration);
                     osNetworkLibrary.ctlMux(poller.mux(), socket, Constants.NET_NONE, Constants.NET_W, MemApi.DEFAULT);
+                }else if(r < 0){
+                    int errno = Math.abs(r);
+                    if (errno == osNetworkLibrary.connectBlockCode()) {
+                        poller.submit(new PollerTask(PollerTaskType.BIND, channel, sentry));
+                        Wheel.wheel().addJob(() -> poller.submit(new PollerTask(PollerTaskType.UNBIND, channel, null)), duration);
+                        osNetworkLibrary.ctlMux(poller.mux(), socket, Constants.NET_NONE, Constants.NET_W, MemApi.DEFAULT);
+                    }else {
+                        throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to connect, errno : \{errno}");
+                    }
                 }else {
-                    throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to connect, errno : \{errno}");
+                    throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
                 }
-            }else {
-                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
-            }
+            });
         } finally {
             readLock.unlock();
         }
@@ -249,7 +250,7 @@ public final class Net implements LifeCycle {
             writers.forEach(writer -> writer.writerThread().start());
             pendingTasks.forEach(listenerTask -> {
                 netQueue.offer(listenerTask);
-                osNetworkLibrary.bindAndListen(listenerTask.socket(), listenerTask.loc(), config.getBacklog());
+                osNetworkLibrary.bindAndListen(listenerTask.socket(), listenerTask.loc(), MemApi.DEFAULT, config.getBacklog());
                 osNetworkLibrary.ctlMux(mux, listenerTask.socket(), Constants.NET_NONE, Constants.NET_R, MemApi.DEFAULT);
             });
             netThread.start();
