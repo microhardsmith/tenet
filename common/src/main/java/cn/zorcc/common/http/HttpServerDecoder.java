@@ -172,7 +172,7 @@ public final class HttpServerDecoder implements Decoder {
         if (available < len) {
             return ResultStatus.INCOMPLETE;
         }
-        current.setData(assignData(readBuffer.readSegment(len)));
+        assignData(readBuffer.readSegment(len));
         decodingStatus = DecodingStatus.INITIAL;
         return ResultStatus.FINISHED;
     }
@@ -185,7 +185,7 @@ public final class HttpServerDecoder implements Decoder {
                 return ResultStatus.INCOMPLETE;
             }
             case MemorySegment a when a == MemorySegment.NULL -> {
-                current.setData(assignData(tempBuffer.asSegment()));
+                assignData(tempBuffer.asSegment());
                 tempBuffer.close();
                 tempBuffer = null; // help GC
                 decodingStatus = DecodingStatus.INITIAL;
@@ -244,18 +244,18 @@ public final class HttpServerDecoder implements Decoder {
     /**
      *   Assigning data to current HttpRequest, the rawData and compression data would be required as Native memory, and the returned MemorySegment would be guaranteed to be on-heap memory
      */
-    private MemorySegment assignData(MemorySegment rawData) {
+    private void assignData(MemorySegment rawData) {
         assert rawData.isNative();
-        return switch (current.getHttpHeader().get(HttpHeader.K_CONTENT_ENCODING)) {
-            case null -> NativeUtil.toHeap(rawData);
+        switch (current.getHttpHeader().get(HttpHeader.K_CONTENT_ENCODING)) {
+            case null -> current.setData(NativeUtil.toHeap(rawData));
             case HttpHeader.V_GZIP ->
-                    NativeUtil.toHeap(CompressUtil.decompressUsingGzip(rawData, Poller.localMemApi()));
+                    CompressUtil.decompressUsingGzip(rawData, Poller.localMemApi(), compressed -> current.setData(NativeUtil.toHeap(compressed)));
             case HttpHeader.V_DEFLATE ->
-                    NativeUtil.toHeap(CompressUtil.decompressUsingDeflate(rawData, Poller.localMemApi()));
+                    CompressUtil.decompressUsingDeflate(rawData, Poller.localMemApi(), compressed -> current.setData(NativeUtil.toHeap(compressed)));
             case HttpHeader.V_BR ->
-                    NativeUtil.toHeap(CompressUtil.decompressUsingBrotli(rawData, Poller.localMemApi()));
+                    CompressUtil.decompressUsingBrotli(rawData, Poller.localMemApi(), compressed -> current.setData(NativeUtil.toHeap(compressed)));
             case HttpHeader.V_ZSTD ->
-                    NativeUtil.toHeap(CompressUtil.decompressUsingZstd(rawData, Poller.localMemApi()));
+                    CompressUtil.decompressUsingZstd(rawData, Poller.localMemApi(), compressed -> current.setData(NativeUtil.toHeap(compressed)));
             default -> throw new FrameworkException(ExceptionType.HTTP, "Unsupported compression type detected");
         };
     }

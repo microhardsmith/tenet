@@ -36,15 +36,21 @@ public class CompressionTest {
         try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
             byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
             MemorySegment m = allocator.allocateFrom(ValueLayout.JAVA_BYTE, bytes);
-            MemorySegment compressed = CompressUtil.compressUsingDeflate(m, DeflateBinding.LIBDEFLATE_FASTEST_LEVEL, MemApi.DEFAULT);
             // default size
-            MemorySegment decompressed = CompressUtil.decompressUsingDeflate(NativeUtil.toNative(compressed, allocator), MemApi.DEFAULT);
-            byte[] decompressedBytes = decompressed.toArray(ValueLayout.JAVA_BYTE);
-            Assertions.assertArrayEquals(bytes, decompressedBytes);
+            CompressUtil.compressUsingDeflate(m, DeflateBinding.LIBDEFLATE_FASTEST_LEVEL, MemApi.DEFAULT, compressed -> {
+                CompressUtil.decompressUsingDeflate(compressed, MemApi.DEFAULT, decompressed -> {
+                    byte[] decompressedBytes = decompressed.toArray(ValueLayout.JAVA_BYTE);
+                    Assertions.assertArrayEquals(bytes, decompressedBytes);
+                });
+            });
+
             // fixed size
-            MemorySegment decompressed2 = CompressUtil.decompressUsingDeflate(NativeUtil.toNative(compressed, allocator), m.byteSize(), MemApi.DEFAULT);
-            byte[] decompressedBytes2 = decompressed2.toArray(ValueLayout.JAVA_BYTE);
-            Assertions.assertArrayEquals(bytes, decompressedBytes2);
+            CompressUtil.compressUsingDeflate(m, DeflateBinding.LIBDEFLATE_FASTEST_LEVEL, MemApi.DEFAULT, compressed -> {
+                CompressUtil.decompressUsingDeflate(compressed, m.byteSize(), MemApi.DEFAULT, decompressed -> {
+                    byte[] decompressedBytes = decompressed.toArray(ValueLayout.JAVA_BYTE);
+                    Assertions.assertArrayEquals(bytes, decompressedBytes);
+                });
+            });
         }
     }
 
@@ -53,15 +59,21 @@ public class CompressionTest {
         try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
             byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
             MemorySegment m = allocator.allocateFrom(ValueLayout.JAVA_BYTE, bytes);
-            MemorySegment compressed = CompressUtil.compressUsingGzip(m, DeflateBinding.LIBDEFLATE_FASTEST_LEVEL, MemApi.DEFAULT);
             // default size
-            MemorySegment decompressed = CompressUtil.decompressUsingGzip(NativeUtil.toNative(compressed, allocator), MemApi.DEFAULT);
-            byte[] decompressedBytes = decompressed.toArray(ValueLayout.JAVA_BYTE);
-            Assertions.assertArrayEquals(bytes, decompressedBytes);
+            CompressUtil.compressUsingGzip(m, DeflateBinding.LIBDEFLATE_FASTEST_LEVEL, MemApi.DEFAULT, compressed -> {
+                CompressUtil.decompressUsingGzip(compressed, MemApi.DEFAULT, decompressed -> {
+                    byte[] decompressedBytes = decompressed.toArray(ValueLayout.JAVA_BYTE);
+                    Assertions.assertArrayEquals(bytes, decompressedBytes);
+                });
+            });
+
             // fixed size
-            MemorySegment decompressed2 = CompressUtil.decompressUsingGzip(NativeUtil.toNative(compressed, allocator), m.byteSize(), MemApi.DEFAULT);
-            byte[] decompressedBytes2 = decompressed2.toArray(ValueLayout.JAVA_BYTE);
-            Assertions.assertArrayEquals(bytes, decompressedBytes2);
+            CompressUtil.compressUsingGzip(m, DeflateBinding.LIBDEFLATE_FASTEST_LEVEL, MemApi.DEFAULT, compressed -> {
+                CompressUtil.decompressUsingGzip(compressed, m.byteSize(), MemApi.DEFAULT, decompressed -> {
+                    byte[] decompressedBytes = decompressed.toArray(ValueLayout.JAVA_BYTE);
+                    Assertions.assertArrayEquals(bytes, decompressedBytes);
+                });
+            });
         }
     }
 
@@ -70,15 +82,21 @@ public class CompressionTest {
         try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
             byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
             MemorySegment m = allocator.allocateFrom(ValueLayout.JAVA_BYTE, bytes);
-            MemorySegment compressed = CompressUtil.compressUsingBrotli(m, MemApi.DEFAULT);
             // default size
-            MemorySegment decompressed = CompressUtil.decompressUsingBrotli(NativeUtil.toNative(compressed, allocator), MemApi.DEFAULT);
-            byte[] decompressedBytes = decompressed.toArray(ValueLayout.JAVA_BYTE);
-            Assertions.assertArrayEquals(bytes, decompressedBytes);
+            CompressUtil.compressUsingBrotli(m, MemApi.DEFAULT, compressed -> {
+                CompressUtil.decompressUsingBrotli(compressed, MemApi.DEFAULT, decompressed -> {
+                    byte[] decompressedBytes = decompressed.toArray(ValueLayout.JAVA_BYTE);
+                    Assertions.assertArrayEquals(bytes, decompressedBytes);
+                });
+            });
+
             // smaller size
-            MemorySegment decompressed2 = CompressUtil.decompressUsingBrotli(NativeUtil.toNative(compressed, allocator), compressed.byteSize(), MemApi.DEFAULT);
-            byte[] decompressedBytes2 = decompressed2.toArray(ValueLayout.JAVA_BYTE);
-            Assertions.assertArrayEquals(bytes, decompressedBytes2);
+            CompressUtil.compressUsingBrotli(m, MemApi.DEFAULT, compressed -> {
+                CompressUtil.decompressUsingBrotli(compressed, compressed.byteSize(), MemApi.DEFAULT, decompressed -> {
+                    byte[] decompressedBytes = decompressed.toArray(ValueLayout.JAVA_BYTE);
+                    Assertions.assertArrayEquals(bytes, decompressedBytes);
+                });
+            });
         }
     }
 
@@ -87,10 +105,12 @@ public class CompressionTest {
         try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
             byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
             MemorySegment m = allocator.allocateFrom(ValueLayout.JAVA_BYTE, bytes);
-            MemorySegment compressed = CompressUtil.compressUsingZstd(m, MemApi.DEFAULT);
-            MemorySegment decompressed = CompressUtil.decompressUsingZstd(NativeUtil.toNative(compressed, allocator), MemApi.DEFAULT);
-            byte[] decompressedBytes = decompressed.toArray(ValueLayout.JAVA_BYTE);
-            Assertions.assertArrayEquals(bytes, decompressedBytes);
+            CompressUtil.compressUsingZstd(m, MemApi.DEFAULT, compressed -> {
+                CompressUtil.decompressUsingZstd(compressed, MemApi.DEFAULT, decompressed -> {
+                    byte[] decompressedBytes = decompressed.toArray(ValueLayout.JAVA_BYTE);
+                    Assertions.assertArrayEquals(bytes, decompressedBytes);
+                });
+            });
         }
     }
 }

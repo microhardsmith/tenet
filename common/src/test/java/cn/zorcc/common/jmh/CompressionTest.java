@@ -47,8 +47,9 @@ public class CompressionTest extends JmhTest {
 
     @Benchmark
     public void libDeflateTest(Blackhole bh) {
-        MemorySegment m1 = CompressUtil.compressUsingDeflate(originalSegment, level, MemApi.DEFAULT);
-        bh.consume(CompressUtil.decompressUsingDeflate(m1, MemApi.DEFAULT));
+        CompressUtil.compressUsingDeflate(originalSegment, level, MemApi.DEFAULT, compressed -> {
+            CompressUtil.decompressUsingDeflate(compressed, MemApi.DEFAULT, bh::consume);
+        });
     }
 
     @Benchmark
@@ -59,8 +60,9 @@ public class CompressionTest extends JmhTest {
 
     @Benchmark
     public void libGzipTest(Blackhole bh) {
-        MemorySegment m1 = CompressUtil.compressUsingGzip(originalSegment, level, MemApi.DEFAULT);
-        bh.consume(CompressUtil.decompressUsingGzip(m1,MemApi.DEFAULT));
+        CompressUtil.compressUsingGzip(originalSegment, level, MemApi.DEFAULT, compressed -> {
+            CompressUtil.decompressUsingGzip(compressed, MemApi.DEFAULT, bh::consume);
+        });
     }
 
     public static void main(String[] args) throws RunnerException {
