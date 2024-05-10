@@ -1,6 +1,10 @@
 package cn.zorcc.common.network;
 
-import cn.zorcc.common.*;
+import cn.zorcc.common.Clock;
+import cn.zorcc.common.Constants;
+import cn.zorcc.common.ExceptionType;
+import cn.zorcc.common.LifeCycle;
+import cn.zorcc.common.bindings.TenetBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.structure.*;
@@ -18,12 +22,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.locks.StampedLock;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
+/**
+ *   Networking core class
+ */
 public final class Net implements LifeCycle {
     private static final Logger log = new Logger(Net.class);
     private static final AtomicBoolean instanceFlag = new AtomicBoolean(false);
@@ -36,9 +41,7 @@ public final class Net implements LifeCycle {
     private static final SocketConfig defaultSocketConfig = new SocketConfig();
     private static final Duration defaultDuration = Duration.ofSeconds(5);
     private final NetConfig config;
-    private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
-    private final Lock readLock = readWriteLock.readLock();
-    private final Lock writeLock = readWriteLock.writeLock();
+    private final StampedLock lock = new StampedLock();
     private final Mux mux = osNetworkLibrary.createMux();
     private final Set<Provider> clientProviders = ConcurrentHashMap.newKeySet();
     private final List<ListenerTask> pendingTasks = new CopyOnWriteArrayList<>();
@@ -51,13 +54,12 @@ public final class Net implements LifeCycle {
 
     private Thread createNetThread() {
         return Thread.ofPlatform().unstarted(() -> {
-            MemApi memApi = config.isEnableRpMalloc() ? RpMalloc.tInitialize() : MemApi.DEFAULT;
+            MemApi memApi = config.isEnableRpMalloc() ? TenetBinding.rpMallocThreadInitialize() : MemApi.DEFAULT;
             int maxEvents = config.getMaxEvents();
-            int muxTimeout = config.getMuxTimeout();
+            int timeout = config.getMuxTimeout();
             IntMap<ListenerTask> listenerMap = IntMap.newTreeMap(config.getMapSize());
             Set<Provider> serverProviders = new HashSet<>();
             try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
-                Timeout timeout = Timeout.of(allocator, muxTimeout);
                 MemorySegment events = allocator.allocate(MemoryLayout.sequenceLayout(maxEvents, osNetworkLibrary.eventLayout()));
                 int counter = 0;
                 for( ; ; ) {
@@ -110,7 +112,7 @@ public final class Net implements LifeCycle {
             } finally {
                 serverProviders.forEach(Provider::close);
                 if(config.isEnableRpMalloc()) {
-                    RpMalloc.tRelease();
+                    TenetBinding.rpMallocThreadFinalize();
                 }
             }
         });
@@ -166,7 +168,7 @@ public final class Net implements LifeCycle {
      *   Register a listener to current Net instance, the server would be listening when the Net instance got initialized
      */
     public void serve(ListenerConfig listenerConfig) {
-        readLock.lock();
+        long stamp = lock.readLock();
         try{
             if(state > Constants.RUNNING) {
                 return ;
@@ -181,12 +183,12 @@ public final class Net implements LifeCycle {
             osNetworkLibrary.configureServerSocket(socket, loc, socketConfig);
             pendingTasks.add(new ListenerTask(encoderSupplier, decoderSupplier, handlerSupplier, provider, loc, socket, socketConfig));
         } finally {
-            readLock.unlock();
+            lock.unlockRead(stamp);
         }
     }
 
     public void connect(Loc loc, Encoder encoder, Decoder decoder, Handler handler, Provider provider, SocketConfig socketConfig, Duration duration) {
-        readLock.lock();
+        long stamp = lock.readLock();
         try{
             if(state > Constants.RUNNING) {
                 return ;
@@ -220,7 +222,7 @@ public final class Net implements LifeCycle {
                 }
             });
         } finally {
-            readLock.unlock();
+            lock.unlockRead(stamp);
         }
     }
 
@@ -238,13 +240,13 @@ public final class Net implements LifeCycle {
 
     @Override
     public void init() {
-        writeLock.lock();
+        long stamp = lock.writeLock();
         try{
             if(state != Constants.INITIAL) {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
             if(config.isEnableRpMalloc()) {
-                RpMalloc.initialize();
+                TenetBinding.rpmallocInitialize();
             }
             pollers.forEach(poller -> poller.pollerThread().start());
             writers.forEach(writer -> writer.writerThread().start());
@@ -256,13 +258,13 @@ public final class Net implements LifeCycle {
             netThread.start();
             state = Constants.RUNNING;
         } finally {
-            writeLock.unlock();
+            lock.unlockWrite(stamp);
         }
     }
 
     @Override
     public void exit() {
-        writeLock.lock();
+        long stamp = lock.writeLock();
         try{
             long nano = Clock.nano();
             if(state != Constants.RUNNING) {
@@ -282,14 +284,14 @@ public final class Net implements LifeCycle {
             clientProviders.forEach(Provider::close);
             osNetworkLibrary.exit();
             if(config.isEnableRpMalloc()) {
-                RpMalloc.release();
+                TenetBinding.rpMallocFinalize();
             }
             log.debug(STR."Exiting Net gracefully, cost : \{Duration.ofNanos(Clock.elapsed(nano)).toMillis()} ms");
             state = Constants.STOPPED;
         } catch (InterruptedException e) {
             throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
         } finally {
-            writeLock.unlock();
+            lock.unlockWrite(stamp);
         }
     }
 }

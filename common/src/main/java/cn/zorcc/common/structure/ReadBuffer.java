@@ -16,7 +16,7 @@ import java.util.List;
 
 /**
  *   Direct memory ReadBuffer, not thread-safe, ReadBuffer is read-only, shouldn't be modified directly
- *   Note that writeIndex is a mutable field, because
+ *   TODO There could be some vectorized-version searching algorithm implemented by using ByteVector, after Vector-API got finalized
  */
 public final class ReadBuffer {
 
@@ -30,8 +30,7 @@ public final class ReadBuffer {
         this.readIndex = 0L;
     }
 
-
-    public long readIndex() {
+    public long currentIndex() {
         return readIndex;
     }
 
@@ -153,7 +152,7 @@ public final class ReadBuffer {
     }
 
     /**
-     *   Creating a byte search pattern with SIMD inside a register algorithm
+     *   Creating a byte search pattern with SIMD inside a register algorithm, in short, SWAR search algorithm
      */
     public static long compilePattern(byte b) {
         long pattern = b & 0xFFL;
@@ -167,11 +166,19 @@ public final class ReadBuffer {
                 | (pattern << 56);
     }
 
-    private static int searchPattern(long data, long pattern) {
-        long input = data ^ pattern;
-        long tmp = (input & 0x7F7F7F7F7F7F7F7FL) + 0x7F7F7F7F7F7F7F7FL;
-        tmp = ~(tmp | input | 0x7F7F7F7F7F7F7F7FL);
-        return (ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN ? Long.numberOfLeadingZeros(tmp) : Long.numberOfTrailingZeros(tmp)) >>> 3;
+    /**
+     *   Using pattern search for target byte in current ReadBuffer without branch prediction, return the target index, Long.Bytes if not found
+     */
+    public static int searchPattern(long data, long pattern, ByteOrder byteOrder) {
+        long mask = data ^ pattern; // this single line is the major cost that we are about 10% slower than the JDK version
+        long match = (mask - 0x0101010101010101L) & ~mask & 0x8080808080808080L;
+        if(byteOrder == ByteOrder.BIG_ENDIAN) {
+            return Long.numberOfLeadingZeros(match) >>> 3;
+        }else if(byteOrder == ByteOrder.LITTLE_ENDIAN) {
+            return Long.numberOfTrailingZeros(match) >>> 3;
+        }else {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED);
+        }
     }
 
     /**
@@ -185,15 +192,21 @@ public final class ReadBuffer {
                 return cur;
             }
         }
-        return -1;
+        return -1L;
     }
 
+    /**
+     *   Linear search target sep in current readBuffer
+     */
     public MemorySegment readUntil(byte sep) {
         long searchIndex = linearSearch(segment, readIndex, size, sep);
         return searchIndex < 0 ? null : shiftData(searchIndex, 1L);
     }
 
-    private static long linearSearch(MemorySegment segment, long startIndex, long endIndex, byte target1, byte target2) {
+    /**
+     *   LinearSearch the target memorySegment, from startIndex to endIndex, of target byte1 and byte2, return its index, or -1 if not found
+     */
+    public static long linearSearch(MemorySegment segment, long startIndex, long endIndex, byte target1, byte target2) {
         final int start = Math.toIntExact(startIndex);
         final int end = Math.toIntExact(endIndex);
         for(int cur = start; cur < end; cur++) {
@@ -201,9 +214,12 @@ public final class ReadBuffer {
                 return cur;
             }
         }
-        return -1;
+        return -1L;
     }
 
+    /**
+     *   Linear search target firstSep and secondSep in current readBuffer
+     */
     public MemorySegment readUntil(byte firstSep, byte secondSep) {
         long searchIndex = linearSearch(segment, readIndex, size, firstSep, secondSep);
         return searchIndex < 0 ? null : shiftData(searchIndex, 2L);
@@ -212,40 +228,46 @@ public final class ReadBuffer {
     /**
      *   Search target segment for target byte using SIMD inside a register algorithm, return -1 if not found or startIndex > endIndex
      */
-    public static long patternSearch(MemorySegment segment, long startIndex, long endIndex, long pattern, byte target) {
-        final long available = endIndex - startIndex;
+    public static long swarSearchWithByteOrder(MemorySegment segment, long startIndex, long endIndex, long pattern, byte target, ByteOrder byteOrder) {
+        long available = endIndex - startIndex;
         if(available < Long.BYTES) {
             return linearSearch(segment, startIndex, endIndex, target);
         }
         // check the first part
-        int r = searchPattern(NativeUtil.getLong(segment, startIndex), pattern);
+        int r = searchPattern(NativeUtil.getLong(segment, startIndex), pattern, byteOrder);
         if(r < Long.BYTES) {
             return startIndex + r;
         }
         // check the middle part
-        final long address = segment.address();
-        int index = Math.toIntExact(Long.BYTES - ((address + startIndex) & (Long.BYTES - 1)) + startIndex);
+        int index = Math.toIntExact(Long.BYTES - ((segment.address() + startIndex) & (Long.BYTES - 1)) + startIndex);
         int end = Math.toIntExact(endIndex - Long.BYTES);
         for( ; index <= end; index += Long.BYTES) {
-            r = searchPattern(NativeUtil.getLong(segment, index), pattern);
+            r = searchPattern(NativeUtil.getLong(segment, index), pattern, byteOrder);
             if(r < Long.BYTES) {
                 return index + r;
             }
         }
         // check the last part
         if(index < endIndex) {
-            r = searchPattern(NativeUtil.getLong(segment, endIndex - Long.BYTES), pattern);
+            r = searchPattern(NativeUtil.getLong(segment, end), pattern, byteOrder);
             if(r < Long.BYTES) {
-                return endIndex - Long.BYTES + r;
+                return end + r;
             }
         }
-        return -1;
+        return -1L;
     }
 
-    public static long patternSearch(MemorySegment segment, long startIndex, long endIndex, long pattern, byte target1, byte target2) {
+    public static long swarSearch(MemorySegment segment, long startIndex, long endIndex, long pattern, byte target) {
+        return swarSearchWithByteOrder(segment, startIndex, endIndex, pattern, target, ByteOrder.nativeOrder());
+    }
+
+    /**
+     *   Search target segment for target byte1 and byte2 using SIMD inside a register algorithm, return -1 if not found or startIndex > endIndex
+     */
+    public static long swarSearchWithByteOrder(MemorySegment segment, long startIndex, long endIndex, long pattern, byte target1, byte target2, ByteOrder byteOrder) {
         long s = startIndex;
         for( ; ; ) {
-            long index = patternSearch(segment, s, endIndex, pattern, target1);
+            long index = swarSearchWithByteOrder(segment, s, endIndex, pattern, target1, byteOrder);
             if(index < 0) {
                 return -1;
             }else if(index < endIndex - 1 && NativeUtil.getByte(segment, index + 1) == target2) {
@@ -256,14 +278,32 @@ public final class ReadBuffer {
         }
     }
 
-    public MemorySegment readPattern(long pattern, byte sep) {
-        long searchIndex = patternSearch(segment, readIndex, size, pattern, sep);
-        return searchIndex < 0 ? null : shiftData(searchIndex, 1L);
+    public static long swarSearch(MemorySegment segment, long startIndex, long endIndex, long pattern, byte target1, byte target2) {
+        return swarSearchWithByteOrder(segment, startIndex, endIndex, pattern, target1, target2, ByteOrder.nativeOrder());
     }
 
-    public MemorySegment readPattern(long pattern, byte firstSep, byte secondSep) {
-        long searchIndex = patternSearch(segment, readIndex, size, pattern, firstSep, secondSep);
-        return searchIndex < 0 ? null : shiftData(searchIndex, 2L);
+    /**
+     *   Find target sep using SIMD inside a register algorithm, return null if not found
+     */
+    public MemorySegment swarReadUntil(long pattern, byte sep, ByteOrder byteOrder) {
+        long searchIndex = swarSearchWithByteOrder(segment, readIndex, size, pattern, sep, byteOrder);
+        return searchIndex < 0L ? null : shiftData(searchIndex, 1L);
+    }
+
+    public MemorySegment swarReadUntil(long pattern, byte sep) {
+        return swarReadUntil(pattern, sep, ByteOrder.nativeOrder());
+    }
+
+    /**
+     *   Find target firstSep and secondSep using SIMD inside a register algorithm, return null if not found
+     */
+    public MemorySegment swarReadUntil(long pattern, byte firstSep, byte secondSep, ByteOrder byteOrder) {
+        long searchIndex = swarSearchWithByteOrder(segment, readIndex, size, pattern, firstSep, secondSep, byteOrder);
+        return searchIndex < 0L ? null : shiftData(searchIndex, 2L);
+    }
+
+    public MemorySegment swarReadUntil(long pattern, byte firstSep, byte secondSep) {
+        return swarReadUntil(pattern, firstSep, secondSep, ByteOrder.nativeOrder());
     }
 
     /**
@@ -303,6 +343,14 @@ public final class ReadBuffer {
 
     public List<String> readMultipleStr() {
         return readMultipleStr(StandardCharsets.UTF_8);
+    }
+
+    /**
+     *   Creating a snapshot for current ReadBuffer, which could be used in vector-search or some other situations
+     *   TODO this is a helper method to avoid loading incubator module for vector API, and could be removed when vector api become preview
+     */
+    public ReadBufferSnapshot snapshot() {
+        return new ReadBufferSnapshot(segment.asReadOnly(), readIndex);
     }
 
     @Override

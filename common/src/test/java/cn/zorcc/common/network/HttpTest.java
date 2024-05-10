@@ -15,6 +15,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.util.Optional;
 
 public class HttpTest {
     private static final Logger log = new Logger(HttpTest.class);
@@ -102,10 +103,10 @@ public class HttpTest {
         }
 
         @Override
-        public TaggedResult onRecv(Channel channel, Object data) {
+        public Optional<TagMsg> onRecv(Channel channel, Object data) {
             if(data instanceof HttpRequest httpRequest) {
                 Thread.ofVirtual().start(() -> onHttpRequest(channel, httpRequest));
-                return null;
+                return Optional.empty();
             }else {
                 throw new FrameworkException(ExceptionType.HTTP, Constants.UNREACHED);
             }

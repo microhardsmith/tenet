@@ -1,5 +1,8 @@
 package cn.zorcc.common.network;
 
+import cn.zorcc.common.serde.Serde;
+
+@Serde
 public final class SocketConfig {
     /**
      *  Whether allow reuse addr, only affect server socket, recommended to open

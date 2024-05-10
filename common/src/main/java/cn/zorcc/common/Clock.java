@@ -1,8 +1,14 @@
 package cn.zorcc.common;
 
-
+/**
+ *   Helper clock class
+ *   Currently we would just use the JDK implementation for time retrieving, it might be modified in the future
+ */
 public final class Clock {
 
+    /**
+     *   Never initialize it
+     */
     private Clock() {
         throw new UnsupportedOperationException();
     }
@@ -22,7 +28,7 @@ public final class Clock {
     }
 
     /**
-     *  Calculates the nanoseconds elapsed since the specified timestamp
+     *  Calculates the nanoseconds elapsed since the specified nanosecond timestamp
      */
     public static long elapsed(long nano) {
         return nano() - nano;

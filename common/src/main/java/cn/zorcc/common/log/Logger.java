@@ -187,7 +187,7 @@ public final class Logger {
     }
 
     /**
-     *   Find next expected byte in the data from startIndex, return the target index + 1 of the expected byte
+     *   Find next expected byte in the data from startIndex, return the target index + 1 of the expected byte TODO using ReadBuffer patternSearch
      */
     private static long searchBytes(MemorySegment data, byte expected, long startIndex, Consumer<MemorySegment> consumer) {
         for(long index = startIndex; index < data.byteSize(); index++) {

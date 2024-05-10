@@ -9,7 +9,6 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.LockSupport;
 
 public sealed interface Wheel extends LifeCycle permits Wheel.WheelImpl {
     int slots = Integer.getInteger("wheel.slots", 4096);
@@ -165,8 +164,13 @@ public sealed interface Wheel extends LifeCycle permits Wheel.WheelImpl {
                 }
                 wheel[currentSlot] = null;
 
-                // park until next slot, it's safe even the value is negative
-                LockSupport.parkNanos(nano - Clock.nano());
+                // sleep until next slot, it's safe even the value is negative
+                // Note that park() couldn't be used here, because park() could be spuriously waken up
+                try{
+                    Thread.sleep(Duration.ofNanos(nano - Clock.nano()));
+                }catch (InterruptedException e) {
+                    throw new FrameworkException(ExceptionType.WHEEL, "Unexpected interruption", e);
+                }
             }
         }
 

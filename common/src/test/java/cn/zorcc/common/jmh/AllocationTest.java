@@ -1,6 +1,6 @@
 package cn.zorcc.common.jmh;
 
-import cn.zorcc.common.RpMalloc;
+import cn.zorcc.common.bindings.TenetBinding;
 import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.structure.MemApi;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -14,30 +14,32 @@ import java.lang.foreign.ValueLayout;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * AllocationTest.testAuto      avgt   25  952123.665 ± 87650.750  ns/op
- * AllocationTest.testConfined  avgt   25  110382.002 ±  9231.961  ns/op
- * AllocationTest.testHeap      avgt   25   84734.509 ±  1134.490  ns/op
- * AllocationTest.testRp        avgt   25   13987.693 ±   624.108  ns/op
- * AllocationTest.testSys       avgt   25   51766.527 ±  4461.971  ns/op
+ * This test focus on different allocator behaviour
+ * Just ignore Arena.auto() or Arena.confined(), using custom allocator with malloc would be much faster, use RpMalloc whenever we can
+ * AllocationTest.testAuto      avgt   25  933926.575 ± 89362.926  ns/op
+ * AllocationTest.testConfined  avgt   25  103721.868 ±  7026.512  ns/op
+ * AllocationTest.testHeap      avgt   25   81796.236 ±   844.086  ns/op
+ * AllocationTest.testRp        avgt   25   21533.046 ±   707.843  ns/op
+ * AllocationTest.testSys       avgt   25   93472.459 ± 35532.708  ns/op
  */
 public class AllocationTest extends JmhTest {
     private static final int COUNT = 1000;
-    private static final long SIZE = 4096L;
-    private long[] arr;
+    private static final int SIZE = 4096;
+    private int[] arr;
 
     @Setup
     public void setup() {
-        arr = new long[COUNT];
+        arr = new int[COUNT];
         ThreadLocalRandom random = ThreadLocalRandom.current();
         for(int i = 0; i < COUNT; i++) {
-            arr[i] = random.nextLong(1L, SIZE);
+            arr[i] = random.nextInt(1, SIZE);
         }
-        RpMalloc.initialize();
+        TenetBinding.rpmallocInitialize();
     }
 
     @Benchmark
     public void testConfined(Blackhole bh) {
-        for (long i : arr) {
+        for (int i : arr) {
             try(Arena arena = Arena.ofConfined()) {
                 bh.consume(arena.allocate(ValueLayout.JAVA_BYTE, i));
             }
@@ -46,23 +48,14 @@ public class AllocationTest extends JmhTest {
 
     @Benchmark
     public void testAuto(Blackhole bh) {
-        for(long i : arr) {
+        for(int i : arr) {
             bh.consume(Arena.ofAuto().allocate(ValueLayout.JAVA_BYTE, i));
         }
     }
 
     @Benchmark
-    public void testSys(Blackhole bh) {
-        for(long i : arr) {
-            try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
-                bh.consume(allocator.allocate(ValueLayout.JAVA_BYTE, i));
-            }
-        }
-    }
-
-    @Benchmark
     public void testHeap(Blackhole bh) {
-        for(long i : arr) {
+        for(int i : arr) {
             try(Allocator allocator = Allocator.HEAP) {
                 bh.consume(allocator.allocate(ValueLayout.JAVA_BYTE, i));
             }
@@ -70,22 +63,31 @@ public class AllocationTest extends JmhTest {
     }
 
     @Benchmark
+    public void testSys(Blackhole bh) {
+        for(int i : arr) {
+            try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
+                bh.consume(allocator.allocate(ValueLayout.JAVA_BYTE, i));
+            }
+        }
+    }
+
+    @Benchmark
     public void testRp(Blackhole bh) {
-        MemApi memApi = RpMalloc.tInitialize();
-        for(long i : arr) {
+        MemApi memApi = TenetBinding.rpMallocThreadInitialize();
+        for(int i : arr) {
             try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
                 bh.consume(allocator.allocate(ValueLayout.JAVA_BYTE, i));
             }
         }
-        RpMalloc.tRelease();
+        TenetBinding.rpMallocThreadFinalize();
     }
 
     @TearDown
     public void tearDown() {
-        RpMalloc.release();
+        TenetBinding.rpMallocFinalize();
     }
 
-    public static void main(String[] args) throws RunnerException {
+    void main() throws RunnerException {
         runTest(AllocationTest.class);
     }
 }

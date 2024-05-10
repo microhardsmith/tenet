@@ -20,7 +20,7 @@ public class PgDecoder implements Decoder {
         if(size < 5) {
             return ;
         }
-        long currentIndex = readBuffer.readIndex();
+        long currentIndex = readBuffer.currentIndex();
         byte msgType = readBuffer.readByte();
         int msgLength = readBuffer.readInt();
         if(size < msgLength + 1) {
@@ -86,7 +86,7 @@ public class PgDecoder implements Decoder {
 
 
     private Object decodeStatusResponseMsg(ReadBuffer readBuffer, int msgLength, boolean isErr) {
-        long startIndex = readBuffer.readIndex();
+        long startIndex = readBuffer.currentIndex();
         List<OldPair<Byte, String>> items = new ArrayList<>();
         for( ; ; ) {
             byte b = readBuffer.readByte();
@@ -96,7 +96,7 @@ public class PgDecoder implements Decoder {
                 items.add(OldPair.of(b, readBuffer.readStr()));
             }
         }
-        checkLength(msgLength, (int) (readBuffer.readIndex() - startIndex + 4));
+        checkLength(msgLength, (int) (readBuffer.currentIndex() - startIndex + 4));
         return new PgStatusResponseMsg(isErr, items);
     }
 
@@ -106,7 +106,7 @@ public class PgDecoder implements Decoder {
     }
 
     private Object decodeDataRowMsg(ReadBuffer readBuffer, int msgLength) {
-        long startIndex = readBuffer.readIndex();
+        long startIndex = readBuffer.currentIndex();
         short len = readBuffer.readShort();
         List<byte[]> data = new ArrayList<>(len);
         for(int i = 0; i < len; i++) {
@@ -114,12 +114,12 @@ public class PgDecoder implements Decoder {
             byte[] bytes = readBuffer.readBytes(size);
             data.add(bytes);
         }
-        checkLength(msgLength, (int) (readBuffer.readIndex() - startIndex + 4));
+        checkLength(msgLength, (int) (readBuffer.currentIndex() - startIndex + 4));
         return new PgDataRowMsg(len, data);
     }
 
     private Object decodeRowDescriptionMsg(ReadBuffer readBuffer, int msgLength) {
-        long startIndex = readBuffer.readIndex();
+        long startIndex = readBuffer.currentIndex();
         short len = readBuffer.readShort();
         PgRowDescription[] pgRowDescriptions = new PgRowDescription[len];
         for(int i = 0; i < len; i++) {
@@ -132,14 +132,14 @@ public class PgDecoder implements Decoder {
             short format = readBuffer.readShort();
             pgRowDescriptions[i] = new PgRowDescription(fieldName, tableOid, attr, fieldOid, typeSize, modifier, format);
         }
-        checkLength(msgLength, (int) (readBuffer.readIndex() - startIndex + 4));
+        checkLength(msgLength, (int) (readBuffer.currentIndex() - startIndex + 4));
         return new PgRowDescriptionMsg(len, pgRowDescriptions);
     }
 
     private Object decodeCommandCompleteMsg(ReadBuffer readBuffer, int msgLength) {
-        long startIndex = readBuffer.readIndex();
+        long startIndex = readBuffer.currentIndex();
         String tag = readBuffer.readStr();
-        checkLength(msgLength, (int) (readBuffer.readIndex() - startIndex + 4));
+        checkLength(msgLength, (int) (readBuffer.currentIndex() - startIndex + 4));
         return new PgCommandCompleteMsg(tag);
     }
 
@@ -182,7 +182,7 @@ public class PgDecoder implements Decoder {
     }
 
     private Object decodeSaslPwdMsg(ReadBuffer readBuffer, int msgLength) {
-        long startIndex = readBuffer.readIndex();
+        long startIndex = readBuffer.currentIndex();
         List<String> mechanisms = new ArrayList<>();
         for( ; ;) {
             String mechanism = readBuffer.readStr();
@@ -191,29 +191,29 @@ public class PgDecoder implements Decoder {
             }
             mechanisms.add(mechanism);
         }
-        checkLength(msgLength, (int) (readBuffer.readIndex() - startIndex + 8));
+        checkLength(msgLength, (int) (readBuffer.currentIndex() - startIndex + 8));
         return new PgAuthSaslPwdMsg(mechanisms);
     }
 
     private Object decodeSaslContinueMsg(ReadBuffer readBuffer, int msgLength) {
-        long startIndex = readBuffer.readIndex();
+        long startIndex = readBuffer.currentIndex();
         String serverFirstMsg = readBuffer.readStr();
-        checkLength(msgLength, (int) (readBuffer.readIndex() - startIndex + 8));
+        checkLength(msgLength, (int) (readBuffer.currentIndex() - startIndex + 8));
         return new PgAuthSaslContinueMsg(serverFirstMsg);
     }
 
     private Object decodeSaslFinalMsg(ReadBuffer readBuffer, int msgLength) {
-        long startIndex = readBuffer.readIndex();
+        long startIndex = readBuffer.currentIndex();
         String serverFinalMsg = readBuffer.readStr();
-        checkLength(msgLength, (int) (readBuffer.readIndex() - startIndex + 8));
+        checkLength(msgLength, (int) (readBuffer.currentIndex() - startIndex + 8));
         return new PgAuthSaslFinalMsg(serverFinalMsg);
     }
 
     private Object decodeParameterStatus(ReadBuffer readBuffer, int msgLength) {
-        long startIndex = readBuffer.readIndex();
+        long startIndex = readBuffer.currentIndex();
         String key = readBuffer.readStr();
         String value = readBuffer.readStr();
-        checkLength(msgLength, (int) (readBuffer.readIndex() - startIndex + 4));
+        checkLength(msgLength, (int) (readBuffer.currentIndex() - startIndex + 4));
         return new PgParameterStatusMsg(key, value);
     }
 

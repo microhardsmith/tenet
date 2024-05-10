@@ -3,8 +3,9 @@ package cn.zorcc.orm.core;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.Channel;
 import cn.zorcc.common.network.Handler;
-import cn.zorcc.common.network.TaggedResult;
+import cn.zorcc.common.network.TagMsg;
 
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -29,8 +30,8 @@ public class PgHandler implements Handler {
     }
 
     @Override
-    public TaggedResult onRecv(Channel channel, Object data) {
-        return null;
+    public Optional<TagMsg> onRecv(Channel channel, Object data) {
+        return Optional.empty();
     }
 
     @Override

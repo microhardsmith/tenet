@@ -24,18 +24,18 @@ public final class LongHolder {
         }
     }
 
-    private volatile long value;
+    private long value;
 
     public LongHolder(long initialValue) {
         this.value = initialValue;
     }
 
     public void increment() {
-        setValue(getValue() + 1L);
+        value++;
     }
 
     public void decrement() {
-        setValue(getValue() - 1L);
+        value--;
     }
 
     public long getValue() {
@@ -47,11 +47,11 @@ public final class LongHolder {
     }
 
     public long getVolatileValue() {
-        return value;
+        return (long) handle.getVolatile(this);
     }
 
     public void setVolatileValue(long newValue) {
-        this.value = newValue;
+        handle.setVolatile(this, newValue);
     }
 
     public long getAcquireValue() {
@@ -94,18 +94,55 @@ public final class LongHolder {
         }
     }
 
+    private static final long LOCK_VALUE = Long.MIN_VALUE;
+
+    /**
+     *   Acquiring a long lock, note that this function is not reentrant, acquiring a lock multiple times will cause deadlock
+     */
+    public long lock(Runnable waitOp) {
+        for( ; ; ) {
+            long current = getVolatileValue();
+            if(current == LOCK_VALUE) {
+                waitOp.run();
+            }else if(casValue(current, LOCK_VALUE)) {
+                return current;
+            }else {
+                waitOp.run();
+            }
+        }
+    }
+
+    /**
+     *   Pair with lock()
+     */
+    public void unlock(long next) {
+        if(next == LOCK_VALUE || !casValue(LOCK_VALUE, next)) {
+            throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
+        }
+    }
+
     /**
      *   Transform current LongHolder to another state without lock acquired
      */
-    public void transform(LongUnaryOperator operator) {
-        setValue(operator.applyAsLong(getValue()));
+    public void transform(LongUnaryOperator operator, Runnable waitOp) {
+        long r = lock(waitOp);
+        try {
+            r = operator.applyAsLong(r);
+        } finally {
+            unlock(r);
+        }
     }
 
     /**
      *   Extract current LongHolder's value without state change or lock
      */
-    public <T> T extract(LongFunction<T> func) {
-        return func.apply(getValue());
+    public <T> T extract(LongFunction<T> func, Runnable waitOp) {
+        long r = lock(waitOp);
+        try{
+            return func.apply(r);
+        }finally {
+            unlock(r);
+        }
     }
 
 }

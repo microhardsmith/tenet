@@ -77,7 +77,7 @@ public final class HttpServerDecoder implements Decoder {
 
     private ResultStatus tryDecodeInitial(ReadBuffer readBuffer) {
         current = new HttpRequest();
-        MemorySegment segment = readBuffer.readPattern(SPACE_PATTERN, Constants.SPACE);
+        MemorySegment segment = readBuffer.swarReadUntil(SPACE_PATTERN, Constants.SPACE);
         switch (segment) {
             case null -> {
                 return ResultStatus.INCOMPLETE;
@@ -101,7 +101,7 @@ public final class HttpServerDecoder implements Decoder {
     }
 
     private ResultStatus tryDecodeUri(ReadBuffer readBuffer) {
-        MemorySegment segment = readBuffer.readPattern(SPACE_PATTERN, Constants.SPACE);
+        MemorySegment segment = readBuffer.swarReadUntil(SPACE_PATTERN, Constants.SPACE);
         switch (segment) {
             case null -> {
                 return ResultStatus.INCOMPLETE;
@@ -116,7 +116,7 @@ public final class HttpServerDecoder implements Decoder {
     }
 
     private ResultStatus tryDecodeVersion(ReadBuffer readBuffer) {
-        MemorySegment segment = readBuffer.readPattern(CR_PATTERN, Constants.CR, Constants.LF);
+        MemorySegment segment = readBuffer.swarReadUntil(CR_PATTERN, Constants.CR, Constants.LF);
         switch (segment) {
             case null -> {
                 return ResultStatus.INCOMPLETE;
@@ -131,7 +131,7 @@ public final class HttpServerDecoder implements Decoder {
     }
 
     private ResultStatus tryDecodeHeader(ReadBuffer readBuffer) {
-        MemorySegment segment = readBuffer.readPattern(CR_PATTERN, Constants.CR, Constants.LF);
+        MemorySegment segment = readBuffer.swarReadUntil(CR_PATTERN, Constants.CR, Constants.LF);
         HttpHeader httpHeader = current.getHttpHeader();
         switch (segment) {
             case null -> {
@@ -155,7 +155,7 @@ public final class HttpServerDecoder implements Decoder {
                 return ResultStatus.FINISHED;
             }
             default -> {
-                long splitIndex = ReadBuffer.patternSearch(segment, 0L, segment.byteSize(), COLON_PATTERN, Constants.COLON, Constants.SPACE);
+                long splitIndex = ReadBuffer.swarSearch(segment, 0L, segment.byteSize(), COLON_PATTERN, Constants.COLON, Constants.SPACE);
                 if(splitIndex < 0) {
                     throw new FrameworkException(ExceptionType.HTTP, "Http Header wrong format");
                 }
@@ -179,7 +179,7 @@ public final class HttpServerDecoder implements Decoder {
 
 
     private ResultStatus tryDecodeChunkedDataFinal(ReadBuffer readBuffer) {
-        MemorySegment segment = readBuffer.readPattern(CR_PATTERN, Constants.CR, Constants.LF);
+        MemorySegment segment = readBuffer.swarReadUntil(CR_PATTERN, Constants.CR, Constants.LF);
         switch (segment) {
             case null -> {
                 return ResultStatus.INCOMPLETE;
@@ -196,7 +196,7 @@ public final class HttpServerDecoder implements Decoder {
     }
 
     private ResultStatus tryDecodeChunkedDataLen(ReadBuffer readBuffer) {
-        MemorySegment segment = readBuffer.readPattern(CR_PATTERN, Constants.CR, Constants.LF);
+        MemorySegment segment = readBuffer.swarReadUntil(CR_PATTERN, Constants.CR, Constants.LF);
         switch (segment) {
             case null -> {
                 return ResultStatus.INCOMPLETE;
@@ -211,11 +211,11 @@ public final class HttpServerDecoder implements Decoder {
     }
 
     private ResultStatus tryDecodeChunkedData(ReadBuffer readBuffer) {
-        if (readBuffer.size() - readBuffer.readIndex() < len) {
+        if (readBuffer.size() - readBuffer.currentIndex() < len) {
             return ResultStatus.INCOMPLETE;
         }
         MemorySegment data = readBuffer.readSegment(len);
-        if(readBuffer.readPattern(CR_PATTERN, Constants.CR, Constants.LF) != MemorySegment.NULL) {
+        if(readBuffer.swarReadUntil(CR_PATTERN, Constants.CR, Constants.LF) != MemorySegment.NULL) {
             throw new FrameworkException(ExceptionType.HTTP, "Unresolved http chunked data");
         }
         tempBuffer.writeSegment(data);

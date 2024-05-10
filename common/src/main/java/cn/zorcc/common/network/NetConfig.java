@@ -1,7 +1,6 @@
 package cn.zorcc.common.network;
 
 import cn.zorcc.common.Constants;
-import cn.zorcc.common.util.NativeUtil;
 
 public final class NetConfig {
     /**
@@ -45,7 +44,7 @@ public final class NetConfig {
     /**
      *  PollerCount determines how many poller thread will be created
      */
-    private int pollerCount = Math.max(NativeUtil.getCpuCores() >> 2, 4);
+    private int pollerCount = 4;
 
     /**
      *  Poller taskQueue initial size
@@ -77,7 +76,7 @@ public final class NetConfig {
     /**
      *  WriterCount determines how many writer thread will be created
      */
-    private int writerCount = Math.max(NativeUtil.getCpuCores() >> 2, 4);
+    private int writerCount = 4;
 
     /**
      *  The write buffer initial size for each writer instance

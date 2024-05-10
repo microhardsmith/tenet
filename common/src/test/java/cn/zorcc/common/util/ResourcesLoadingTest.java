@@ -7,6 +7,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collection;
 
+/**
+ *   This test shows that, no matter which class we use as the caller, it will always locate at the current resource folder for searching
+ */
 public class ResourcesLoadingTest {
     @Test
     public void testSelfClass() {

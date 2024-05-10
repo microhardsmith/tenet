@@ -1,5 +1,8 @@
 package cn.zorcc.common.network;
 
+/**
+ *   Poller msg type enum
+ */
 public enum PollerTaskType {
     /**
      *   Bind a SentryPollerNode to current poller instance

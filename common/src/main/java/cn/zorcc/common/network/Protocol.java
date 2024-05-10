@@ -132,11 +132,10 @@ public interface Protocol {
 
         @Override
         public long onReadableEvent(MemorySegment reserved, long len) {
-            int current = sslState.lock(Thread::yield);
-            int next = current;
+            int state = sslState.lock(Thread::yield);
             try{
-                if((next & SEND_WANT_READ) != 0) {
-                    next &= ~SEND_WANT_READ;
+                if((state & SEND_WANT_READ) != 0) {
+                    state &= ~SEND_WANT_READ;
                     channel.writer().submit(new WriterTask(WriterTaskType.WRITABLE, channel, null, null));
                 }
                 int received = SslBinding.sslRead(ssl, reserved, Math.toIntExact(len));
@@ -147,10 +146,10 @@ public interface Protocol {
                     }else if(err == Constants.SSL_ERROR_WANT_WRITE) {
                         return -Constants.NET_W;
                     }else if(err == Constants.SSL_ERROR_ZERO_RETURN) {
-                        if((next & LOCAL_INITIATED_SHUTDOWN) == 0) {
-                            next |= REMOTE_INITIATED_SHUTDOWN;
+                        if((state & LOCAL_INITIATED_SHUTDOWN) == 0) {
+                            state |= REMOTE_INITIATED_SHUTDOWN;
                         }else {
-                            next &= (~LOCAL_INITIATED_SHUTDOWN);
+                            state &= (~LOCAL_INITIATED_SHUTDOWN);
                         }
                         return 0;
                     }else {
@@ -160,38 +159,36 @@ public interface Protocol {
                     return received;
                 }
             }finally {
-                sslState.unlock(current, next);
+                sslState.unlock(state);
             }
         }
 
         @Override
         public long onWritableEvent() {
-            int current = sslState.lock(Thread::yield);
-            int next = current;
+            int state = sslState.lock(Thread::yield);
             try{
-                if((next & SEND_WANT_WRITE) != 0) {
-                    next &= (~SEND_WANT_WRITE);
+                if((state & SEND_WANT_WRITE) != 0) {
+                    state &= (~SEND_WANT_WRITE);
                     channel.writer().submit(new WriterTask(WriterTaskType.WRITABLE, channel, null, null));
                 }
                 return -Constants.NET_R;
             }finally {
-                sslState.unlock(current, next);
+                sslState.unlock(state);
             }
         }
 
         @Override
         public long doWrite(MemorySegment data, long len) {
-            int current = sslState.lock(Thread::yield);
-            int next = current;
+            int state = sslState.lock(Thread::yield);
             try{
                 int written = SslBinding.sslWrite(ssl, data, Math.toIntExact(len));
                 if(written <= 0) {
                     int err = SslBinding.sslGetErr(ssl, written);
                     if(err == Constants.SSL_ERROR_WANT_READ) {
-                        next |= SEND_WANT_READ;
+                        state |= SEND_WANT_READ;
                         return -Constants.NET_PR;
                     }else if(err == Constants.SSL_ERROR_WANT_WRITE) {
-                        next |= SEND_WANT_WRITE;
+                        state |= SEND_WANT_WRITE;
                         return -Constants.NET_PW;
                     }else {
                         return SslUtil.throwException(err, "SSL_write()", Writer.localMemApi());
@@ -200,32 +197,30 @@ public interface Protocol {
                     return written;
                 }
             }finally {
-                sslState.unlock(current, next);
+                sslState.unlock(state);
             }
         }
 
         @Override
         public void doShutdown() {
-            int current = sslState.lock(Thread::yield);
-            int next = current;
+            int state = sslState.lock(Thread::yield);
             try{
-                next |= LOCAL_INITIATED_SHUTDOWN;
+                state |= LOCAL_INITIATED_SHUTDOWN;
                 int r = SslBinding.sslShutdown(ssl);
                 if(r < 0) {
                     throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform SSL_shutdown(), err code : \{SslBinding.sslGetErr(ssl, r)}");
                 }
             }finally {
-                sslState.unlock(current, next);
+                sslState.unlock(state);
             }
         }
 
         @Override
         public void doClose() {
-            int current = sslState.lock(Thread::yield);
-            int next = current;
+            int state = sslState.lock(Thread::yield);
             try{
-                if((next & REMOTE_INITIATED_SHUTDOWN) != 0) {
-                    next &= (~REMOTE_INITIATED_SHUTDOWN);
+                if((state & REMOTE_INITIATED_SHUTDOWN) != 0) {
+                    state &= (~REMOTE_INITIATED_SHUTDOWN);
                     SslBinding.sslShutdown(ssl);
                 }
                 SslBinding.sslFree(ssl);
@@ -234,7 +229,7 @@ public interface Protocol {
                     throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to close socket, errno : \{Math.abs(r)}");
                 }
             }finally {
-                sslState.unlock(current, next);
+                sslState.unlock(state);
             }
         }
     }

@@ -2,6 +2,7 @@ package cn.zorcc.common.network;
 
 /**
  *  Socket abstraction, using long in windows, using int in Linux and macOS
+ *  TODO value-based class
  */
 public record Socket(
         int intValue,

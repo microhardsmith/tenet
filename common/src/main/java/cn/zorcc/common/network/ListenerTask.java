@@ -2,6 +2,9 @@ package cn.zorcc.common.network;
 
 import java.util.function.Supplier;
 
+/**
+ *   Used as message for net thread
+ */
 public record ListenerTask(
         Supplier<Encoder> encoderSupplier,
         Supplier<Decoder> decoderSupplier,

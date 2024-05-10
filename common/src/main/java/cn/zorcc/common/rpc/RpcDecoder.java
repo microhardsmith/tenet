@@ -9,7 +9,7 @@ public final class RpcDecoder implements Decoder {
     @Override
     public void decode(ReadBuffer readBuffer, List<Object> entityList) {
         for( ; ; ) {
-            long currentIndex = readBuffer.readIndex();
+            long currentIndex = readBuffer.currentIndex();
             if(readBuffer.available() < 8) {
                 return ;
             }

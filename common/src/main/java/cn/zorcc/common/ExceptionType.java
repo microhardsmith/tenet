@@ -1,6 +1,7 @@
 package cn.zorcc.common;
 
 public enum ExceptionType {
+    ANNO,
     NATIVE,
     WHEEL,
     CONTEXT,

@@ -10,12 +10,13 @@ import java.lang.foreign.MemorySegment;
  *   Multiplexing fd abstraction on different platforms
  *   On Windows, it is a pointer
  *   On Linux or macOS, it is an int fd
+ *   TODO value-based record
  */
 public record Mux (
         MemorySegment winHandle,
         int epfd,
         int kqfd
-){
+) {
     /**
      *   Create a Windows mux
      */

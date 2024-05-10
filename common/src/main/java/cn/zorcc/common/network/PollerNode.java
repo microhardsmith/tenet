@@ -1,16 +1,19 @@
 package cn.zorcc.common.network;
 
-import cn.zorcc.common.Carrier;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
+import cn.zorcc.common.Ref;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.structure.*;
+import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.MemorySegment;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Consumer;
 
 public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNode.ProtocolPollerNode {
     OsNetworkLibrary osNetworkLibrary = OsNetworkLibrary.CURRENT;
@@ -44,13 +47,24 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
      */
     void exit(Duration duration);
 
-    record SentryPollerNode(
-            IntMap<PollerNode> nodeMap,
-            Channel channel,
-            Sentry sentry,
-            MemApi memApi
-    ) implements PollerNode {
+    final class SentryPollerNode implements PollerNode {
         private static final Logger log = new Logger(SentryPollerNode.class);
+        private final IntMap<PollerNode> nodeMap;
+        private final Channel channel;
+        private final Sentry sentry;
+        private final MemApi memApi;
+
+        /**
+         *   When channel was mounted on the Poller thread, the initial state must be NET_W
+         */
+        private int state = Constants.NET_W;
+
+        public SentryPollerNode(IntMap<PollerNode> nodeMap, Channel channel, Sentry sentry, MemApi memApi) {
+            this.nodeMap = nodeMap;
+            this.channel = channel;
+            this.sentry = sentry;
+            this.memApi = memApi;
+        }
 
         @Override
         public void onReadableEvent(MemorySegment reserved, long len) {
@@ -103,12 +117,13 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
             }
         }
 
+        /**
+         *   Ctl in sentryPollerNode is safe, no external synchronization needed
+         */
         private void ctl(int expected) {
-            IntHolder channelState = channel.state();
-            int current = channelState.getValue();
-            if(current != expected) {
-                osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), current, expected, memApi);
-                channelState.setValue(expected);
+            if(state != expected) {
+                osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), state, expected, memApi);
+                state = expected;
             }
         }
 
@@ -122,9 +137,10 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
             }
             ctl(Constants.NET_R);
             Protocol protocol = sentry.toProtocol();
-            ProtocolPollerNode protocolPollerNode = new ProtocolPollerNode(nodeMap, channel, protocol, memApi);
+            Mutex mutex = new Mutex(channel.poller().pollerThread(), channel.writer().writerThread(), state);
+            ProtocolPollerNode protocolPollerNode = new ProtocolPollerNode(nodeMap, channel, protocol, mutex, memApi);
             nodeMap.replace(channel.socket().intValue(), this, protocolPollerNode);
-            channel.writer().submit(new WriterTask(WriterTaskType.INITIATE, channel, protocol, null));
+            channel.writer().submit(new WriterTask(WriterTaskType.INITIATE, channel, new ProtocolWithMutex(protocol, mutex), null));
         }
 
         private void close() {
@@ -156,16 +172,18 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
         private final IntMap<PollerNode> nodeMap;
         private final Channel channel;
         private final Protocol protocol;
+        private final Mutex mutex;
         private final MemApi memApi;
         private List<Object> entityList = new ArrayList<>(MAX_LIST_SIZE);
         private WriteBuffer tempBuffer;
-        private IntMap<TaggedMsg> msgMap;
-        private Carrier carrier;
+        private RefMap refMap;
+        private Ref seqRef;
 
-        public ProtocolPollerNode(IntMap<PollerNode> nodeMap, Channel channel, Protocol protocol, MemApi memApi) {
+        public ProtocolPollerNode(IntMap<PollerNode> nodeMap, Channel channel, Protocol protocol, Mutex mutex, MemApi memApi) {
             this.nodeMap = nodeMap;
             this.channel = channel;
             this.protocol = protocol;
+            this.mutex = mutex;
             this.memApi = memApi;
         }
 
@@ -206,18 +224,18 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
          */
         @Override
         public void onRegisterTaggedMsg(PollerTask pollerTask) {
-            if(pollerTask.channel() == channel && pollerTask.msg() instanceof TaggedMsg taggedMsg) {
-                int tag = taggedMsg.tag();
-                if(tag == Channel.SEQ) {
-                    if(carrier != null) {
-                        carrier.cas(Carrier.HOLDER, Carrier.FAILED);
+            if(pollerTask.channel() == channel && pollerTask.msg() instanceof TagWithRef tr) {
+                MemorySegment tag = tr.tag();
+                if(tag == MemorySegment.NULL) {
+                    if(seqRef != null) {
+                        seqRef.assign(Channel.FAILED);
                     }
-                    carrier = taggedMsg.carrier();
+                    seqRef = tr.ref();
                 }else {
-                    if(msgMap == null) {
-                        msgMap = IntMap.newLinkedMap(MAP_SIZE);
+                    if(refMap == null) {
+                        refMap = RefMap.newInstance(MAP_SIZE);
                     }
-                    msgMap.put(tag, taggedMsg);
+                    refMap.put(tag, tr.ref());
                 }
             }
         }
@@ -227,18 +245,19 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
          */
         @Override
         public void onUnregisterTaggedMsg(PollerTask pollerTask) {
-            if(pollerTask.channel() == channel && pollerTask.msg() instanceof TaggedMsg taggedMsg) {
-                int tag = taggedMsg.tag();
-                if(tag == Channel.SEQ) {
-                    if(carrier != null && taggedMsg.carrier() == carrier) {
-                        carrier.cas(Carrier.HOLDER, Carrier.FAILED);
-                        carrier = null;
+            if(pollerTask.channel() == channel && pollerTask.msg() instanceof TagWithRef taggedMsg) {
+                MemorySegment tag = taggedMsg.tag();
+                if(tag == MemorySegment.NULL) {
+                    if(seqRef != null && taggedMsg.ref() == seqRef) {
+                        seqRef.assign(Channel.FAILED);
+                        seqRef = null;
                     }
-                }else if(msgMap != null) {
-                    if(msgMap.remove(tag, taggedMsg)) {
-                        taggedMsg.carrier().cas(Carrier.HOLDER, Carrier.FAILED);
-                        if(msgMap.isEmpty()) {
-                            msgMap = null;
+                }else if(refMap != null) {
+                    Ref ref = taggedMsg.ref();
+                    if(refMap.remove(tag, ref)) {
+                        ref.assign(Channel.FAILED);
+                        if(refMap.isEmpty()) {
+                            refMap = null;
                         }
                     }
                 }
@@ -266,15 +285,16 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
         }
 
         private void ctl(int expected) {
-            channel.state().transform(state -> {
+            int state = mutex.pLock();
+            try {
                 int current = state & Constants.NET_RW;
                 if(current != expected) {
                     osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), current, expected, memApi);
-                    return expected - current + state;
-                }else {
-                    return state;
+                    state += expected - current;
                 }
-            }, Thread::onSpinWait);
+            } finally {
+                mutex.pUnlock(state);
+            }
         }
 
         private void handleReceived(MemorySegment segment, long len, long received) {
@@ -292,7 +312,8 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
                 long len = memorySegment.byteSize();
                 long readIndex = process(memorySegment);
                 if(readIndex >= 0L && readIndex < len) {
-                    tempBuffer = WriteBuffer.newHeapWriteBuffer(len);
+                    // Caching policy could use heap or non-heap, since we could manage it ourselves, let's save the trouble for GC
+                    tempBuffer = WriteBuffer.newNativeWriteBuffer(Poller.localMemApi(), len);
                     tempBuffer.writeSegment(readIndex == 0L ? memorySegment : memorySegment.asSlice(readIndex, len - readIndex));
                 }
             }else {
@@ -319,28 +340,28 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
             }
             if(!entityList.isEmpty()) {
                 for (Object entity : entityList) {
-                    TaggedResult taggedResult;
+                    Optional<TagMsg> tm;
                     try{
-                        taggedResult = channel.handler().onRecv(channel, entity);
+                        tm = channel.handler().onRecv(channel, entity);
                     }catch (RuntimeException e) {
                         log.error("Err occurred in onRecv()", e);
                         close();
                         return -1;
                     }
-                    if(taggedResult != null) {
-                        int tag = taggedResult.tag();
-                        if(tag == Channel.SEQ) {
-                            if(carrier != null) {
-                                carrier.cas(Carrier.HOLDER, taggedResult.entity());
-                                carrier = null;
+                    tm.ifPresent(tagMsg -> {
+                        MemorySegment tag = tagMsg.tag();
+                        if(tag == MemorySegment.NULL) {
+                            if(seqRef != null) {
+                                seqRef.assign(tagMsg.msg());
+                                seqRef = null;
                             }
-                        }else {
-                            TaggedMsg taggedMsg = msgMap.get(tag);
-                            if(taggedMsg != null && msgMap.remove(tag, taggedMsg)) {
-                                taggedMsg.carrier().cas(Carrier.HOLDER, taggedResult.entity());
+                        } else {
+                            Ref ref = refMap.get(tag);
+                            if(ref != null && refMap.remove(tag, ref)) {
+                                ref.assign(tagMsg.msg());
                             }
                         }
-                    }
+                    });
                 }
                 if(entityList.size() > MAX_LIST_SIZE) {
                     entityList = new ArrayList<>();
@@ -348,7 +369,7 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
                     entityList.clear();
                 }
             }
-            return readBuffer.readIndex();
+            return readBuffer.currentIndex();
         }
 
         private void close() {
@@ -357,13 +378,14 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
                     tempBuffer.close();
                     tempBuffer = null;
                 }
-                if (msgMap != null) {
-                    msgMap.asList().forEach(taggedMsg -> taggedMsg.carrier().cas(Carrier.HOLDER, Carrier.FAILED));
+                if (refMap != null) {
+                    refMap.forEach(ref -> ref.assign(Channel.FAILED));
                 }
-                if (carrier != null) {
-                    carrier.cas(Carrier.HOLDER, Carrier.FAILED);
+                if (seqRef != null) {
+                    seqRef.assign(Channel.FAILED);
                 }
-                channel.state().transform(state -> {
+                int state = mutex.pLock();
+                try {
                     int current = state & Constants.NET_RW;
                     if(current != Constants.NET_NONE) {
                         osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), current, Constants.NET_NONE, memApi);
@@ -374,8 +396,10 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
                     }else {
                         channel.writer().submit(new WriterTask(WriterTaskType.CLOSE, channel, null, null));
                     }
-                    return state | Constants.NET_PC;
-                }, Thread::onSpinWait);
+                    state |= Constants.NET_PC;
+                } finally {
+                    mutex.pUnlock(state);
+                }
                 try{
                     channel.handler().onRemoved(channel);
                 }catch (RuntimeException e) {
@@ -394,5 +418,153 @@ public sealed interface PollerNode permits PollerNode.SentryPollerNode, PollerNo
                 log.error("Failed to close protocol from poller", e);
             }
         }
+    }
+
+    /**
+     *   Segment map is a data structure used in communication between virtual threads and platform threads with memory uniqueness mapping
+     *   The design was to sacrifice some performance for more robust error checking mechanism, based on sorted linked list
+     */
+    final class RefMap {
+        private final Node[] nodes;
+        private final int mask;
+        private int count;
+
+        public static RefMap newInstance(int size) {
+            if(Integer.bitCount(size) != 1) {
+                throw new FrameworkException(ExceptionType.CONTEXT, "Size must be power of 2");
+            }
+            return new RefMap(size);
+        }
+
+        private RefMap(int size) {
+            this.nodes = new Node[size];
+            this.mask = size - 1;
+            this.count = 0;
+        }
+
+        private static final class Node {
+            int prefix;
+            MemorySegment seg;
+            Ref ref;
+            Node next;
+        }
+
+        private static int getPrefix(MemorySegment segment) {
+            long len = segment.byteSize();
+            if(len >= Integer.BYTES) {
+                return NativeUtil.getInt(segment, 0L);
+            } else if(len >= Short.BYTES) {
+                return NativeUtil.getShort(segment, 0L);
+            } else if(len >= Byte.BYTES) {
+                return NativeUtil.getByte(segment, 0L);
+            } else {
+                throw new FrameworkException(ExceptionType.CONTEXT, "segment is empty");
+            }
+        }
+
+        public Ref get(MemorySegment segment) {
+            if(NativeUtil.checkNullPointer(segment) || segment.isNative()) {
+                throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
+            }
+            int prefix = getPrefix(segment);
+            int index = prefix & mask;
+            Node cur = nodes[index];
+            while(cur != null) {
+                if(cur.prefix == prefix) {
+                    if(cur.seg.mismatch(segment) < 0) {
+                        return cur.ref;
+                    }else {
+                        cur = cur.next;
+                    }
+                } else if(cur.prefix > prefix) {
+                    return null;
+                } else {
+                    cur = cur.next;
+                }
+            }
+            return null;
+        }
+
+        public void put(MemorySegment segment, Ref ref) {
+            if(NativeUtil.checkNullPointer(segment) || segment.isNative() || ref == null) {
+                throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+            }
+            int prefix = getPrefix(segment);
+            Node n = new Node();
+            n.prefix = prefix;
+            n.seg = segment;
+            n.ref = ref;
+            int index = prefix & mask;
+            Node p = null, cur = nodes[index];
+            if(cur == null) {
+                nodes[index] = n;
+                count++;
+                return ;
+            }
+            while (cur != null && cur.prefix <= prefix) {
+                if(cur.prefix == prefix && cur.seg.mismatch(segment) < 0) {
+                    throw new FrameworkException(ExceptionType.NETWORK, "Same segment found");
+                }
+                p = cur;
+                cur = cur.next;
+            }
+            if(p == null) {
+                nodes[index] = n;
+                n.next = cur;
+            }else if(cur == null) {
+                p.next = n;
+            }else {
+                p.next = n;
+                n.next = cur;
+            }
+            count++;
+        }
+
+        public boolean remove(MemorySegment segment, Ref ref) {
+            if(NativeUtil.checkNullPointer(segment) || segment.isNative() || ref == null) {
+                throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
+            }
+            int prefix = getPrefix(segment);
+            int index = prefix & mask;
+            Node p = null, cur = nodes[index];
+            while (cur != null) {
+                if(cur.prefix == prefix && cur.seg.mismatch(segment) < 0) {
+                    if(p == null) {
+                        nodes[index] = cur.next;
+                    }else {
+                        p.next = cur.next;
+                    }
+                    count--;
+                    return true;
+                }else if(cur.prefix > prefix) {
+                    return false;
+                }else {
+                    p = cur;
+                    cur = cur.next;
+                }
+            }
+            return false;
+        }
+
+        public boolean isEmpty() {
+            return count == 0;
+        }
+
+        public int count() {
+            return count;
+        }
+
+        public void forEach(Consumer<Ref> refConsumer) {
+            if(count > 0) {
+                for (Node n : nodes) {
+                    Node ptr = n;
+                    while (ptr != null) {
+                        refConsumer.accept(ptr.ref);
+                        ptr = ptr.next;
+                    }
+                }
+            }
+        }
+
     }
 }

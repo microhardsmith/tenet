@@ -14,7 +14,7 @@ import java.util.Arrays;
 public sealed interface Allocator extends SegmentAllocator, AutoCloseable permits Allocator.HeapAllocator, Allocator.DirectAllocator {
 
     /**
-     *   Global heap allocator
+     *   Global heap allocator which delegates to free action to GC, relies on array for allocation
      */
     Allocator HEAP = new HeapAllocator();
 
@@ -25,8 +25,11 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
         return new DirectAllocator(memApi);
     }
 
+    /**
+     *   check allocated byteSize, must be within the range of Integer, which is 2GB for 64bits operating system
+     */
     static void checkByteSize(long byteSize) {
-        if(byteSize <= 0L) {
+        if(byteSize <= 0L || byteSize > Integer.MAX_VALUE) {
             throw new FrameworkException(ExceptionType.NATIVE, "ByteSize overflow");
         }
     }
@@ -44,21 +47,29 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
 
     /**
      *   Allocator for heap memory usage, The global HEAP instance should be used instead of creating a new one
+     *   Heap allocator is generally much slower than the non-heap one, because it's always requires to be zero-out
+     *   However, escape analyse may work and allocation goes to stack rather than heap, which makes the overall performance much better
      */
     final class HeapAllocator implements Allocator {
-        // A fair amount of waste wouldn't harm the system
+
+        private HeapAllocator() {
+            // external usage are forbidden
+        }
+
         @Override
         public MemorySegment allocate(long byteSize, long byteAlignment) {
             checkByteSize(byteSize);
             switch (Math.toIntExact(byteAlignment)) {
                 case Byte.BYTES -> {
-                    return MemorySegment.ofArray(new byte[Math.toIntExact(byteSize)]); // This is quite important, which makes the byte allocation will always be backed by a byte[] which could be fetched by heapBase()
+                    // This is quite important, which makes the byte allocation will always be backed by a byte[] which could be fetched by heapBase()
+                    return MemorySegment.ofArray(new byte[Math.toIntExact(byteSize)]);
                 }
                 case Short.BYTES, Integer.BYTES, Long.BYTES -> {
+                    // A fair amount of waste wouldn't harm the system
                     MemorySegment m = MemorySegment.ofArray(new long[Math.toIntExact((byteSize + 7) >> 3)]);
                     return m.byteSize() == byteSize ? m : m.asSlice(0L, byteSize);
                 }
-                default -> throw new FrameworkException(ExceptionType.NATIVE, STR."Unexpected alignment : \{byteAlignment}");
+                default -> throw new FrameworkException(ExceptionType.NATIVE, "Unexpected alignment : %d".formatted(byteAlignment));
             }
         }
 
@@ -73,13 +84,13 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
         }
     }
 
-    /**
-     *   DirectAllocator using malloc and free for native memory allocation, each allocation were recorded into the long array
-     */
     final class DirectAllocator implements Allocator {
+        /**
+         *   Normally, an allocator won't create many chunks at once, so let's start at a small value first
+         */
         private static final int SIZE = 8;
         private final MemApi memApi;
-        private long[] pointers;
+        private MemorySegment[] pointers;
         private int index = 0;
 
         public DirectAllocator(MemApi memApi) {
@@ -91,25 +102,22 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
             checkByteSize(byteSize);
             switch (Math.toIntExact(byteAlignment)) {
                 case Byte.BYTES, Short.BYTES, Integer.BYTES, Long.BYTES -> {
-                    // if malloc returns a NULL pointer, reinterpret still works
+                    // if malloc returns a NULL pointer, reinterpret would still work
                     MemorySegment ptr = memApi.allocateMemory(byteSize).reinterpret(byteSize);
                     if(NativeUtil.checkNullPointer(ptr)) {
                         throw new OutOfMemoryError();
                     }
+                    // lazy initialization
                     if(pointers == null) {
-                        pointers = new long[SIZE];
+                        pointers = new MemorySegment[SIZE];
                     }
                     if(index == pointers.length) {
-                        int newCapacity = pointers.length + (pointers.length >> 1);
-                        if(newCapacity < 0) {
-                            throw new FrameworkException(ExceptionType.CONTEXT, "Size overflow");
-                        }
-                        pointers = Arrays.copyOf(pointers, newCapacity);
+                        pointers = Arrays.copyOf(pointers, NativeUtil.grow(pointers.length));
                     }
-                    pointers[index++] = ptr.address();
+                    pointers[index++] = ptr;
                     return ptr;
                 }
-                default -> throw new FrameworkException(ExceptionType.NATIVE, STR."Unexpected alignment : \{byteAlignment}");
+                default -> throw new FrameworkException(ExceptionType.NATIVE, "Unexpected alignment : %d".formatted(byteAlignment));
             }
         }
 
@@ -120,9 +128,11 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
 
         @Override
         public void close() {
-            final int len = index;
-            for(int i = 0; i < len; i++) {
-                memApi.freeMemory(MemorySegment.ofAddress(pointers[i]));
+            if(pointers != null) {
+                final int len = index;
+                for(int i = 0; i < len; i++) {
+                    memApi.freeMemory(pointers[i]);
+                }
             }
         }
     }

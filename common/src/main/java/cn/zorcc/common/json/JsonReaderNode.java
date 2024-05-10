@@ -11,8 +11,19 @@ import java.lang.reflect.Type;
 import java.time.*;
 import java.util.*;
 
+/**
+ *   JsonReaderNode represents a linked-node reader pattern for JSON specified deserialization
+ */
 public abstract class JsonReaderNode {
+
+    /**
+     *   Prev linkedNode
+     */
     private JsonReaderNode prev;
+
+    /**
+     *   Determines if it's the first linkedNode in the linkedList
+     */
     private boolean notFirst = false;
 
     /**
@@ -36,12 +47,25 @@ public abstract class JsonReaderNode {
         return n;
     }
 
+    /**
+     *   Assign the value to current node
+     */
     protected abstract void setJsonObject(Object value);
 
+    /**
+     *   Get the deserialization result
+     */
     protected abstract Object getJsonObject();
 
+
+    /**
+     *   Try deserialization from current Node, return the next Node linked to it, or null if deserialization is complete
+     */
     protected abstract JsonReaderNode tryDeserialize();
 
+    /**
+     *   Start looping and deserializing from current JsonReaderNode
+     */
     public void deserialize() {
         JsonReaderNode p = this;
         while (p != null) {
@@ -67,7 +91,7 @@ public abstract class JsonReaderNode {
             if(sep == endByte) {
                 return true;
             }else {
-                readBuffer.setReadIndex(readBuffer.readIndex() - 1);
+                readBuffer.setReadIndex(readBuffer.currentIndex() - 1L);
                 return false;
             }
         }
@@ -112,7 +136,7 @@ public abstract class JsonReaderNode {
      *   Read and ignore empty bytes until counter expected byte, if other bytes occur, throw an exception
      */
     protected static void readExpected(ReadBuffer readBuffer, byte expected) {
-        while (readBuffer.readIndex() < readBuffer.size()) {
+        while (readBuffer.currentIndex() < readBuffer.size()) {
             byte b = readBuffer.readByte();
             if(shouldParse(b)) {
                 if(b == expected){
@@ -128,7 +152,7 @@ public abstract class JsonReaderNode {
      *   Read until the expected byte, convert the escape characters and write them into the writeBuffer
      */
     public static String readStringUntil(ReadBuffer readBuffer, WriteBuffer writeBuffer, byte expected) {
-        while (readBuffer.readIndex() < readBuffer.size()) {
+        while (readBuffer.currentIndex() < readBuffer.size()) {
             byte b = readBuffer.readByte();
             if(b == Constants.ESCAPE) {
                 readEscape(readBuffer, writeBuffer);
@@ -162,7 +186,7 @@ public abstract class JsonReaderNode {
      *   Read until next meaningful byte, throw an exception if not found
      */
     public static byte readNextByte(ReadBuffer readBuffer) {
-        while (readBuffer.readIndex() < readBuffer.size()) {
+        while (readBuffer.currentIndex() < readBuffer.size()) {
             byte b = readBuffer.readByte();
             if(shouldParse(b)) {
                 return b;
@@ -175,7 +199,7 @@ public abstract class JsonReaderNode {
      *   Read until next byte matches expected, return the matched one, throw an exception if not found
      */
     public static byte readUntilMatch(ReadBuffer readBuffer, WriteBuffer writeBuffer, byte... expected) {
-        while (readBuffer.readIndex() < readBuffer.size()) {
+        while (readBuffer.currentIndex() < readBuffer.size()) {
             byte b = readBuffer.readByte();
             for (byte b1 : expected) {
                 if(b == b1) {
@@ -238,39 +262,24 @@ public abstract class JsonReaderNode {
         if(type.isPrimitive()) {
             type = ReflectUtil.getWrapperClass(type);
         }
-        if(type == String.class) {
-            return str;
-        }else if(type == Byte.class) {
-            return Byte.valueOf(str);
-        }else if(type == Short.class) {
-            return Short.valueOf(str);
-        }else if(type == Integer.class) {
-            return Integer.valueOf(str);
-        }else if(type == Long.class) {
-            return Long.valueOf(str);
-        }else if(type == Float.class) {
-            return Float.valueOf(str);
-        }else if(type == Double.class) {
-            return Double.valueOf(str);
-        }else if(type == Character.class) {
-            return stringToCharacter(str);
-        }else if(type == LocalDate.class) {
-            return LocalDate.parse(str);
-        }else if(type == LocalTime.class) {
-            return LocalTime.parse(str);
-        }else if(type == OffsetTime.class) {
-            return OffsetTime.parse(str);
-        }else if(type == LocalDateTime.class) {
-            return LocalDateTime.parse(str);
-        }else if(type == ZonedDateTime.class) {
-            return ZonedDateTime.parse(str);
-        }else if(type == OffsetDateTime.class) {
-            return OffsetDateTime.parse(str);
-        }else if(type.isEnum()) {
-            return JsonParser.getMeta(type).enumMap().get(str);
-        }else {
-            throw new JsonParseException("Unsupported string type : %s".formatted(type.getName()));
-        }
+        return switch (type) {
+            case Class<?> t when t == String.class -> str;
+            case Class<?> t when t == Byte.class -> Byte.valueOf(str);
+            case Class<?> t when t == Short.class -> Short.valueOf(str);
+            case Class<?> t when t == Integer.class -> Integer.valueOf(str);
+            case Class<?> t when t == Long.class -> Long.valueOf(str);
+            case Class<?> t when t == Float.class -> Float.valueOf(str);
+            case Class<?> t when t == Double.class -> Double.valueOf(str);
+            case Class<?> t when t == Character.class -> stringToCharacter(str);
+            case Class<?> t when t == LocalDate.class -> LocalDate.parse(str);
+            case Class<?> t when t == LocalTime.class -> LocalTime.parse(str);
+            case Class<?> t when t == OffsetTime.class -> OffsetTime.parse(str);
+            case Class<?> t when t == LocalDateTime.class -> LocalDateTime.parse(str);
+            case Class<?> t when t == ZonedDateTime.class -> ZonedDateTime.parse(str);
+            case Class<?> t when t == OffsetDateTime.class -> OffsetDateTime.parse(str);
+            case Class<?> t when t.isEnum() -> JsonParser.getMeta(type).enumMap().get(str);
+            default -> throw new JsonParseException("Unsupported string type : %s".formatted(type.getName()));
+        };
     }
 
     private static Character stringToCharacter(String str) {
@@ -288,40 +297,29 @@ public abstract class JsonReaderNode {
         if(type.isPrimitive()) {
             type = ReflectUtil.getWrapperClass(type);
         }
-        if(type == Byte.class) {
-            return Byte.valueOf(str);
-        }else if(type == Short.class) {
-            return Short.valueOf(str);
-        }else if(type == Integer.class) {
-            return Integer.valueOf(str);
-        }else if(type == Long.class) {
-            return Long.valueOf(str);
-        }else if(type == Float.class) {
-            return Float.valueOf(str);
-        }else if(type == Double.class) {
-            return Double.valueOf(str);
-        }else {
-            throw new JsonParseException("Unsupported number type : %s".formatted(type.getName()));
-        }
+        return switch (type) {
+            case Class<?> t when t == Byte.class -> Byte.valueOf(str);
+            case Class<?> t when t == Short.class -> Short.valueOf(str);
+            case Class<?> t when t == Integer.class -> Integer.valueOf(str);
+            case Class<?> t when t == Long.class -> Long.valueOf(str);
+            case Class<?> t when t == Float.class -> Float.valueOf(str);
+            case Class<?> t when t == Double.class -> Double.valueOf(str);
+            default -> throw new JsonParseException("Unsupported number type : %s".formatted(type.getName()));
+        };
     }
 
     /**
      *   Set a json Collection value into the target
      */
     public static Object convertJsonCollectionValue(Class<?> type, List<Object> list) {
-        if(type.isArray()) {
-            return list.toArray();
-        }else if(SortedSet.class.isAssignableFrom(type)) {
-            return new TreeSet<>(list);
-        }else if(Set.class.isAssignableFrom(type)) {
-            return new HashSet<>(list);
-        }else if(Queue.class.isAssignableFrom(type)) {
-            return new ArrayDeque<>(list);
-        }else if(List.class.isAssignableFrom(type)) {
-            return list;
-        }else {
-            throw new JsonParseException(Constants.JSON_VALUE_TYPE_ERR);
-        }
+        return switch (type) {
+            case Class<?> t when t.isArray() -> list.toArray();
+            case Class<?> t when SortedSet.class.isAssignableFrom(t) -> new TreeSet<>(list);
+            case Class<?> t when Set.class.isAssignableFrom(t) -> new HashSet<>(list);
+            case Class<?> t when Queue.class.isAssignableFrom(t) -> new ArrayDeque<>(list);
+            case Class<?> t when List.class.isAssignableFrom(t) -> list;
+            default -> throw new JsonParseException(Constants.JSON_VALUE_TYPE_ERR);
+        };
     }
 
     public static Object convertJsonMapValue(Class<?> type, Map<String, Object> map) {

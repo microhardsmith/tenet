@@ -3,10 +3,14 @@ package cn.zorcc.common.bindings;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
+import cn.zorcc.common.structure.IntHolder;
+import cn.zorcc.common.structure.MemApi;
 import cn.zorcc.common.util.NativeUtil;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  *   Tenet shared bindings for all platforms
@@ -25,6 +29,16 @@ public final class TenetBinding {
     private static final MethodHandle rpMalloc;
     private static final MethodHandle rpRealloc;
     private static final MethodHandle rpFree;
+
+    /**
+     *   RpMalloc lock
+     */
+    private static final IntHolder state = new IntHolder(Constants.INITIAL);
+
+    /**
+     *   RpMalloc thread registries
+     */
+    private static final Set<Thread> registries = new HashSet<>();
 
     static {
         SymbolLookup symbolLookup = NativeUtil.loadLibrary(Constants.TENET);
@@ -86,7 +100,7 @@ public final class TenetBinding {
         }
     }
 
-    public static int rpInitialize() {
+    private static int rpInitialize() {
         try{
             return (int) rpInitializeHandle.invokeExact();
         }catch (Throwable throwable) {
@@ -94,7 +108,7 @@ public final class TenetBinding {
         }
     }
 
-    public static void rpFinalize() {
+    private static void rpFinalize() {
         try{
             rpFinalizeHandle.invokeExact();
         }catch (Throwable throwable) {
@@ -102,7 +116,7 @@ public final class TenetBinding {
         }
     }
 
-    public static void rpThreadInitialize() {
+    private static void rpThreadInitialize() {
         try{
             rpThreadInitializeHandle.invokeExact();
         }catch (Throwable throwable) {
@@ -110,7 +124,7 @@ public final class TenetBinding {
         }
     }
 
-    public static void rpThreadFinalize() {
+    private static void rpThreadFinalize() {
         try{
             rpThreadFinalizeHandle.invokeExact();
         }catch (Throwable throwable) {
@@ -118,7 +132,7 @@ public final class TenetBinding {
         }
     }
 
-    public static MemorySegment rpMalloc(long size) {
+    private static MemorySegment rpMalloc(long size) {
         try{
             return (MemorySegment) rpMalloc.invokeExact(size);
         }catch (Throwable throwable) {
@@ -126,7 +140,7 @@ public final class TenetBinding {
         }
     }
 
-    public static MemorySegment rpRealloc(MemorySegment ptr, long size) {
+    private static MemorySegment rpRealloc(MemorySegment ptr, long size) {
         try{
             return (MemorySegment) rpRealloc.invokeExact(ptr, size);
         }catch (Throwable throwable) {
@@ -134,12 +148,85 @@ public final class TenetBinding {
         }
     }
 
-    public static void rpFree(MemorySegment ptr) {
+    private static void rpFree(MemorySegment ptr) {
         try{
             rpFree.invokeExact(ptr);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }
+    }
+
+    private static final MemApi RPMALLOC_INSTANCE = new MemApi() {
+        @Override
+        public MemorySegment allocateMemory(long byteSize) {
+            return rpMalloc(byteSize);
+        }
+
+        @Override
+        public MemorySegment reallocateMemory(MemorySegment ptr, long newSize) {
+            return rpRealloc(ptr, newSize);
+        }
+
+        @Override
+        public void freeMemory(MemorySegment ptr) {
+            rpFree(ptr);
+        }
+    };
+
+    public static void rpmallocInitialize() {
+        state.transform(current -> {
+            if(current == Constants.INITIAL) {
+                if(TenetBinding.rpInitialize() < 0) {
+                    throw new FrameworkException(ExceptionType.NATIVE, "Failed to initialize RpMalloc allocator");
+                }
+                return Constants.RUNNING;
+            }else {
+                return current;
+            }
+        }, Thread::yield);
+    }
+
+    public static void rpMallocFinalize() {
+        state.transform(current -> {
+            if(current == Constants.RUNNING) {
+                TenetBinding.rpFinalize();
+                return Constants.STOPPED;
+            }else {
+                return current;
+            }
+        }, Thread::yield);
+    }
+
+    public static MemApi rpMallocThreadInitialize() {
+        Thread currentThread = Thread.currentThread();
+        if(currentThread.isVirtual()) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Shouldn't be initializing rpMalloc in virtual threads");
+        }
+        return state.extract(current -> {
+            if (current != Constants.RUNNING) {
+                throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED);
+            }
+            if (registries.add(currentThread)) {
+                TenetBinding.rpThreadInitialize();
+            }
+            return RPMALLOC_INSTANCE;
+        }, Thread::onSpinWait);
+    }
+
+    public static void rpMallocThreadFinalize() {
+        Thread currentThread = Thread.currentThread();
+        if(currentThread.isVirtual()) {
+            throw new FrameworkException(ExceptionType.NATIVE, "Shouldn't be initializing rpMalloc in virtual threads");
+        }
+        state.transform(current -> {
+            if(current != Constants.RUNNING) {
+                throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED);
+            }
+            if(registries.remove(currentThread)) {
+                TenetBinding.rpThreadFinalize();
+            }
+            return current;
+        }, Thread::onSpinWait);
     }
 
 }

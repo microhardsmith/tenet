@@ -23,10 +23,10 @@ public interface Provider {
     Sentry create(Channel channel);
 
     /**
-     *   Release current provider's resources, implementation could choose to override it
+     *   Release current provider's resources, implementation could choose to override it or not
      */
     default void close() {
-
+        // default close operation does nothing
     }
 
     static Provider newTcpProvider() {

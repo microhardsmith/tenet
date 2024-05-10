@@ -6,7 +6,7 @@ import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.network.Channel;
 import cn.zorcc.common.network.Handler;
-import cn.zorcc.common.network.TaggedResult;
+import cn.zorcc.common.network.TagMsg;
 import cn.zorcc.common.structure.ReadBuffer;
 import cn.zorcc.common.structure.WriteBuffer;
 import com.ongres.scram.client.ScramClient;
@@ -27,6 +27,7 @@ import java.time.format.DateTimeFormatterBuilder;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE;
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_TIME;
@@ -122,7 +123,7 @@ public final class PgHandler implements Handler {
     }
 
     @Override
-    public TaggedResult onRecv(Channel channel, Object data) {
+    public Optional<TagMsg> onRecv(Channel channel, Object data) {
         if(data instanceof PgMsg pgMsg) {
             return onMsg(pgMsg, channel);
         }else {
@@ -130,7 +131,7 @@ public final class PgHandler implements Handler {
         }
     }
 
-    private TaggedResult onMsg(PgMsg pgMsg, Channel channel) {
+    private Optional<TagMsg> onMsg(PgMsg pgMsg, Channel channel) {
         byte type = pgMsg.type();
         MemorySegment data = pgMsg.data();
         switch (state) {
@@ -142,7 +143,7 @@ public final class PgHandler implements Handler {
             case CONFIGURING_SCHEMA -> handleConfiguringSchema(type, channel);
             case CONFIGURING_ENCODING -> handleConfiguringEncoding(type, data);
         }
-        return null;
+        return Optional.empty();
     }
 
     private void handleStartUpMsg(byte type, MemorySegment data, Channel channel) {

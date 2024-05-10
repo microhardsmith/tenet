@@ -20,19 +20,24 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Thread)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 abstract class JmhTest {
-    /**
-     *   Custom args would be merged with these default settings
-     */
-    private static final String[] ARGS = new String[]{"-Xmx2G", "--enable-preview", "--enable-native-access=ALL-UNNAMED", "-XX:+UseZGC", "-XX:+ZGenerational"};
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
 
+    /**
+     *   Recommended jvm args:
+     *   --enable-native-access=ALL-UNNAMED
+     *   -DTENET_LIBRARY_PATH=C:/workspace/tenet-lib/lib
+     *   -Xmx2G
+     *   -XX:+UseZGC
+     *   -XX:+ZGenerational
+     *   --add-modules
+     *   jdk.incubator.vector
+     */
     public static void runTest(Class<?> launchClass) throws RunnerException {
         Options options = new OptionsBuilder()
                 .include(launchClass.getSimpleName())
                 .detectJvmArgs()
-                .jvmArgsAppend(ARGS)
                 .resultFormat(ResultFormatType.TEXT)
-                .result(STR."\{launchClass.getSimpleName()}_\{LocalDateTime.now().format(FORMATTER)}.txt")
+                .result("%s_%s.txt".formatted(launchClass.getSimpleName(), LocalDateTime.now().format(FORMATTER)))
                 .build();
         new Runner(options).run();
     }

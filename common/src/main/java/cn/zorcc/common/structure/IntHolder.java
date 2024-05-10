@@ -38,11 +38,11 @@ public final class IntHolder {
     }
 
     public int getValue() {
-        return value;
+        return (int) handle.get(this);
     }
 
     public void setValue(int newValue) {
-        this.value = newValue;
+        handle.set(this, newValue);
     }
 
     public int getVolatileValue() {
@@ -105,24 +105,29 @@ public final class IntHolder {
         return (int) handle.getAndBitwiseXor(this, xorValue);
     }
 
-    private static final int MASK = 1 << 31;
+    private static final int LOCK_VALUE = Integer.MIN_VALUE;
 
     /**
      *   Acquiring an int lock, note that this function is not reentrant, acquiring a lock multiple times will cause deadlock
      */
     public int lock(Runnable waitOp) {
         for( ; ; ) {
-            int current = getAndBitwiseOr(MASK);
-            if((current & MASK) != 0) {
+            int current = getVolatileValue();
+            if(current == LOCK_VALUE) {
                 waitOp.run();
-            }else {
+            }else if(casValue(current, LOCK_VALUE)) {
                 return current;
+            }else {
+                waitOp.run();
             }
         }
     }
 
-    public void unlock(int current, int next) {
-        if ((getAndBitwiseXor((current ^ next) | MASK) & MASK) == 0) {
+    /**
+     *   Pair with lock()
+     */
+    public void unlock(int next) {
+        if(next == LOCK_VALUE || !casValue(LOCK_VALUE, next)) {
             throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
         }
     }
@@ -131,12 +136,11 @@ public final class IntHolder {
      *   Transform current IntHolder to another state with exclusive lock guarded
      */
     public void transform(IntUnaryOperator operator, Runnable waitOp) {
-        int current = lock(waitOp);
-        int next = current;
+        int r = lock(waitOp);
         try{
-            next = operator.applyAsInt(current);
+            r = operator.applyAsInt(r);
         }finally {
-            unlock(current, next);
+            unlock(r);
         }
     }
 
@@ -144,11 +148,11 @@ public final class IntHolder {
      *   Extract current IntHolder's value without state change, guarded by exclusive lock
      */
     public <T> T extract(IntFunction<T> func, Runnable waitOp) {
-        int current = lock(waitOp);
+        int r = lock(waitOp);
         try{
-            return func.apply(current);
+            return func.apply(r);
         }finally {
-            unlock(current, current);
+            unlock(r);
         }
     }
 }

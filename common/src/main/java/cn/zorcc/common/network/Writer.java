@@ -2,7 +2,7 @@ package cn.zorcc.common.network;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
-import cn.zorcc.common.RpMalloc;
+import cn.zorcc.common.bindings.TenetBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.structure.Allocator;
@@ -46,7 +46,7 @@ public record Writer(
         int sequence = counter.getAndIncrement();
         return Thread.ofPlatform().name(STR."writer-\{sequence}").unstarted(() -> {
             log.info(STR."Initializing writer thread, sequence : \{sequence}");
-            MemApi memApi = config.isEnableRpMalloc() ? RpMalloc.tInitialize() : MemApi.DEFAULT;
+            MemApi memApi = config.isEnableRpMalloc() ? TenetBinding.rpMallocThreadInitialize() : MemApi.DEFAULT;
             ScopedValue.runWhere(MEM_SCOPE, memApi, () -> {
                 try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
                     IntMap<WriterNode> nodeMap = IntMap.newTreeMap(config.getWriterMapSize());
@@ -57,7 +57,7 @@ public record Writer(
                 }finally {
                     log.info(STR."Exiting writer thread, sequence : \{sequence}");
                     if(config.isEnableRpMalloc()) {
-                        RpMalloc.tRelease();
+                        TenetBinding.rpMallocThreadFinalize();
                     }
                 }
             });
@@ -96,9 +96,9 @@ public record Writer(
 
     private static void handleInitiateMsg(IntMap<WriterNode> nodeMap, WriterTask writerTask, MemApi memApi) {
         Object msg = writerTask.msg();
-        if(msg instanceof Protocol protocol) {
+        if(msg instanceof ProtocolWithMutex protocolWithMutex) {
             Channel channel = writerTask.channel();
-            WriterNode writerNode = new WriterNode.ProtocolWriterNode(nodeMap, channel, protocol, memApi);
+            WriterNode writerNode = new WriterNode.ProtocolWriterNode(nodeMap, channel, protocolWithMutex.protocol(), protocolWithMutex.mutex(), memApi);
             nodeMap.put(channel.socket().intValue(), writerNode);
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);

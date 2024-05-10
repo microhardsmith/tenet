@@ -2,7 +2,7 @@ package cn.zorcc.common.network;
 
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
-import cn.zorcc.common.RpMalloc;
+import cn.zorcc.common.bindings.TenetBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.structure.Allocator;
@@ -51,11 +51,11 @@ public record Poller(
         int sequence = counter.getAndIncrement();
         return Thread.ofPlatform().name(STR."poller-\{sequence}").unstarted(() -> {
             log.info(STR."Initializing poller thread, sequence : \{sequence}");
-            MemApi memApi = config.isEnableRpMalloc() ? RpMalloc.tInitialize() : MemApi.DEFAULT;
+            MemApi memApi = config.isEnableRpMalloc() ? TenetBinding.rpMallocThreadInitialize() : MemApi.DEFAULT;
+            int timeout = config.getPollerMuxTimeout();
             IntMap<PollerNode> nodeMap = IntMap.newTreeMap(config.getPollerMapSize());
             ScopedValue.runWhere(MEM_SCOPE, memApi, () -> {
                 try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
-                    Timeout timeout = Timeout.of(allocator, config.getPollerMuxTimeout());
                     int maxEvents = config.getPollerMaxEvents();
                     int readBufferSize = config.getPollerBufferSize();
                     // Note that different operating system using different alignment for their event's struct layout, however, malloc just makes it always align with 8 bytes, if not, let's force it
@@ -91,7 +91,7 @@ public record Poller(
                     log.info(STR."Exiting poller thread, sequence : \{sequence}");
                     osNetworkLibrary.exitMux(mux);
                     if(config.isEnableRpMalloc()) {
-                        RpMalloc.tRelease();
+                        TenetBinding.rpMallocThreadFinalize();
                     }
                 }
             });

@@ -47,6 +47,27 @@ public final class NativeUtil {
     private static final VarHandle ADDRESS_HANDLE = ValueLayout.ADDRESS_UNALIGNED.varHandle().withInvokeExactBehavior();
 
     /**
+     *   SIMD related
+     */
+    private static final boolean usingSIMD = shouldEnableSIMD();
+
+    public static boolean isUsingSIMD() {
+        return usingSIMD;
+    }
+
+    /**
+     *   Detect if current program could use SIMD instruction TODO currently we would just determine from the system property
+     */
+    private static boolean shouldEnableSIMD() {
+        return switch (System.getProperty("usingSIMD")) {
+            case null -> false;
+            case "true" -> true;
+            case "false" -> false;
+            default -> throw new FrameworkException(ExceptionType.CONTEXT, "Unrecognized enableSIMD property");
+        };
+    }
+
+    /**
      *   Detect if current program is running from a jar file
      */
     private static boolean runningFromJar() {
@@ -204,6 +225,10 @@ public final class NativeUtil {
         return true;
     }
 
+    /**
+     *   Underneath all the offset means byte offset, not element offset
+     */
+
     public static byte getByte(MemorySegment m, long offset) {
         return (byte) BYTE_HANDLE.get(m, offset);
     }
@@ -287,6 +312,24 @@ public final class NativeUtil {
         MemorySegment nativeSegment = allocator.allocate(ValueLayout.JAVA_BYTE, len);
         MemorySegment.copy(heapSegment, 0L, nativeSegment, 0L, len);
         return nativeSegment;
+    }
+
+    /**
+     *   Calculate a grown size for the collection with overflow checking
+     */
+    public static int grow(int currentSize) {
+        int nextSize = currentSize + (currentSize >> 1);
+        if(currentSize < 0 || nextSize < 0) {
+            throw new FrameworkException(ExceptionType.CONTEXT, "Possible overflow");
+        }
+        return nextSize;
+    }
+    public static long grow(long currentSize) {
+        long nextSize = currentSize << 1;//currentSize + (currentSize >> 1);
+        if(currentSize < 0L || nextSize < 0L) {
+            throw new FrameworkException(ExceptionType.CONTEXT, "Possible overflow");
+        }
+        return nextSize;
     }
 
 }

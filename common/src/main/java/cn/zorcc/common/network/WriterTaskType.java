@@ -1,5 +1,8 @@
 package cn.zorcc.common.network;
 
+/**
+ *   Used as writer msg type enum
+ */
 public enum WriterTaskType {
     /**
      *   Bind a protocol and channel with current writer instance

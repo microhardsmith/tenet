@@ -4,10 +4,7 @@ import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
-import cn.zorcc.common.structure.IntMap;
-import cn.zorcc.common.structure.MemApi;
-import cn.zorcc.common.structure.Wheel;
-import cn.zorcc.common.structure.WriteBuffer;
+import cn.zorcc.common.structure.*;
 
 import java.lang.foreign.MemorySegment;
 import java.time.Duration;
@@ -63,6 +60,7 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
         private final IntMap<WriterNode> nodeMap;
         private final Channel channel;
         private final Protocol protocol;
+        private final Mutex mutex;
         private final MemApi memApi;
         /**
          *   Tasks exist means current channel is not writable, incoming data should be wrapped into tasks list first, normally it's null
@@ -73,10 +71,11 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
          */
         private Duration timeout;
 
-        public ProtocolWriterNode(IntMap<WriterNode> nodeMap, Channel channel, Protocol protocol, MemApi memApi) {
+        public ProtocolWriterNode(IntMap<WriterNode> nodeMap, Channel channel, Protocol protocol, Mutex mutex, MemApi memApi) {
             this.nodeMap = nodeMap;
             this.channel = channel;
             this.protocol = protocol;
+            this.mutex = mutex;
             this.memApi = memApi;
         }
 
@@ -268,7 +267,8 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
         }
 
         private void ctl(int expected) {
-            channel.state().transform(state -> {
+            int state = mutex.wLock();
+            try{
                 if((state & Constants.NET_PC) != 0) {
                     // Poller has been closed, and it's not writable, so let's just close the Writer as well
                     clearTaskQueue();
@@ -279,11 +279,12 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
                     int to = from | expected;
                     if(to != from) {
                         osNetworkLibrary.ctlMux(channel.poller().mux(), channel.socket(), from, to, memApi);
-                        state += (to - from);
+                        state += to - from;
                     }
                 }
-                return state;
-            }, Thread::onSpinWait);
+            } finally {
+                mutex.wUnlock(state);
+            }
         }
 
         private void conditionalShutdown(Duration duration) {
@@ -300,14 +301,17 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
          */
         private void shutdown(Duration duration) {
             if(nodeMap.remove(channel.socket().intValue(), this)) {
-                channel.state().transform(current -> {
-                    if((current & Constants.NET_PC) != 0) {
+                int state = mutex.wLock();
+                try {
+                    if((state & Constants.NET_PC) != 0) {
                         closeProtocol();
                     }else {
                         shutdownProtocol(duration);
                     }
-                    return current | Constants.NET_WC;
-                }, Thread::onSpinWait);
+                    state |= Constants.NET_WC;
+                } finally {
+                    mutex.wUnlock(state);
+                }
                 checkPotentialExit();
             }
         }
@@ -325,14 +329,17 @@ public sealed interface WriterNode permits WriterNode.ProtocolWriterNode {
         private void close() {
             if (nodeMap.remove(channel.socket().intValue(), this)) {
                 clearTaskQueue();
-                channel.state().transform(current -> {
-                    if((current & Constants.NET_PC) != 0) {
+                int state = mutex.wLock();
+                try {
+                    if((state & Constants.NET_PC) != 0) {
                         closeProtocol();
                     }else {
                         channel.poller().submit(new PollerTask(PollerTaskType.CLOSE, channel, null));
                     }
-                    return current | Constants.NET_WC;
-                }, Thread::onSpinWait);
+                    state |= Constants.NET_WC;
+                } finally {
+                    mutex.wUnlock(state);
+                }
                 checkPotentialExit();
             }
         }

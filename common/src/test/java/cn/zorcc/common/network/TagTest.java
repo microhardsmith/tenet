@@ -6,14 +6,17 @@ import cn.zorcc.common.ExceptionType;
 import cn.zorcc.common.TestConstants;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.log.Logger;
+import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.structure.ReadBuffer;
 import cn.zorcc.common.structure.Wheel;
 import cn.zorcc.common.structure.WriteBuffer;
 import org.junit.jupiter.api.Test;
 
+import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -124,19 +127,21 @@ public class TagTest {
         public void onConnected(Channel channel) {
             log.info(STR."Client channel connected, loc : \{channel.loc()}");
             task.set(Wheel.wheel().addPeriodicJob(() -> {
-                Object result = channel.sendTaggedMsg(tag -> new Msg(tag, STR."Hello : \{counter.getAndIncrement()}"));
+                int seq = counter.getAndIncrement();
+                Msg msg = new Msg(seq, "Hello : %d".formatted(seq));
+                Object result = channel.sendTaggedMsg(msg, Allocator.HEAP.allocateFrom(ValueLayout.JAVA_INT, seq));
                 if(result instanceof String s) {
-                    log.info(STR."Client receiving msg : \{s}");
+                    log.info("Client receiving msg : %s".formatted(s));
                 }
             }, Duration.ZERO, Duration.ofSeconds(1)));
             Wheel.wheel().addJob(() -> channel.shutdown(Duration.ofSeconds(5)), Duration.ofSeconds(30));
         }
 
         @Override
-        public TaggedResult onRecv(Channel channel, Object data) {
+        public Optional<TagMsg> onRecv(Channel channel, Object data) {
             if(data instanceof Msg(int tag, String content)) {
                 log.info(STR."Client receiving msg : \{content}");
-                return new TaggedResult(tag, content);
+                return Optional.of(new TagMsg(Allocator.HEAP.allocateFrom(ValueLayout.JAVA_INT, tag), content));
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
@@ -144,7 +149,7 @@ public class TagTest {
 
         @Override
         public void onShutdown(Channel channel) {
-            channel.sendMsg(new Msg(Channel.SEQ, "Client going to shutdown"));
+            channel.sendMsg(new Msg(Integer.MIN_VALUE, "Client going to shutdown"));
             task.getAndSet(null);
         }
 
@@ -167,11 +172,11 @@ public class TagTest {
         }
 
         @Override
-        public TaggedResult onRecv(Channel channel, Object data) {
+        public Optional<TagMsg> onRecv(Channel channel, Object data) {
             if(data instanceof Msg msg) {
                 log.info(STR."Msg received : [\{msg.content()}]");
                 channel.sendMsg(msg);
-                return null;
+                return Optional.empty();
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
@@ -188,7 +193,7 @@ public class TagTest {
         }
     }
 
-    private record Msg(int tag, String content) {
+    record Msg(int tag, String content) {
 
     }
 
@@ -196,7 +201,7 @@ public class TagTest {
         @Override
         public void decode(ReadBuffer readBuffer, List<Object> entityList) {
             for( ; ; ) {
-                long currentIndex = readBuffer.readIndex();
+                long currentIndex = readBuffer.currentIndex();
                 if(readBuffer.available() < 8) {
                     return ;
                 }

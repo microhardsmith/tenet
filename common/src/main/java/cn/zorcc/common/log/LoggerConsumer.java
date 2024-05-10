@@ -3,7 +3,7 @@ package cn.zorcc.common.log;
 import cn.zorcc.common.AbstractLifeCycle;
 import cn.zorcc.common.Constants;
 import cn.zorcc.common.ExceptionType;
-import cn.zorcc.common.RpMalloc;
+import cn.zorcc.common.bindings.TenetBinding;
 import cn.zorcc.common.exception.FrameworkException;
 import cn.zorcc.common.structure.Allocator;
 import cn.zorcc.common.structure.MemApi;
@@ -36,7 +36,7 @@ public final class LoggerConsumer extends AbstractLifeCycle {
 
     private static Thread createConsumerThread(LogConfig logConfig) {
         return Thread.ofPlatform().name("tenet-log").unstarted(() -> {
-            MemApi memApi = logConfig.isUsingRpMalloc() ? RpMalloc.tInitialize() : MemApi.DEFAULT;
+            MemApi memApi = logConfig.isUsingRpMalloc() ? TenetBinding.rpMallocThreadInitialize() : MemApi.DEFAULT;
             try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
                 MemorySegment reserved = allocator.allocate(ValueLayout.JAVA_BYTE, logConfig.getBufferSize());
                 List<Consumer<LogEvent>> handlers = createEventHandlerList(logConfig, reserved, memApi);
@@ -79,7 +79,7 @@ public final class LoggerConsumer extends AbstractLifeCycle {
     @Override
     public void doInit() {
         if(Logger.getLogConfig().isUsingRpMalloc()) {
-            RpMalloc.initialize();
+            TenetBinding.rpmallocInitialize();
         }
         consumerThread.start();
     }
@@ -91,7 +91,7 @@ public final class LoggerConsumer extends AbstractLifeCycle {
         }
         consumerThread.join();
         if(Logger.getLogConfig().isUsingRpMalloc()) {
-            RpMalloc.release();
+            TenetBinding.rpMallocFinalize();
         }
     }
 }

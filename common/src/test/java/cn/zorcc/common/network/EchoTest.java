@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -131,10 +132,10 @@ public class EchoTest {
         }
 
         @Override
-        public TaggedResult onRecv(Channel channel, Object data) {
+        public Optional<TagMsg> onRecv(Channel channel, Object data) {
             if(data instanceof String str) {
                 log.info(STR."Client receiving msg : \{str}");
-                return null;
+                return Optional.empty();
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
@@ -171,11 +172,11 @@ public class EchoTest {
         }
 
         @Override
-        public TaggedResult onRecv(Channel channel, Object data) {
+        public Optional<TagMsg> onRecv(Channel channel, Object data) {
             if(data instanceof String str) {
                 log.info(STR."Msg received : [\{str}]");
                 channel.sendMsg(str);
-                return null;
+                return Optional.empty();
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
             }
@@ -196,7 +197,7 @@ public class EchoTest {
         @Override
         public void decode(ReadBuffer readBuffer, List<Object> entityList) {
             for( ; ; ) {
-                long currentIndex = readBuffer.readIndex();
+                long currentIndex = readBuffer.currentIndex();
                 if(readBuffer.available() < 4) {
                     return ;
                 }

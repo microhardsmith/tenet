@@ -11,6 +11,7 @@ import java.util.List;
 
 /**
  *   HashMap with int as key type, fixed size, better performance because of no auto-boxing
+ *   TODO after value types got published, this class might be considered to be rewrite
  */
 public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap {
 
@@ -40,17 +41,18 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
     T get(int identifier);
 
     /**
-     *   Put a new element in the IntMap, the element must not exist
+     *   Put a new element in the IntMap, the element must not exist, or data would be corrupted
      */
     void put(int identifier, T value);
 
     /**
-     *   Replace an element, the element must exist in the IntMap
+     *   Replace an element, the element must already exist in the IntMap, or an exception would be thrown
      */
     void replace(int identifier, T oldValue, T newValue);
 
     /**
      *   Remove an element from current IntMap, return if removed successfully
+     *   Note this function compares the identity using == , so the object must be the exact one using get()
      */
     boolean remove(int identifier, T value);
 
@@ -80,7 +82,7 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
             this.size = 0;
         }
 
-        static final class Node<T> {
+        private static final class Node<T> {
             int identifier;
             T value;
             Node<T> next;
@@ -88,12 +90,13 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
 
         @Override
         public T get(int identifier) {
-            Node<T> current = nodes[identifier & mask];
-            while (current != null) {
-                if(current.identifier == identifier) {
-                    return current.value;
+            int index = identifier & mask;
+            Node<T> cur = nodes[index];
+            while (cur != null) {
+                if(cur.identifier == identifier) {
+                    return cur.value;
                 }else {
-                    current = current.next;
+                    cur = cur.next;
                 }
             }
             return null;
@@ -112,14 +115,18 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
 
         @Override
         public void replace(int identifier, T oldValue, T newValue) {
-            int slot = identifier & mask;
-            Node<T> current = nodes[slot];
-            while (current != null) {
-                if(current.identifier == identifier && current.value == oldValue) {
-                    current.value = newValue;
-                    return ;
+            int index = identifier & mask;
+            Node<T> cur = nodes[index];
+            while (cur != null) {
+                if(cur.identifier == identifier) {
+                    if(cur.value == oldValue) {
+                        cur.value = newValue;
+                        return ;
+                    } else {
+                        throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
+                    }
                 }else {
-                    current = current.next;
+                    cur = cur.next;
                 }
             }
             throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
@@ -127,22 +134,27 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
 
         @Override
         public boolean remove(int identifier, T value) {
-            int slot = identifier & mask;
-            Node<T> head = nodes[slot];
-            if(head == null) {
-                return false;
+            final int slot = identifier & mask;
+            Node<T> prev = null, cur = nodes[slot];
+            while (cur != null) {
+                if(cur.identifier == identifier) {
+                    if(cur.value == value) {
+                        if(prev == null) {
+                            nodes[slot] = cur.next;
+                        }else {
+                            prev.next = cur.next;
+                        }
+                        size--;
+                        return true;
+                    }else {
+                        return false;
+                    }
+                }else {
+                    prev = cur;
+                    cur = cur.next;
+                }
             }
-            Node<T> prev = null, current = head;
-            while (current != null && current.identifier != identifier) {
-                prev = current;
-                current = current.next;
-            }
-            if(prev == null || current == null) {
-                return false;
-            }
-            prev.next = current.next;
-            current.next = null;
-            return true;
+            return false;
         }
 
         @Override
@@ -165,18 +177,18 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
     }
 
     final class IntTreeMap<T> implements IntMap<T> {
-        private final Entry<T>[] nodes;
+        private final Entry<T>[] entries;
         private final int mask;
         private int size;
 
         @SuppressWarnings("unchecked")
         IntTreeMap(int size) {
-            this.nodes = new Entry[size];
+            this.entries = new Entry[size];
             this.mask = size - 1;
             this.size = 0;
         }
 
-        static final class Entry<T> {
+        private static final class Entry<T> {
             int identifier;
             T value;
             Entry<T> left;
@@ -187,7 +199,7 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
 
         @Override
         public T get(int identifier) {
-            Entry<T> current = nodes[identifier & mask];
+            Entry<T> current = entries[identifier & mask];
             while (current != null) {
                 int i = current.identifier;
                 if(i == identifier) {
@@ -204,15 +216,15 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
         @Override
         public void put(int identifier, T value) {
             int slot = identifier & mask;
-            if(nodes[slot] == null) {
+            if(entries[slot] == null) {
                 Entry<T> entry = new Entry<>();
                 entry.identifier = identifier;
                 entry.value = value;
-                nodes[slot] = entry;
+                entries[slot] = entry;
                 size++;
                 return ;
             }
-            Entry<T> current = nodes[slot];
+            Entry<T> current = entries[slot];
             Entry<T> parent;
             do {
                 parent = current;
@@ -243,7 +255,7 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
 
         private void fixAfterInsertion(int slot, Entry<T> entry) {
             entry.color = false;
-            while (entry != null && entry != nodes[slot] && !entry.parent.color) {
+            while (entry != null && entry != entries[slot] && !entry.parent.color) {
                 if (parentOf(entry) == leftOf(parentOf(parentOf(entry)))) {
                     Entry<T> y = rightOf(parentOf(parentOf(entry)));
                     if(colorOf(y)) {
@@ -278,7 +290,7 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
                     }
                 }
             }
-            nodes[slot].color = true;
+            entries[slot].color = true;
         }
 
         private static <T> boolean colorOf(Entry<T> p) {
@@ -312,7 +324,7 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
                 }
                 r.parent = entry.parent;
                 if (entry.parent == null) {
-                    nodes[slot] = r;
+                    entries[slot] = r;
                 } else if (entry.parent.left == entry) {
                     entry.parent.left = r;
                 } else {
@@ -332,7 +344,7 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
                 }
                 l.parent = entry.parent;
                 if (entry.parent == null) {
-                    nodes[slot] = l;
+                    entries[slot] = l;
                 } else if (entry.parent.right == entry) {
                     entry.parent.right = l;
                 } else {
@@ -345,12 +357,16 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
 
         @Override
         public void replace(int identifier, T oldValue, T newValue) {
-            Entry<T> current = nodes[identifier & mask];
+            Entry<T> current = entries[identifier & mask];
             while (current != null) {
                 int i = current.identifier;
-                if(i == identifier && current.value == oldValue) {
-                    current.value = newValue;
-                    return ;
+                if(i == identifier) {
+                    if(current.value == oldValue) {
+                        current.value = newValue;
+                        return ;
+                    } else {
+                        throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);
+                    }
                 }else if(i < identifier) {
                     current = current.right;
                 }else {
@@ -362,13 +378,17 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
 
         @Override
         public boolean remove(int identifier, T value) {
-            int slot = identifier & mask;
-            Entry<T> current = nodes[slot];
+            final int slot = identifier & mask;
+            Entry<T> current = entries[slot];
             while (current != null) {
                 int i = current.identifier;
                 if(i == identifier) {
-                    deleteEntry(slot, current);
-                    return true;
+                    if(current.value == value) {
+                        deleteEntry(slot, current);
+                        return true;
+                    }else {
+                        return false;
+                    }
                 }else if(i < identifier) {
                     current = current.right;
                 }else {
@@ -390,7 +410,7 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
             if(replacement != null) {
                 replacement.parent = p.parent;
                 if (p.parent == null) {
-                    nodes[slot] = replacement;
+                    entries[slot] = replacement;
                 }else if (p == p.parent.left) {
                     p.parent.left  = replacement;
                 }else {
@@ -401,7 +421,7 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
                     fixAfterDeletion(slot, replacement);
                 }
             }else if (p.parent == null) {
-                nodes[slot] = null;
+                entries[slot] = null;
             }else {
                 if (p.color) {
                     fixAfterDeletion(slot, p);
@@ -418,7 +438,7 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
         }
 
         private void fixAfterDeletion(int slot, Entry<T> x) {
-            while (x != nodes[slot] && colorOf(x)) {
+            while (x != entries[slot] && colorOf(x)) {
                 if (x == leftOf(parentOf(x))) {
                     Entry<T> sib = rightOf(parentOf(x));
                     if (!colorOf(sib)) {
@@ -441,7 +461,7 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
                         setColor(parentOf(x), true);
                         setColor(rightOf(sib), true);
                         rotateLeft(slot, parentOf(x));
-                        x = nodes[slot];
+                        x = entries[slot];
                     }
                 } else {
                     Entry<T> sib = leftOf(parentOf(x));
@@ -465,7 +485,7 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
                         setColor(parentOf(x), true);
                         setColor(leftOf(sib), true);
                         rotateRight(slot, parentOf(x));
-                        x = nodes[slot];
+                        x = entries[slot];
                     }
                 }
             }
@@ -501,7 +521,7 @@ public sealed interface IntMap<T> permits IntMap.IntLinkedMap, IntMap.IntTreeMap
         public List<T> asList() {
             int count = count();
             Deque<Entry<T>> deque = new ArrayDeque<>(count);
-            for (Entry<T> n : nodes) {
+            for (Entry<T> n : entries) {
                 if(n != null) {
                     deque.addLast(n);
                 }

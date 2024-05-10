@@ -10,7 +10,7 @@ public final class PgDecoder implements Decoder {
     @Override
     public void decode(ReadBuffer readBuffer, List<Object> entityList) {
         for( ; ; ) {
-            long currentIndex = readBuffer.readIndex();
+            long currentIndex = readBuffer.currentIndex();
             if (readBuffer.available() < 5) {
                 return ;
             }

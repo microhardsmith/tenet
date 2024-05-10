@@ -40,14 +40,14 @@ public class IntMapTest extends JmhTest {
     }
 
     @Benchmark
-    public void testGetILinkedMap(Blackhole bh) {
+    public void testGetIntLinkedMap(Blackhole bh) {
         for(int i = 0; i < size; i++) {
             bh.consume(m2.get(i));
         }
     }
 
     @Benchmark
-    public void testGetITreeMap(Blackhole bh) {
+    public void testGetIntTreeMap(Blackhole bh) {
         for(int i = 0; i < size; i++) {
             bh.consume(m3.get(i));
         }
@@ -70,7 +70,7 @@ public class IntMapTest extends JmhTest {
     }
 
     @Benchmark
-    public void testPutILinkedMap(Blackhole bh) {
+    public void testPutIntLinkedMap(Blackhole bh) {
         IntMap<Object> m = IntMap.newLinkedMap(LENGTH);
         for(int i = 0; i < size; i++) {
             m.put(i, t);
@@ -79,7 +79,7 @@ public class IntMapTest extends JmhTest {
     }
 
     @Benchmark
-    public void testPutITreeMap(Blackhole bh) {
+    public void testPutIntTreeMap(Blackhole bh) {
         IntMap<Object> m = IntMap.newTreeMap(LENGTH);
         for(int i = 0; i < size; i++) {
             m.put(i, t);

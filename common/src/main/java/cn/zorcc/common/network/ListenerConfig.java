@@ -1,7 +1,10 @@
 package cn.zorcc.common.network;
 
+import cn.zorcc.common.serde.Serde;
+
 import java.util.function.Supplier;
 
+@Serde
 public final class ListenerConfig {
 
     /**

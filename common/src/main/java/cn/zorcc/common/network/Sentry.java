@@ -137,6 +137,9 @@ public interface Sentry {
             }
         }
 
+        /**
+         *   Performing SSL/TLS handshake, note that a successful handshake may take more than a few turns by pause and resuming the state
+         */
         private int handshake() {
             int r = clientSide ? SslBinding.sslConnect(ssl) : SslBinding.sslAccept(ssl);
             if(r == 1) {
@@ -156,6 +159,9 @@ public interface Sentry {
             }
         }
 
+        /**
+         *   Verify the server-side certificate for security reasons, throw an exception if the server certificate is illegal, thus closing the connection
+         */
         private void verifyCertificate() {
             if(clientSide) {
                 MemorySegment x509 = SslBinding.sslGetPeerCertificate(ssl);

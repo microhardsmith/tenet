@@ -28,7 +28,10 @@ public final class HttpHeader {
     public static final String V_CHUNKED = "chunked";
     public static final String K_AUTHORIZATION = "Authorization";
 
-    private static final int HEADER_SIZE = 16;
+    /**
+     *   Fixed http header array size, 8 would be enough for most applications
+     */
+    private static final int HEADER_SIZE = 8;
     private static final int MASK = HEADER_SIZE - 1;
     private Node[] nodes;
     private static final class Node {

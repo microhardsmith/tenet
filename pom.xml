@@ -4,7 +4,7 @@
 
   <groupId>cn.zorcc</groupId>
   <artifactId>tenet</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+  <version>0.0.1</version>
   <modules>
     <module>common</module>
     <module>orm</module>
@@ -29,19 +29,18 @@
   <developers>
     <developer>
       <name>benrush</name>
-      <email>15271845019@163.com</email>
+      <email>benrush0705@gmail.com</email>
     </developer>
   </developers>
 
   <properties>
-    <project.version>0.0.1</project.version>
     <java.version>22</java.version>
     <resource.delimiter>@</resource.delimiter>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <maven-compiler-plugin.version>3.12.1</maven-compiler-plugin.version>
     <maven.compiler.encoding>UTF-8</maven.compiler.encoding>
-    <maven-surefile-plugin.version>3.1.2</maven-surefile-plugin.version>
+    <maven-surefire-plugin.version>3.1.2</maven-surefire-plugin.version>
     <maven-assembly-plugin.version>3.6.0</maven-assembly-plugin.version>
     <jmh.version>1.37</jmh.version>
     <junit.version>5.10.1</junit.version>
@@ -85,12 +84,15 @@
         <version>${maven-compiler-plugin.version}</version>
         <configuration>
           <encoding>${maven.compiler.encoding}</encoding>
-          <verbose>true</verbose>
           <parameters>true</parameters> <!-- adding -parameter so that java reflection could see the parameter names -->
-          <enablePreview>true</enablePreview>
           <source>${java.version}</source>
           <target>${java.version}</target>
           <release>${java.version}</release>
+          <compilerArgs>
+            <arg>--enable-preview</arg>
+            <arg>--add-modules</arg>
+            <arg>jdk.incubator.vector</arg>
+          </compilerArgs>
           <annotationProcessorPaths>
             <path>
               <groupId>org.openjdk.jmh</groupId>
@@ -104,7 +106,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>${maven-surefile-plugin.version}</version>
+        <version>${maven-surefire-plugin.version}</version>
         <configuration>
           <skipTests>true</skipTests>
         </configuration>

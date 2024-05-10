@@ -20,6 +20,7 @@ import java.util.function.Consumer;
  *   Platform independent native interface for Network operation
  *
  */
+@SuppressWarnings("Duplicates")
 public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetworkLibrary, OsNetworkLibrary.LinuxNetworkLibrary, OsNetworkLibrary.MacOSNetworkLibrary {
 
     /**
@@ -86,7 +87,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
     /**
      *   Start multiplexing waiting for events, return the event count that triggered
      */
-    int wait(Mux mux, MemorySegment events, int maxEvents, Timeout timeout);
+    int wait(Mux mux, MemorySegment events, int maxEvents, int timeout);
 
     /**
      *   For poller to access the events array, the first return value represents the socket, the second value represents the event type
@@ -235,7 +236,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
     /**
      *   Blocking wait the mux until event triggered
      */
-    default int waitMux(Mux mux, MemorySegment events, int maxEvents, Timeout timeout) {
+    default int waitMux(Mux mux, MemorySegment events, int maxEvents, int timeout) {
         int r = wait(mux, events, maxEvents, timeout);
         if(r < 0) {
             int errno = Math.abs(r);
@@ -576,8 +577,8 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
         }
 
         @Override
-        public int wait(Mux mux, MemorySegment events, int maxEvents, Timeout timeout) {
-            return TenetWindowsBinding.epollWait(mux.winHandle(), events, maxEvents, timeout.val());
+        public int wait(Mux mux, MemorySegment events, int maxEvents, int timeout) {
+            return TenetWindowsBinding.epollWait(mux.winHandle(), events, maxEvents, timeout);
         }
 
         @Override
@@ -846,8 +847,8 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
         }
 
         @Override
-        public int wait(Mux mux, MemorySegment events, int maxEvents, Timeout timeout) {
-            return TenetLinuxBinding.epollWait(mux.epfd(), events, maxEvents, timeout.val());
+        public int wait(Mux mux, MemorySegment events, int maxEvents, int timeout) {
+            return TenetLinuxBinding.epollWait(mux.epfd(), events, maxEvents, timeout);
         }
 
         @Override
@@ -1125,8 +1126,8 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
         }
 
         @Override
-        public int wait(Mux mux, MemorySegment events, int maxEvents, Timeout timeout) {
-            return TenetMacosBinding.keventWait(mux.kqfd(), events, maxEvents, timeout.ptr());
+        public int wait(Mux mux, MemorySegment events, int maxEvents, int timeout) {
+            return TenetMacosBinding.keventWait(mux.kqfd(), events, maxEvents, timeout);
         }
 
         @Override
