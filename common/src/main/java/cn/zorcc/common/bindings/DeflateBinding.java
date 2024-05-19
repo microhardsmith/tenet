@@ -22,6 +22,7 @@ public final class DeflateBinding {
     public static final int LIBDEFLATE_FASTEST_LEVEL = 1;
     public static final int LIBDEFLATE_SLOWEST_LEVEL = 12;
     public static final int LIBDEFLATE_DEFAULT_LEVEL = 6;
+
     private static final MethodHandle allocCompressor;
     private static final MethodHandle freeCompressor;
     private static final MethodHandle allocDecompressor;

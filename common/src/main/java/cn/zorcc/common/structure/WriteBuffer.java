@@ -234,10 +234,16 @@ public final class WriteBuffer implements AutoCloseable {
     }
 
     /**
-     *   Return current written segment, from 0 ~ writeIndex, calling content() will not modify current writeBuffer's writeIndex
+     *   Return current written segment
      */
     public MemorySegment content() {
-        return writeIndex == segment.byteSize() ? segment : segment.asSlice(0L, writeIndex);
+        if(writeIndex == 0L) {
+            return MemorySegment.NULL;
+        }else if(writeIndex == segment.byteSize()) {
+            return segment;
+        }else {
+            return segment.asSlice(0L, writeIndex);
+        }
     }
 
     /**

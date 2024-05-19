@@ -411,27 +411,15 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
         private static final long dataOffset = epollEventLayout.byteOffset(MemoryLayout.PathElement.groupElement("data"));
         private static final long sockOffset = epollDataLayout.byteOffset(MemoryLayout.PathElement.groupElement("sock"));
 
-        private final int connectBlockCode;
-        private final int sendBlockCode;
-        private final int interruptCode;
-        private final int ipv4AddressLen;
-        private final int ipv6AddressLen;
-        private final int ipv4AddressSize;
-        private final int ipv6AddressSize;
-        private final int ipv4AddressAlign;
-        private final int ipv6AddressAlign;
-
-        public WindowsNetworkLibrary() {
-            connectBlockCode = TenetWindowsBinding.connectBlockCode();
-            sendBlockCode = TenetWindowsBinding.sendBlockCode();
-            interruptCode = TenetWindowsBinding.interruptCode();
-            ipv4AddressLen = TenetWindowsBinding.ipv4AddressLen();
-            ipv6AddressLen = TenetWindowsBinding.ipv6AddressLen();
-            ipv4AddressSize = TenetWindowsBinding.ipv4AddressSize();
-            ipv6AddressSize = TenetWindowsBinding.ipv6AddressSize();
-            ipv4AddressAlign = TenetWindowsBinding.ipv4AddressAlign();
-            ipv6AddressAlign = TenetWindowsBinding.ipv6AddressAlign();
-        }
+        private static final int connectBlockCode = TenetWindowsBinding.connectBlockCode();
+        private static final int sendBlockCode = TenetWindowsBinding.sendBlockCode();
+        private static final int interruptCode = TenetWindowsBinding.interruptCode();
+        private static final int ipv4AddressLen = TenetWindowsBinding.ipv4AddressLen();
+        private static final int ipv6AddressLen = TenetWindowsBinding.ipv6AddressLen();
+        private static final int ipv4AddressSize = TenetWindowsBinding.ipv4AddressSize();
+        private static final int ipv6AddressSize = TenetWindowsBinding.ipv6AddressSize();
+        private static final int ipv4AddressAlign = TenetWindowsBinding.ipv4AddressAlign();
+        private static final int ipv6AddressAlign = TenetWindowsBinding.ipv6AddressAlign();
 
         @Override
         public int connectBlockCode() {
@@ -507,7 +495,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
             try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
                 MemorySegment ptr = allocator.allocate(ValueLayout.JAVA_LONG);
                 check(TenetWindowsBinding.ipv4SocketCreate(ptr), "ipv4 socket create");
-                return new Socket(NativeUtil.getLong(ptr, 0L));
+                return Socket.ofLong(NativeUtil.getLong(ptr, 0L));
             }
         }
 
@@ -516,7 +504,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
             try(Allocator allocator = Allocator.newDirectAllocator(MemApi.DEFAULT)) {
                 MemorySegment ptr = allocator.allocate(ValueLayout.JAVA_LONG);
                 check(TenetWindowsBinding.ipv6SocketCreate(ptr), "ipv6 socket create");
-                return new Socket(NativeUtil.getLong(ptr, 0L));
+                return Socket.ofLong(NativeUtil.getLong(ptr, 0L));
             }
         }
 
@@ -617,7 +605,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
                 MemorySegment ptr = allocator.allocate(ValueLayout.JAVA_LONG);
                 check(TenetWindowsBinding.accept(socket.longValue(), ptr, addr, (int) addr.byteSize()), "accept");
                 long socketFd = NativeUtil.getLong(ptr, 0L);
-                return new Socket(socketFd);
+                return Socket.ofLong(socketFd);
             }
         }
 
@@ -690,27 +678,16 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
         private static final long eventsOffset = epollEventLayout.byteOffset(MemoryLayout.PathElement.groupElement("events"));
         private static final long dataOffset = epollEventLayout.byteOffset(MemoryLayout.PathElement.groupElement("data"));
         private static final long fdOffset = epollDataLayout.byteOffset(MemoryLayout.PathElement.groupElement("fd"));
-        private final int connectBlockCode;
-        private final int sendBlockCode;
-        private final int interruptCode;
-        private final int ipv4AddressLen;
-        private final int ipv6AddressLen;
-        private final int ipv4AddressSize;
-        private final int ipv6AddressSize;
-        private final int ipv4AddressAlign;
-        private final int ipv6AddressAlign;
 
-        public LinuxNetworkLibrary() {
-            connectBlockCode = TenetLinuxBinding.connectBlockCode();
-            sendBlockCode = TenetLinuxBinding.sendBlockCode();
-            interruptCode = TenetLinuxBinding.interruptCode();
-            ipv4AddressLen = TenetLinuxBinding.ipv4AddressLen();
-            ipv6AddressLen = TenetLinuxBinding.ipv6AddressLen();
-            ipv4AddressSize = TenetLinuxBinding.ipv4AddressSize();
-            ipv6AddressSize = TenetLinuxBinding.ipv6AddressSize();
-            ipv4AddressAlign = TenetLinuxBinding.ipv4AddressAlign();
-            ipv6AddressAlign = TenetLinuxBinding.ipv6AddressAlign();
-        }
+        private static final int connectBlockCode = TenetLinuxBinding.connectBlockCode();
+        private static final int sendBlockCode = TenetLinuxBinding.sendBlockCode();
+        private static final int interruptCode = TenetLinuxBinding.interruptCode();
+        private static final int ipv4AddressLen = TenetLinuxBinding.ipv4AddressLen();
+        private static final int ipv6AddressLen = TenetLinuxBinding.ipv6AddressLen();
+        private static final int ipv4AddressSize = TenetLinuxBinding.ipv4AddressSize();
+        private static final int ipv6AddressSize = TenetLinuxBinding.ipv6AddressSize();
+        private static final int ipv4AddressAlign = TenetLinuxBinding.ipv4AddressAlign();
+        private static final int ipv6AddressAlign = TenetLinuxBinding.ipv6AddressAlign();
 
         @Override
         public int connectBlockCode() {
@@ -781,13 +758,13 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
         @Override
         public Socket createIpv4Socket() {
             int fd = check(TenetLinuxBinding.ipv4SocketCreate(), "ipv4 socket create");
-            return new Socket(fd);
+            return Socket.ofInt(fd);
         }
 
         @Override
         public Socket createIpv6Socket() {
             int fd = check(TenetLinuxBinding.ipv6SocketCreate(), "ipv6 socket create");
-            return new Socket(fd);
+            return Socket.ofInt(fd);
         }
 
         @Override
@@ -884,7 +861,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
         @Override
         public Socket accept(Socket socket, MemorySegment addr, MemApi memApi) {
             int fd = check(TenetLinuxBinding.accept(socket.intValue(), addr, (int) addr.byteSize()), "accept");
-            return new Socket(fd);
+            return Socket.ofInt(fd);
         }
 
         @Override
@@ -961,28 +938,15 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
         private static final long filterOffset = keventLayout.byteOffset(MemoryLayout.PathElement.groupElement("filter"));
         private static final long flagsOffset = keventLayout.byteOffset(MemoryLayout.PathElement.groupElement("flags"));
 
-        private final int connectBlockCode;
-        private final int sendBlockCode;
-        private final int interruptCode;
-        private final int ipv4AddressLen;
-        private final int ipv6AddressLen;
-        private final int ipv4AddressSize;
-        private final int ipv6AddressSize;
-        private final int ipv4AddressAlign;
-        private final int ipv6AddressAlign;
-
-        public MacOSNetworkLibrary() {
-            connectBlockCode = TenetMacosBinding.connectBlockCode();
-            sendBlockCode = TenetMacosBinding.sendBlockCode();
-            interruptCode = TenetMacosBinding.interruptCode();
-            ipv4AddressLen = TenetMacosBinding.ipv4AddressLen();
-            ipv6AddressLen = TenetMacosBinding.ipv6AddressLen();
-            ipv4AddressSize = TenetMacosBinding.ipv4AddressSize();
-            ipv6AddressSize = TenetMacosBinding.ipv6AddressSize();
-            ipv4AddressAlign = TenetMacosBinding.ipv4AddressAlign();
-            ipv6AddressAlign = TenetMacosBinding.ipv6AddressAlign();
-        }
-
+        private static final int connectBlockCode = TenetMacosBinding.connectBlockCode();
+        private static final int sendBlockCode = TenetMacosBinding.sendBlockCode();
+        private static final int interruptCode = TenetMacosBinding.interruptCode();
+        private static final int ipv4AddressLen = TenetMacosBinding.ipv4AddressLen();
+        private static final int ipv6AddressLen = TenetMacosBinding.ipv6AddressLen();
+        private static final int ipv4AddressSize = TenetMacosBinding.ipv4AddressSize();
+        private static final int ipv6AddressSize = TenetMacosBinding.ipv6AddressSize();
+        private static final int ipv4AddressAlign = TenetMacosBinding.ipv4AddressAlign();
+        private static final int ipv6AddressAlign = TenetMacosBinding.ipv6AddressAlign();
 
         @Override
         public int connectBlockCode() {
@@ -1053,13 +1017,13 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
         @Override
         public Socket createIpv4Socket() {
             int fd = check(TenetMacosBinding.ipv4SocketCreate(), "ipv4 socket create");
-            return new Socket(fd);
+            return Socket.ofInt(fd);
         }
 
         @Override
         public Socket createIpv6Socket() {
             int fd = check(TenetMacosBinding.ipv6SocketCreate(), "ipv6 socket create");
-            return new Socket(fd);
+            return Socket.ofInt(fd);
         }
 
         @Override
@@ -1161,7 +1125,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
         @Override
         public Socket accept(Socket socket, MemorySegment addr, MemApi memApi) {
             int fd = check(TenetMacosBinding.accept(socket.intValue(), addr, (int) addr.byteSize()), "accept");
-            return new Socket(fd);
+            return Socket.ofInt(fd);
         }
 
         @Override

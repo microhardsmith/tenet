@@ -1,23 +1,53 @@
 package cn.zorcc.common.network;
 
-/**
- *  Socket abstraction, using long in windows, using int in Linux and macOS
- *  TODO value-based class
- */
-public record Socket(
-        int intValue,
-        long longValue
-) {
-    public Socket(int socket) {
-        this(socket, socket);
+public sealed interface Socket permits Socket.IntSocket, Socket.LongSocket{
+    /**
+     *   Return the int value of current socket implementation
+     */
+    int intValue();
+
+    /**
+     *   Return the int value of current socket implementation
+     */
+    long longValue();
+
+    static Socket ofInt(int value) {
+        return new IntSocket(value);
     }
 
-    public Socket(long socket) {
-        this(Math.toIntExact(socket), socket);
+    static Socket ofLong(long value) {
+        return new LongSocket(value);
     }
 
-    @Override
-    public int hashCode() {
-        return intValue;
+    /**
+     *   Socket used for linux and macOS
+     *   TODO value-based class
+     */
+    record IntSocket(int value) implements Socket {
+        @Override
+        public int intValue() {
+            return value;
+        }
+
+        @Override
+        public long longValue() {
+            return value;
+        }
+    }
+
+    /**
+     *   Socket used for Windows
+     *   TODO value-based class
+     */
+    record LongSocket(long value) implements Socket {
+        @Override
+        public int intValue() {
+            return Math.toIntExact(value);
+        }
+
+        @Override
+        public long longValue() {
+            return value;
+        }
     }
 }
