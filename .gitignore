@@ -1,0 +1,20 @@
+*/target/*
+
+# IntelliJ IDEA
+.idea/*
+*.iws
+*.iml
+*.ipr
+
+# VS Code
+.vscode/
+
+# Mac OS
+.DS_Store
+
+# JMH tests
+*.txt
+
+#log files
+*.log
+*.db
