@@ -24,6 +24,8 @@
         <module>tenet-net</module>
         <module>tenet-serde</module>
         <module>tenet-serde-processor</module>
+        <module>tenet-serde-testsuite</module>
+        <module>tenet-log</module>
     </modules>
     <inceptionYear>2022</inceptionYear>
 
