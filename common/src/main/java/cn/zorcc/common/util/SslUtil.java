@@ -23,6 +23,12 @@ public final class SslUtil {
      */
     private static final int SSL_CTRL_MODE = 33;
     private static final int SSL_CTRL_CLEAR_MODE = 78;
+    /**
+     *   Some default SSL_CTX options
+     */
+    private static final long SSL_OP_DISABLE_TLSEXT_CA_NAMES = 1L << 9;
+    private static final long SSL_OP_ENABLE_KTLS = 1 << 3;
+
 
     private SslUtil() {
         throw new UnsupportedOperationException();
@@ -32,6 +38,7 @@ public final class SslUtil {
      *   configure CTX for non-blocking socket with several preassigned options
      */
     public static void configureCtx(MemorySegment ctx) {
+        // overwriting CTX mode
         if((SslBinding.ctxCtrl(ctx, SSL_CTRL_MODE, Constants.SSL_MODE_ENABLE_PARTIAL_WRITE, MemorySegment.NULL) & Constants.SSL_MODE_ENABLE_PARTIAL_WRITE) == 0) {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
@@ -39,6 +46,12 @@ public final class SslUtil {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
         if(((~SslBinding.ctxCtrl(ctx, SSL_CTRL_CLEAR_MODE, Constants.SSL_MODE_AUTO_RETRY, MemorySegment.NULL)) & Constants.SSL_MODE_AUTO_RETRY) == 0) {
+            throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
+        }
+        // overwriting CTX options
+        long currentOptions = SslBinding.ctxGetOptions(ctx);
+        long newOptions = currentOptions | SSL_OP_DISABLE_TLSEXT_CA_NAMES | SSL_OP_ENABLE_KTLS;
+        if(currentOptions != newOptions && SslBinding.ctxSetOptions(ctx, newOptions) != newOptions) {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }
     }

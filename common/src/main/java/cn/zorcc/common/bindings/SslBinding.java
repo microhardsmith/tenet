@@ -23,6 +23,8 @@ public final class SslBinding {
     private static final MethodHandle sslCtxUsePrivateKeyFileMethod;
     private static final MethodHandle sslCtxCheckPrivateKeyMethod;
     private static final MethodHandle sslCtxCtrlMethod;
+    private static final MethodHandle sslCtxGetOptions;
+    private static final MethodHandle sslCtxSetOptions;
     private static final MethodHandle sslCtxSetVerifyMethod;
     private static final MethodHandle sslCtxSetDefaultVerifyPath;
     private static final MethodHandle sslCtxLoadVerifyLocations;
@@ -57,6 +59,10 @@ public final class SslBinding {
                 FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         sslCtxCtrlMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_ctrl",
                 FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+        sslCtxGetOptions = NativeUtil.methodHandle(ssl, "SSL_CTX_get_options",
+                FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+        sslCtxSetOptions = NativeUtil.methodHandle(ssl, "SSL_CTX_set_options",
+                FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
         sslCtxSetVerifyMethod = NativeUtil.methodHandle(ssl, "SSL_CTX_set_verify",
                 FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         sslCtxSetDefaultVerifyPath = NativeUtil.methodHandle(ssl, "SSL_CTX_set_default_verify_paths",
@@ -141,6 +147,22 @@ public final class SslBinding {
     public static long ctxCtrl(MemorySegment ctx, int cmd, long mode, MemorySegment ptr) {
         try{
             return (long) sslCtxCtrlMethod.invokeExact(ctx, cmd, mode, ptr);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static long ctxGetOptions(MemorySegment ctx) {
+        try{
+            return (long) sslCtxGetOptions.invokeExact(ctx);
+        }catch (Throwable throwable) {
+            throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
+        }
+    }
+
+    public static long ctxSetOptions(MemorySegment ctx, long option) {
+        try{
+            return (long) sslCtxSetOptions.invokeExact(ctx, option);
         }catch (Throwable throwable) {
             throw new FrameworkException(ExceptionType.NATIVE, Constants.UNREACHED, throwable);
         }

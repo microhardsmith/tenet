@@ -155,7 +155,7 @@ public final class ReadBuffer {
      *   Creating a byte search pattern with SIMD inside a register algorithm, in short, SWAR search algorithm
      */
     public static long compilePattern(byte b) {
-        long pattern = b & 0xFFL;
+        long pattern = Byte.toUnsignedLong(b);
         return pattern
                 | (pattern << 8)
                 | (pattern << 16)

@@ -359,7 +359,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
             configureClientSocket(clientSocket, socketConfig);
             check(getIpv6Address(clientAddr, address), "get client's ipv6 address");
             String ip = address.getString(0L, StandardCharsets.UTF_8);
-            int port = 0xFFFF & getIpv6Port(clientAddr);
+            int port = Short.toUnsignedInt(getIpv6Port(clientAddr));
             if(ip.startsWith(IPV4_MAPPED_FORMAT)) {
                 return new SocketAndLoc(clientSocket, new Loc(IpType.IPV4, ip.substring(IPV4_PREFIX_LENGTH), port));
             }else {
@@ -376,7 +376,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
             configureClientSocket(clientSocket, socketConfig);
             check(getIpv4Address(clientAddr, address), "get client's ipv4 address");
             String ip = address.getString(0L, StandardCharsets.UTF_8);
-            int port = 0xFFFF & getIpv4Port(clientAddr);
+            int port = Short.toUnsignedInt(getIpv4Port(clientAddr));
             Loc clientLoc = new Loc(IpType.IPV4, ip, port);
             return new SocketAndLoc(clientSocket, clientLoc);
         }
