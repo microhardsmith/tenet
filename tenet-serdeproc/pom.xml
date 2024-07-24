@@ -8,19 +8,15 @@
         <artifactId>tenet</artifactId>
         <version>0.0.3</version>
     </parent>
-    <artifactId>tenet-net</artifactId>
-    <packaging>jar</packaging>
+
+    <artifactId>tenet-serdeproc</artifactId>
 
     <dependencies>
         <dependency>
             <groupId>cc.zorcc</groupId>
-            <artifactId>tenet-core</artifactId>
+            <artifactId>tenet-serde</artifactId>
             <version>${project.version}</version>
         </dependency>
     </dependencies>
-
-    <build>
-
-    </build>
 
 </project>

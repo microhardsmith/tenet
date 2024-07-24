@@ -1,5 +1,3 @@
-module tenet.serde {
-    requires tenet.core;
-
-    exports cc.zorcc.serde;
+module cc.zorcc.tenet.serde {
+    exports cc.zorcc.tenet.serde;
 }

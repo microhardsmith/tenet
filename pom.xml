@@ -6,7 +6,7 @@
 
     <groupId>cc.zorcc</groupId>
     <artifactId>tenet</artifactId>
-    <version>0.0.2</version>
+    <version>0.0.3</version>
     <packaging>pom</packaging>
     <name>tenet project</name>
     <!-- currently not registered, might change in the future -->
@@ -23,7 +23,7 @@
         <module>tenet-core</module>
         <module>tenet-net</module>
         <module>tenet-serde</module>
-        <module>tenet-serde-processor</module>
+        <module>tenet-serdeproc</module>
         <module>tenet-serde-testsuite</module>
         <module>tenet-log</module>
     </modules>
@@ -73,7 +73,7 @@
             <groupId>org.openjdk.jmh</groupId>
             <artifactId>jmh-generator-annprocess</artifactId>
             <version>${jmh.version}</version>
-            <scope>provided</scope>
+            <scope>test</scope>
         </dependency>
 
     </dependencies>
