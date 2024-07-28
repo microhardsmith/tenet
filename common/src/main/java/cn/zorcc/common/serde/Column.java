@@ -9,7 +9,7 @@ import java.util.function.Supplier;
  */
 public record Column<T> (
         String name,
-        RecurClass type,
+        RecursiveType type,
         Function<String, String> tagMapping,
         BiConsumer<Supplier<T>, Object> assigner,
         Function<T, Object> fetcher

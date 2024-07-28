@@ -486,7 +486,7 @@ public final class SerdeProcessor extends AbstractProcessor {
          */
         Source createSource() {
             Source source = new Source(packageName(), className(), Set.of("Handle<%s>".formatted(targetType())));
-            source.registerImports(Handle.class, MethodHandle.class, MethodHandles.class, List.class, Supplier.class, Accessor.class, Column.class, RecurClass.class, SerdeContext.class, Objects.class);
+            source.registerImports(Handle.class, MethodHandle.class, MethodHandles.class, List.class, Supplier.class, Accessor.class, Column.class, RecursiveType.class, SerdeContext.class, Objects.class);
             return source;
         }
     }

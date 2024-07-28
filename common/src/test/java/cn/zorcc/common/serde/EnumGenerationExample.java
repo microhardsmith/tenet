@@ -15,11 +15,11 @@ public final class EnumGenerationExample implements Handle<EnumBean> {
             MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(EnumBean.class, MethodHandles.lookup());
 
             MethodHandle aGetHandle = lookup.findGetter(EnumBean.class, "a", int.class);
-            Column<EnumBean> aColumn = new Column<>("a", new RecurClass(int.class, List.of()), EnumGenerationExample::aTag, EnumGenerationExample::aAssign, EnumGenerationExample::aGet);
+            Column<EnumBean> aColumn = new Column<>("a", new RecursiveType(int.class, List.of()), EnumGenerationExample::aTag, EnumGenerationExample::aAssign, EnumGenerationExample::aGet);
             aAccessor = new Accessor<>(aGetHandle, aColumn);
 
             MethodHandle bGetHandle = lookup.findGetter(EnumBean.class, "b", String.class);
-            Column<EnumBean> bColumn = new Column<>("b", new RecurClass(String.class, List.of()), i -> i, EnumGenerationExample::bAssign, EnumGenerationExample::bGet);
+            Column<EnumBean> bColumn = new Column<>("b", new RecursiveType(String.class, List.of()), i -> i, EnumGenerationExample::bAssign, EnumGenerationExample::bGet);
             bAccessor = new Accessor<>(bGetHandle, bColumn);
 
             GenerationContext.registerHandle(EnumBean.class, new EnumGenerationExample());

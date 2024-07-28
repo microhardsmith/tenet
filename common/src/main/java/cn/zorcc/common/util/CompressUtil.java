@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 import java.util.zip.*;
 
 /**

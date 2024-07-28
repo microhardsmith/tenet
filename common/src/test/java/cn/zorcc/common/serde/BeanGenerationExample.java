@@ -13,12 +13,12 @@ public final class BeanGenerationExample implements Handle<Bean> {
 
             MethodHandle aGetHandle = lookup.findGetter(Bean.class, "a", int.class);
             MethodHandle aSetHandle = lookup.findSetter(Bean.class, "a", int.class);
-            Column<Bean> aColumn = new Column<>("a", new RecurClass(int.class, List.of()), BeanGenerationExample::aTag, BeanGenerationExample::aAssign, BeanGenerationExample::aGet);
+            Column<Bean> aColumn = new Column<>("a", new RecursiveType(int.class, List.of()), BeanGenerationExample::aTag, BeanGenerationExample::aAssign, BeanGenerationExample::aGet);
             aAccessor = new Accessor<>(aGetHandle, aSetHandle, aColumn);
 
             MethodHandle bGetHandle = lookup.findGetter(Bean.class, "b", String.class);
             MethodHandle bSetHandle = lookup.findSetter(Bean.class, "b", String.class);
-            Column<Bean> bColumn = new Column<>("b", new RecurClass(String.class, List.of()), i -> i, BeanGenerationExample::bAssign, BeanGenerationExample::bGet);
+            Column<Bean> bColumn = new Column<>("b", new RecursiveType(String.class, List.of()), i -> i, BeanGenerationExample::bAssign, BeanGenerationExample::bGet);
             bAccessor = new Accessor<>(bGetHandle, bSetHandle, bColumn);
 
             GenerationContext.registerHandle(Bean.class, new BeanGenerationExample());

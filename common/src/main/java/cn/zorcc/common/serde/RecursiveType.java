@@ -9,12 +9,12 @@ import java.util.List;
 /**
  *   Representing class with generic type information recursively, this class shouldn't be renamed as it's used in source code generation
  */
-public record RecurClass(
+public record RecursiveType(
         Class<?> currentClass,
-        List<RecurClass> recurClasses
+        List<RecursiveType> recursiveTypes
 ) {
-    public RecurClass {
-        if(currentClass == null || recurClasses == null) {
+    public RecursiveType {
+        if(currentClass == null || recursiveTypes == null) {
             throw new FrameworkException(ExceptionType.ANNO, Constants.UNREACHED);
         }
     }

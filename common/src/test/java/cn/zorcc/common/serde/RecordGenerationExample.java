@@ -14,11 +14,11 @@ public final class RecordGenerationExample implements Handle<RecordBean> {
             MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(RecordBean.class, MethodHandles.lookup());
 
             MethodHandle aGetHandle = lookup.findGetter(RecordBean.class, "a", int.class);
-            Column<RecordBean> aColumn = new Column<>("a", new RecurClass(int.class, List.of()), RecordGenerationExample::aTag, RecordGenerationExample::aAssign, RecordGenerationExample::aGet);
+            Column<RecordBean> aColumn = new Column<>("a", new RecursiveType(int.class, List.of()), RecordGenerationExample::aTag, RecordGenerationExample::aAssign, RecordGenerationExample::aGet);
             aAccessor = new Accessor<>(aGetHandle, aColumn);
 
             MethodHandle bGetHandle = lookup.findGetter(RecordBean.class, "b", String.class);
-            Column<RecordBean> bColumn = new Column<>("b", new RecurClass(String.class, List.of()), i -> i, RecordGenerationExample::bAssign, RecordGenerationExample::bGet);
+            Column<RecordBean> bColumn = new Column<>("b", new RecursiveType(String.class, List.of()), i -> i, RecordGenerationExample::bAssign, RecordGenerationExample::bGet);
             bAccessor = new Accessor<>(bGetHandle, bColumn);
 
             GenerationContext.registerHandle(RecordBean.class, new RecordGenerationExample());
