@@ -2,6 +2,7 @@ module cc.zorcc.tenet.core {
     requires cc.zorcc.tenet.serde;
     requires static cc.zorcc.tenet.serdeproc;
     requires jdk.incubator.vector;
+    requires org.jspecify;
 
     exports cc.zorcc.tenet.core.bindings;
     exports cc.zorcc.tenet.core.json;

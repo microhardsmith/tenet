@@ -6,9 +6,13 @@
     <parent>
         <groupId>cc.zorcc</groupId>
         <artifactId>tenet</artifactId>
-        <version>0.0.3</version>
+        <version>0.0.4</version>
     </parent>
     <artifactId>tenet-serde</artifactId>
     <packaging>jar</packaging>
+
+    <dependencies>
+
+    </dependencies>
 
 </project>

@@ -1,9 +1,12 @@
 package cc.zorcc.tenet.serde;
 
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+
 @FunctionalInterface
 public interface AssignerFunc<T> {
     /**
      *   Assigning value to the builder instance
      */
-    void assign(Builder<T> builder, Object value);
+    void assign(@NonNull Builder<T> builder, @Nullable Object value);
 }

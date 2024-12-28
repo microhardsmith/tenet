@@ -19,12 +19,14 @@ public final class AllocatorTest {
      */
     @Test
     public void testHeapAllocation() {
-        MemorySegment segment = Allocator.HEAP.allocate(ValueLayout.JAVA_INT, 2);
-        Std.setInt(segment, 0L, 1);
-        Std.setInt(segment, 4L, 2);
-        Assertions.assertEquals(Std.getInt(segment, 0L), 1);
-        Assertions.assertEquals(Std.getInt(segment, 4L), 2);
-        Assertions.assertFalse(segment.isNative());
+        try(Allocator allocator = Allocator.newHeapAllocator()) {
+            MemorySegment segment = allocator.allocate(ValueLayout.JAVA_INT, 2);
+            Std.setInt(segment, 0L, 1);
+            Std.setInt(segment, 4L, 2);
+            Assertions.assertEquals(Std.getInt(segment, 0L), 1);
+            Assertions.assertEquals(Std.getInt(segment, 4L), 2);
+            Assertions.assertFalse(segment.isNative());
+        }
     }
 
     /**

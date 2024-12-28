@@ -1,5 +1,7 @@
 package cc.zorcc.tenet.core;
 
+import org.jspecify.annotations.NonNull;
+
 import java.io.File;
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
@@ -102,8 +104,8 @@ public final class Dyn {
      *   Note that, for a process, a dynamic library could be loaded many times, but only one copy would exist in process's memory
      *   So, calling loadDynLibrary() with same libraryName multiple times will always return the SymbolLookup targeting at the same area of the process memory with no harm
      */
-    public static SymbolLookup loadDynLibrary(String libraryName) {
-        if(libraryName == null || libraryName.isBlank()) {
+    public static @NonNull SymbolLookup loadDynLibrary(@NonNull String libraryName) {
+        if(libraryName.isBlank()) {
             throw new TenetException(ExceptionType.NATIVE, "Library name is empty");
         }
         return SymbolLookup.libraryLookup(concatDynLibraryPath(libraryName), Arena.global());
@@ -112,10 +114,11 @@ public final class Dyn {
     /**
      *   Concat absolute library path with naming convention
      */
-    private static String concatDynLibraryPath(String libraryName) {
+    private static @NonNull String concatDynLibraryPath(@NonNull String libraryName) {
         if(extFormat == null) {
             throw new TenetException(ExceptionType.NATIVE, "Extension format not found");
         }
+        // Different operating system have different extension format
         String targetName = libraryName + extFormat;
         // Try system library if provided by operating system
         if(sysPath != null) {

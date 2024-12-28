@@ -246,8 +246,8 @@ public final class TomlParser {
      */
     private TomlState transform(TomlState currentState) {
         return switch (currentState) {
-            case null -> throw new TomlException(UNREACHED);
             case INITIAL -> parseInitial();
+            default -> throw new TomlException(UNREACHED);
         };
     }
 
@@ -324,7 +324,7 @@ public final class TomlParser {
     }
 
     private TomlState parseValue() {
-
+        return null;
     }
 
     /**

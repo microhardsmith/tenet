@@ -1,10 +1,7 @@
-package cc.zorcc.tenet.serdetest;
+package cc.zorcc.tenet.serdeproc.example;
 
 import cc.zorcc.tenet.serde.Serde;
 
-/**
- *   Empty enum bean test
- */
 @Serde
 public enum Empty {
     T1,

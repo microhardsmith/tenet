@@ -6,20 +6,20 @@
     <parent>
         <groupId>cc.zorcc</groupId>
         <artifactId>tenet</artifactId>
-        <version>0.0.3</version>
+        <version>0.0.4</version>
     </parent>
     <artifactId>tenet-core</artifactId>
     <packaging>jar</packaging>
 
     <dependencies>
         <dependency>
-            <groupId>cc.zorcc</groupId>
+            <groupId>${project.groupId}</groupId>
             <artifactId>tenet-serde</artifactId>
             <version>${project.version}</version>
         </dependency>
 
         <dependency>
-            <groupId>cc.zorcc</groupId>
+            <groupId>${project.groupId}</groupId>
             <artifactId>tenet-serdeproc</artifactId>
             <version>${project.version}</version>
             <scope>provided</scope>

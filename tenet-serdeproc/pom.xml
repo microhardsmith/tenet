@@ -6,17 +6,34 @@
     <parent>
         <groupId>cc.zorcc</groupId>
         <artifactId>tenet</artifactId>
-        <version>0.0.3</version>
+        <version>0.0.4</version>
     </parent>
 
     <artifactId>tenet-serdeproc</artifactId>
 
     <dependencies>
         <dependency>
-            <groupId>cc.zorcc</groupId>
+            <groupId>${project.groupId}</groupId>
             <artifactId>tenet-serde</artifactId>
             <version>${project.version}</version>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven-compiler-plugin.version}</version>
+                <configuration>
+                    <encoding>${maven.compiler.encoding}</encoding>
+                    <release>${java.version}</release>
+                    <showDeprecation>true</showDeprecation>
+                    <showWarnings>true</showWarnings>
+                    <proc>none</proc> <!--  Essential for annotation processor module -->
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>

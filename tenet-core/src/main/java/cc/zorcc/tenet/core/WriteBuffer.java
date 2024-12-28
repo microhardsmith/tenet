@@ -291,16 +291,17 @@ public final class WriteBuffer implements AutoCloseable {
     record HeapWriteBufferPolicy(
             long initialSize
     ) implements WriteBufferPolicy {
+
         @Override
         public MemorySegment resize(MemorySegment segment, long currentIndex, long nextIndex) {
-            if(segment == MemorySegment.NULL) {
-                return Allocator.HEAP.allocate(Math.max(initialSize, Std.grow(nextIndex)));
-            }else {
-                MemorySegment newSegment = Allocator.HEAP.allocate(Std.grow(nextIndex));
-                byte[] b1 = (byte[]) segment.heapBase().orElseThrow(() -> new TenetException(ExceptionType.NATIVE, "Not a heap segment"));
-                byte[] b2 = (byte[]) newSegment.heapBase().orElseThrow(() -> new TenetException(ExceptionType.NATIVE, "Not a heap segment"));
-                System.arraycopy(b1, 0, b2, 0, Math.toIntExact(currentIndex));
-                return newSegment;
+            try(Allocator allocator = Allocator.newHeapAllocator()) {
+                if(segment == MemorySegment.NULL) {
+                    return allocator.allocate(Math.max(initialSize, Std.grow(nextIndex)));
+                }else {
+                    MemorySegment newSegment = allocator.allocate(Std.grow(nextIndex));
+                    MemorySegment.copy(segment, 0L, newSegment, 0L, currentIndex);
+                    return newSegment;
+                }
             }
         }
 

@@ -7,16 +7,20 @@ import java.util.List;
 import java.util.Map;
 
 @Serde
-public final class Bean {
+public class GBean<A extends Number, B> {
     @Attr({"json:str"})
     private Integer intValue;
 
     @Attr("json:raw")
     private List<String> list;
 
-    private List<List<String>> doubleList;
+    private A a;
 
-    private Map<Integer, String> map;
+    private B b;
+
+    private List<B> c;
+
+    private Map<A, B> d;
 
     public Integer getIntValue() {
         return intValue;
@@ -34,19 +38,35 @@ public final class Bean {
         this.list = list;
     }
 
-    public List<List<String>> getDoubleList() {
-        return doubleList;
+    public A getA() {
+        return a;
     }
 
-    public void setDoubleList(List<List<String>> doubleList) {
-        this.doubleList = doubleList;
+    public void setA(A a) {
+        this.a = a;
     }
 
-    public Map<Integer, String> getMap() {
-        return map;
+    public B getB() {
+        return b;
     }
 
-    public void setMap(Map<Integer, String> map) {
-        this.map = map;
+    public void setB(B b) {
+        this.b = b;
+    }
+
+    public List<B> getC() {
+        return c;
+    }
+
+    public void setC(List<B> c) {
+        this.c = c;
+    }
+
+    public Map<A, B> getD() {
+        return d;
+    }
+
+    public void setD(Map<A, B> d) {
+        this.d = d;
     }
 }

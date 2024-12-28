@@ -11,9 +11,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public sealed interface Allocator extends SegmentAllocator, AutoCloseable permits Allocator.HeapAllocator, Allocator.DirectAllocator {
 
     /**
-     *   Global heap allocator which delegates to free action to GC, relies on array for allocation
+     *   Create a new Heap memory allocator, relies on array for allocation
      */
-    Allocator HEAP = new HeapAllocator();
+    static Allocator newHeapAllocator() {
+        final class Holder {
+            private static final Allocator HEAP = new HeapAllocator();
+        }
+        return Holder.HEAP;
+    }
 
     /**
      *   Create a new Direct memory Allocator using target MemApi, using DirectAllocator is a dangerous move, and should always be used as try-with-resources term
@@ -47,6 +52,10 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
      */
     final class HeapAllocator implements Allocator {
         private static final AtomicBoolean initialized = new AtomicBoolean(false);
+        private static final int BYTE_SHIFT = Integer.numberOfTrailingZeros(Byte.BYTES);
+        private static final int SHORT_SHIFT = Integer.numberOfTrailingZeros(Short.BYTES);
+        private static final int INTEGER_SHIFT = Integer.numberOfTrailingZeros(Integer.BYTES);
+        private static final int LONG_SHIFT = Integer.numberOfTrailingZeros(Long.BYTES);
 
         private HeapAllocator() {
             if(!initialized.compareAndSet(false, true)) {
@@ -64,12 +73,19 @@ public sealed interface Allocator extends SegmentAllocator, AutoCloseable permit
             checkByteSize(byteSize);
             switch (Math.toIntExact(byteAlignment)) {
                 case Byte.BYTES -> {
-                    // This is quite important, which makes the byte allocation will always be backed by a byte[] which could be fetched by heapBase()
-                    return MemorySegment.ofArray(new byte[Math.toIntExact(byteSize)]);
+                    MemorySegment m = MemorySegment.ofArray(new byte[Math.toIntExact(byteSize + Byte.BYTES - 1) >> BYTE_SHIFT]);
+                    return m.byteSize() == byteSize ? m : m.asSlice(0L, byteSize);
                 }
-                case Short.BYTES, Integer.BYTES, Long.BYTES -> {
-                    // A fair amount of waste wouldn't harm the system
-                    MemorySegment m = MemorySegment.ofArray(new long[Math.toIntExact((byteSize + 7) >> 3)]);
+                case Short.BYTES -> {
+                    MemorySegment m = MemorySegment.ofArray(new short[Math.toIntExact(byteSize + Short.BYTES - 1) >> SHORT_SHIFT]);
+                    return m.byteSize() == byteSize ? m : m.asSlice(0L, byteSize);
+                }
+                case Integer.BYTES -> {
+                    MemorySegment m = MemorySegment.ofArray(new int[Math.toIntExact(byteSize + Integer.BYTES - 1) >> INTEGER_SHIFT]);
+                    return m.byteSize() == byteSize ? m : m.asSlice(0L, byteSize);
+                }
+                case Long.BYTES -> {
+                    MemorySegment m = MemorySegment.ofArray(new long[Math.toIntExact((byteSize + Long.BYTES - 1) >> LONG_SHIFT)]);
                     return m.byteSize() == byteSize ? m : m.asSlice(0L, byteSize);
                 }
                 default -> throw new TenetException(ExceptionType.NATIVE, "Unexpected alignment : %d".formatted(byteAlignment));
