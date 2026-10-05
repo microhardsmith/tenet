@@ -11,6 +11,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.lang.ScopedValue;
 
 /**
  *   JsonParser is a commonly used tool for transforming UTF-8 json data into Java object, or otherwise
@@ -50,7 +51,7 @@ public final class JsonParser {
         if(targetClass.isPrimitive() || targetClass.isAnnotation() || targetClass.isMemberClass()) {
             throw new FrameworkException(ExceptionType.JSON, "Unsupported type");
         }
-        ScopedValue.runWhere(localCache, new HashMap<>(), () -> {
+        ScopedValue.where(localCache, new HashMap<>()).run(() -> {
             JsonWriterNode jsonWriterNode = targetClass.isRecord() ? new JsonWriterRecordNode(writeBuffer, target, targetClass) : new JsonWriterObjectNode(writeBuffer, target, targetClass);
             jsonWriterNode.serialize();
         });
@@ -65,7 +66,7 @@ public final class JsonParser {
      *   The format annotation will be applied to all its elements
      */
     public static <T> void writeCollection(WriteBuffer writeBuffer, Collection<T> collection, Format format) {
-        ScopedValue.runWhere(localCache, new HashMap<>(), () -> {
+        ScopedValue.where(localCache, new HashMap<>()).run(() -> {
             JsonWriterNode jsonWriterNode = new JsonWriterCollectionNode(writeBuffer, collection.iterator(), format);
             jsonWriterNode.serialize();
         });
@@ -79,7 +80,7 @@ public final class JsonParser {
         if(JsonReaderNode.readNextByte(readBuffer) != Constants.LCB) {
             throw new JsonParseException(readBuffer);
         }
-        return (T) ScopedValue.getWhere(localCache, new HashMap<>(), () -> {
+        return (T) ScopedValue.where(localCache, new HashMap<>()).call(() -> {
             JsonReaderNode jsonReaderNode = type.isRecord() ? new JsonReaderRecordNode(readBuffer, type) : new JsonReaderObjectNode(readBuffer, type);
             jsonReaderNode.deserialize();
             return jsonReaderNode.getJsonObject();
@@ -94,7 +95,7 @@ public final class JsonParser {
         if(JsonReaderNode.readNextByte(readBuffer) != Constants.LSB) {
             throw new JsonParseException(readBuffer);
         }
-        return (List<T>) ScopedValue.getWhere(localCache, new HashMap<>(), () -> {
+        return (List<T>) ScopedValue.where(localCache, new HashMap<>()).call(() -> {
             JsonReaderNode jsonReaderNode = new JsonReaderCollectionNode(readBuffer, List.class, typeRef.type());
             jsonReaderNode.deserialize();
             return jsonReaderNode.getJsonObject();

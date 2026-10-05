@@ -44,7 +44,7 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
                 case "className" -> (writeBuffer, logEvent) -> writeBuffer.writeSegment(logEvent.className());
                 case "threadName" -> (writeBuffer, logEvent) -> writeBuffer.writeSegment(logEvent.threadName());
                 case "msg" -> (writeBuffer, logEvent) -> writeBuffer.writeSegment(logEvent.msg());
-                default -> throw new FrameworkException(ExceptionType.LOG, STR. "Unresolved log format : \{ s }" );
+                default -> throw new FrameworkException(ExceptionType.LOG, "Unresolved log format : " + s );
             });
             logHandlers.add((writeBuffer, logEvent) -> {
                 MemorySegment throwable = logEvent.throwable();
@@ -100,14 +100,16 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
             case Msg -> {
                 eventList.add(event);
                 if(flushThreshold > 0 && eventList.size() > flushThreshold) {
+                    long lastTimestamp = eventList.getLast().timestamp();
                     flush();
-                    checkFile();
+                    checkFile(lastTimestamp);
                 }
             }
             case Flush -> {
                 if(!eventList.isEmpty()) {
+                    long lastTimestamp = eventList.getLast().timestamp();
                     flush();
-                    checkFile();
+                    checkFile(lastTimestamp);
                 }
             }
             case Shutdown -> {
@@ -131,9 +133,9 @@ public final class FileLogEventHandler implements Consumer<LogEvent> {
         }
     }
 
-    private void checkFile() {
+    private void checkFile(long lastTimestamp) {
         if((maxFileSize > 0 && currentWrittenIndex > maxFileSize)
-                || (maxRecordingTime > 0 && eventList.getLast().timestamp() - currentCreateTime > maxRecordingTime)) {
+                || (maxRecordingTime > 0 && lastTimestamp - currentCreateTime > maxRecordingTime)) {
             openNewLogOutputFile();
         }
     }

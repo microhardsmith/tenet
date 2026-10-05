@@ -49,12 +49,12 @@ public record Poller(
 
     private static Thread createPollerThread(Mux mux, TaskQueue<PollerTask> pollerQueue, NetConfig config) {
         int sequence = counter.getAndIncrement();
-        return Thread.ofPlatform().name(STR."poller-\{sequence}").unstarted(() -> {
-            log.info(STR."Initializing poller thread, sequence : \{sequence}");
+        return Thread.ofPlatform().name("poller-" + sequence).unstarted(() -> {
+            log.info("Initializing poller thread, sequence : " + sequence);
             MemApi memApi = config.isEnableRpMalloc() ? TenetBinding.rpMallocThreadInitialize() : MemApi.DEFAULT;
             int timeout = config.getPollerMuxTimeout();
             IntMap<PollerNode> nodeMap = IntMap.newTreeMap(config.getPollerMapSize());
-            ScopedValue.runWhere(MEM_SCOPE, memApi, () -> {
+            ScopedValue.where(MEM_SCOPE, memApi).run(() -> {
                 try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
                     int maxEvents = config.getPollerMaxEvents();
                     int readBufferSize = config.getPollerBufferSize();
@@ -88,7 +88,7 @@ public record Poller(
                         }
                     }
                 }finally {
-                    log.info(STR."Exiting poller thread, sequence : \{sequence}");
+                    log.info("Exiting poller thread, sequence : " + sequence);
                     osNetworkLibrary.exitMux(mux);
                     if(config.isEnableRpMalloc()) {
                         TenetBinding.rpMallocThreadFinalize();

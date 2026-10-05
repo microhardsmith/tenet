@@ -122,7 +122,7 @@ public final class SqliteBinding {
 
     public static void check(int r, String errMsg) {
         if(r != 0) {
-            throw new FrameworkException(ExceptionType.SQLITE, STR."Failed to \{errMsg} with err code : \{r}");
+            throw new FrameworkException(ExceptionType.SQLITE, "Failed to " + errMsg + " with err code : " + r);
         }
     }
 

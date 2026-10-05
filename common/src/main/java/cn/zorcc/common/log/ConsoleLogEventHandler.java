@@ -33,7 +33,7 @@ public final class ConsoleLogEventHandler implements Consumer<LogEvent> {
             case "className" -> classNameHandler(config);
             case "threadName" -> threadNameHandler(config);
             case "msg" -> msgHandler(config);
-            default -> throw new FrameworkException(ExceptionType.LOG, STR."Unresolved log format : \{s}");
+            default -> throw new FrameworkException(ExceptionType.LOG, "Unresolved log format : " + s);
         });
         this.flushThreshold = config.getFlushThreshold();
         if (FileUtil.setvbuf(stdout, MemorySegment.NULL, TenetBinding.nbf(), 0) != 0) {

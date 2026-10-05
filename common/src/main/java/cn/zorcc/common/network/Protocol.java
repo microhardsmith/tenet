@@ -62,7 +62,7 @@ public interface Protocol {
         public long onReadableEvent(MemorySegment reserved, long len) {
             long r = osNetworkLibrary.recv(channel.socket(), reserved, len);
             if(r < 0L) {
-                throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform recv(), errno : \{Math.abs(r)}");
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to perform recv(), errno : " + Math.abs(r));
             }else {
                 return r;
             }
@@ -83,7 +83,7 @@ public interface Protocol {
                 if(errno == osNetworkLibrary.sendBlockCode()) {
                     return -Constants.NET_PW;
                 }else {
-                    throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform send(), errno : \{errno}");
+                    throw new FrameworkException(ExceptionType.NETWORK, "Failed to perform send(), errno : " + errno);
                 }
             }else {
                 return r;
@@ -94,7 +94,7 @@ public interface Protocol {
         public void doShutdown() {
             int r = osNetworkLibrary.shutdownWrite(channel.socket());
             if(r < 0) {
-                throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform shutdown(), errno : \{Math.abs(r)}");
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to perform shutdown(), errno : " + Math.abs(r));
             }
         }
 
@@ -103,7 +103,7 @@ public interface Protocol {
         public void doClose() {
             int r = osNetworkLibrary.closeSocket(channel.socket());
             if(r < 0) {
-                throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to close socket, errno : \{Math.abs(r)}");
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to close socket, errno : " + Math.abs(r));
             }
         }
 
@@ -208,7 +208,7 @@ public interface Protocol {
                 state |= LOCAL_INITIATED_SHUTDOWN;
                 int r = SslBinding.sslShutdown(ssl);
                 if(r < 0) {
-                    throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform SSL_shutdown(), err code : \{SslBinding.sslGetErr(ssl, r)}");
+                    throw new FrameworkException(ExceptionType.NETWORK, "Failed to perform SSL_shutdown(), err code : " + SslBinding.sslGetErr(ssl, r));
                 }
             }finally {
                 sslState.unlock(state);
@@ -226,7 +226,7 @@ public interface Protocol {
                 SslBinding.sslFree(ssl);
                 int r = osNetworkLibrary.closeSocket(channel.socket());
                 if(r < 0) {
-                    throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to close socket, errno : \{Math.abs(r)}");
+                    throw new FrameworkException(ExceptionType.NETWORK, "Failed to close socket, errno : " + Math.abs(r));
                 }
             }finally {
                 sslState.unlock(state);

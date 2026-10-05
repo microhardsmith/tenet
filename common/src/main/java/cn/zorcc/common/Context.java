@@ -53,7 +53,7 @@ public final class Context {
                 Object target = container.target();
                 Class<?> type = container.type();
                 if(containerMap.putIfAbsent(type, target) != null) {
-                    throw new FrameworkException(ExceptionType.CONTEXT, STR."Container already exist : \{type.getSimpleName()}");
+                    throw new FrameworkException(ExceptionType.CONTEXT, "Container already exist : " + type.getSimpleName());
                 }
                 if(target instanceof LifeCycle lifeCycle) {
                     cycles.addLast(lifeCycle);
@@ -64,8 +64,8 @@ public final class Context {
             contextListener.afterStarted();
             RuntimeMXBean runtimeMXBean = ManagementFactory.getRuntimeMXBean();
             String[] pidAndDevice = runtimeMXBean.getName().split("@");
-            log.info(STR."Process running with Pid: \{pidAndDevice[0]} on Device: \{pidAndDevice[1]}");
-            log.info(STR."Tenet application started in \{ Duration.ofNanos(Clock.elapsed(nano)).toMillis()} ms, JVM running for \{runtimeMXBean.getUptime()} ms");
+            log.info("Process running with Pid: " + pidAndDevice[0] + " on Device: " + pidAndDevice[1]);
+            log.info("Tenet application started in " + Duration.ofNanos(Clock.elapsed(nano)).toMillis() + " ms, JVM running for " + runtimeMXBean.getUptime() + " ms");
             state = Constants.RUNNING;
         } finally {
             writeLock.unlock();
@@ -103,7 +103,7 @@ public final class Context {
             throw new FrameworkException(ExceptionType.CONTEXT, "Container can't be null");
         }
         if (!type.isAssignableFrom(target.getClass())) {
-            throw new FrameworkException(ExceptionType.CONTEXT, STR."Container doesn't match its class : \{type.getSimpleName()}");
+            throw new FrameworkException(ExceptionType.CONTEXT, "Container doesn't match its class : " + type.getSimpleName());
         }
         readLock.lock();
         try {
@@ -123,7 +123,7 @@ public final class Context {
             if(state <= Constants.RUNNING) {
                 Object o = containerMap.computeIfAbsent(type, contextListener::onRequested);
                 if(o == null) {
-                    throw new FrameworkException(ExceptionType.CONTEXT, STR."Unable to retrieve target container : \{type.getName()}");
+                    throw new FrameworkException(ExceptionType.CONTEXT, "Unable to retrieve target container : " + type.getName());
                 }
                 return (T) o;
             }else {

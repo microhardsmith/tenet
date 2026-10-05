@@ -26,7 +26,7 @@ public class ContextTest {
     public void testContext() throws InterruptedException {
         Context.load(new LifeCycleTest(), LifeCycleTest.class);
         Context.init();
-        Runnable exitOnce = Wheel.wheel().addJob(() -> log.info(STR."onetime\{Thread.currentThread().threadId()}"), Duration.ofSeconds(5));
+        Runnable exitOnce = Wheel.wheel().addJob(() -> log.info("onetime" + Thread.currentThread().threadId()), Duration.ofSeconds(5));
         exitOnce.run();
         Runnable exitPeriod = Wheel.wheel().addPeriodicJob(() -> log.info(String.valueOf(Thread.currentThread().threadId())), Duration.ZERO, Duration.ofSeconds(1));
         Thread.sleep(5000);

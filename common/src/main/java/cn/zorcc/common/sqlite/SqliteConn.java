@@ -53,9 +53,9 @@ public final class SqliteConn implements AutoCloseable {
                 String err = SqliteBinding.errMsg(sqlite).getString(0L, StandardCharsets.UTF_8);
                 int close = SqliteBinding.close(sqlite);
                 if(close != 0) {
-                    throw new FrameworkException(ExceptionType.SQLITE, STR."Failed to close unopened sqlite database, open err : \{err}, close err : \{close}");
+                    throw new FrameworkException(ExceptionType.SQLITE, "Failed to close unopened sqlite database, open err : " + err + ", close err : " + close);
                 }else {
-                    throw new FrameworkException(ExceptionType.SQLITE, STR."Failed to open sqlite database, open err : \{err}");
+                    throw new FrameworkException(ExceptionType.SQLITE, "Failed to open sqlite database, open err : " + err);
                 }
             }
             return sqlite;
@@ -205,7 +205,7 @@ public final class SqliteConn implements AutoCloseable {
             MemorySegment pErr = ppErr.get(ValueLayout.ADDRESS, 0).reinterpret(Long.MAX_VALUE);
             String err = pErr.getString(0L, StandardCharsets.UTF_8);
             SqliteBinding.free(pErr);
-            throw new FrameworkException(ExceptionType.SQLITE, STR."Unable to exec sql : [\{actualSql}], err : [\{err}]");
+            throw new FrameworkException(ExceptionType.SQLITE, "Unable to exec sql : [" + actualSql + "], err : [" + err + "]");
         }
     }
 

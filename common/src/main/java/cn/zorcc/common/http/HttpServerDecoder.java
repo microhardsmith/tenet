@@ -92,7 +92,7 @@ public final class HttpServerDecoder implements Decoder {
                     case "DELETE" -> current.setMethod(HttpMethod.Delete);
                     case "PATCH" -> current.setMethod(HttpMethod.Patch);
                     case "OPTIONS" -> current.setMethod(HttpMethod.Options);
-                    default -> throw new FrameworkException(ExceptionType.HTTP, STR."Unknown method : \{methodStr}");
+                    default -> throw new FrameworkException(ExceptionType.HTTP, "Unknown method : " + methodStr);
                 }
                 decodingStatus = DecodingStatus.DECODING_URI;
                 return ResultStatus.CONTINUE;

@@ -34,19 +34,26 @@
   </developers>
 
   <properties>
-    <java.version>22</java.version>
+    <java.version>28</java.version>
     <resource.delimiter>@</resource.delimiter>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <maven-compiler-plugin.version>3.12.1</maven-compiler-plugin.version>
+    <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
     <maven.compiler.encoding>UTF-8</maven.compiler.encoding>
-    <maven-surefire-plugin.version>3.1.2</maven-surefire-plugin.version>
+    <maven-surefire-plugin.version>3.2.5</maven-surefire-plugin.version>
     <maven-assembly-plugin.version>3.6.0</maven-assembly-plugin.version>
     <jmh.version>1.37</jmh.version>
     <junit.version>5.10.1</junit.version>
 
     <scram.version>2.1</scram.version>
     <jctools.version>4.0.2</jctools.version>
+
+    <!--
+      Directory holding libtenet.so, libssl.so, libcrypto.so and the compression libraries.
+      Override on the command line when the native libraries live elsewhere:
+        mvn test -Dtenet.library.path=/opt/tenet/lib
+    -->
+    <tenet.library.path>${user.home}/tenet-lib/lib</tenet.library.path>
   </properties>
 
   <!-- general dependencies for all modules -->
@@ -108,8 +115,98 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <version>${maven-surefire-plugin.version}</version>
         <configuration>
-          <skipTests>true</skipTests>
+          <skipTests>false</skipTests>
+          <!--
+            TENET_LIBRARY_PATH is read by NativeUtil via System.getProperty, an exported env var alone is not enough.
+            log.file points at a test config that disables console output: ConsoleLogEventHandler writes to the native
+            stdout FILE stream, which is the same pipe Surefire uses for its forked JVM protocol, so console logging
+            corrupts it. The add-modules option must mirror the compiler args, otherwise classes touching
+            jdk.incubator.vector (VectorJmhTest) fail with NoClassDefFoundError and abort JUnit discovery
+            for the whole module.
+          -->
+          <argLine>--enable-preview --enable-native-access=ALL-UNNAMED --add-modules jdk.incubator.vector -DTENET_LIBRARY_PATH=${tenet.library.path} -Dlog.file=/log-test.json</argLine>
+          <environmentVariables>
+            <TENET_LIBRARY_PATH>${tenet.library.path}</TENET_LIBRARY_PATH>
+          </environmentVariables>
+          <excludes>
+            <!--
+              These are interactive demo programs, not automated tests: every method ends in
+              Thread.sleep(Long.MAX_VALUE) so a live server can be poked by hand, and several of them
+              call Context.init() or create a Net per method, which the static single-instance guards
+              in Context/Net/LoggerConsumer forbid. Leaving them in the run would hang the build forever.
+              The patterns are prefixed with a wildcard after the class name on purpose: Surefire matches
+              compiled class files, and nested fixtures such as ContextTest$LifeCycleTest also match its
+              default ** / *Test include pattern.
+            -->
+            <exclude>**/EchoTest*.java</exclude>
+            <exclude>**/TagTest*.java</exclude>
+            <exclude>**/ContextTest*.java</exclude>
+            <!--
+              RefMapTest and IntMapTest are stress tests, not unit tests: RefMapTest spawns one thread per core
+              and each thread performs ROUND x BATCH map operations with assertions (100 x 100000 per core), and
+              IntMapTest repeats a 100000 entry put/get/replace/remove cycle ROUNDS (100) times. On a many-core
+              machine they run for an unbounded time. Run one explicitly when the behaviour matters:
+                mvn -pl common test -Dtest=IntMapTest -Dsurefire.excludes=
+            -->
+            <exclude>**/RefMapTest.java</exclude>
+            <exclude>**/IntMapTest.java</exclude>
+          </excludes>
         </configuration>
+        <executions>
+          <!--
+            HttpTest and LogTest are the only automated tests that boot a real container. Context, Net,
+            LoggerConsumer and Wheel are process global singletons: Context.init() is one-shot per JVM and never
+            returns to INITIAL, and Net/LoggerConsumer refuse to be constructed twice. Two classes needing
+            Context.init() therefore cannot share one forked JVM, so each is given its own Surefire execution,
+            and Surefire gives every execution its own fork.
+
+            fork-per-test-class (reuseForks=false) would express this more broadly, but it breaks under
+            preview features: Surefire then resolves test classes on the Maven side, whose JVM is not started
+            with the preview flag, so every preview-compiled test class fails with UnsupportedClassVersionError.
+          -->
+          <execution>
+            <id>default-test</id>
+            <configuration>
+              <!--
+                A nested excludes list replaces the plugin level one instead of merging with it, so the interactive
+                and stress exclusions have to be repeated here.
+              -->
+              <excludes>
+                <exclude>**/EchoTest*.java</exclude>
+                <exclude>**/TagTest*.java</exclude>
+                <exclude>**/ContextTest*.java</exclude>
+                <exclude>**/RefMapTest.java</exclude>
+                <exclude>**/IntMapTest.java</exclude>
+                <exclude>**/HttpTest.java</exclude>
+                <exclude>**/LogTest.java</exclude>
+              </excludes>
+            </configuration>
+          </execution>
+          <execution>
+            <id>http-test</id>
+            <phase>test</phase>
+            <goals>
+              <goal>test</goal>
+            </goals>
+            <configuration>
+              <includes>
+                <include>**/HttpTest.java</include>
+              </includes>
+            </configuration>
+          </execution>
+          <execution>
+            <id>log-test</id>
+            <phase>test</phase>
+            <goals>
+              <goal>test</goal>
+            </goals>
+            <configuration>
+              <includes>
+                <include>**/LogTest.java</include>
+              </includes>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

@@ -66,7 +66,7 @@ public final class PgSentry implements Sentry {
         }else {
             int errOpt = osNetworkLibrary.getErrOpt(channel.socket(), Poller.localMemApi());
             if(errOpt != 0) {
-                throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to establish postgresql connection, err opt : \{errOpt}");
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to establish postgresql connection, err opt : " + errOpt);
             }
             try(Allocator allocator = Allocator.newDirectAllocator(Poller.localMemApi())) {
                 MemorySegment segment = allocator.allocate(ValueLayout.JAVA_INT, 2);
@@ -78,9 +78,9 @@ public final class PgSentry implements Sentry {
                     sslState.setValue(current | WAITING_SSL);
                     return Constants.NET_IGNORED;
                 }else if(sent < len) {
-                    throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to send SSL request, only \{sent} bytes got written, consider this connection unfunctionally");
+                    throw new FrameworkException(ExceptionType.NETWORK, "Failed to send SSL request, only " + sent + " bytes got written, consider this connection unfunctionally");
                 }else if(sent < 0L) {
-                    throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to send SSL request, errno : \{Math.abs(sent)}");
+                    throw new FrameworkException(ExceptionType.NETWORK, "Failed to send SSL request, errno : " + Math.abs(sent));
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
                 }
@@ -104,7 +104,7 @@ public final class PgSentry implements Sentry {
         }
         int r = osNetworkLibrary.closeSocket(channel.socket());
         if(r < 0) {
-            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to close socket, errno : \{Math.abs(r)}");
+            throw new FrameworkException(ExceptionType.NETWORK, "Failed to close socket, errno : " + Math.abs(r));
         }
     }
 
@@ -122,7 +122,7 @@ public final class PgSentry implements Sentry {
                 sslState.setValue(sslState.getValue() | WANT_WRITE);
                 return Constants.NET_W;
             }else {
-                throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to perform SSL_handshake(), err code : \{err}");
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to perform SSL_handshake(), err code : " + err);
             }
         }
     }
@@ -135,7 +135,7 @@ public final class PgSentry implements Sentry {
             }
             long verifyResult = SslBinding.sslGetVerifyResult(ssl);
             if(verifyResult != 0) {
-                throw new FrameworkException(ExceptionType.NETWORK, STR."Postgresql server certificate cannot be verified, verify result : \{verifyResult}");
+                throw new FrameworkException(ExceptionType.NETWORK, "Postgresql server certificate cannot be verified, verify result : " + verifyResult);
             }
             SslBinding.x509Free(x509);
         }

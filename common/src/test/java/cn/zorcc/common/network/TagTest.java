@@ -120,12 +120,12 @@ public class TagTest {
 
         @Override
         public void onFailed(Channel channel) {
-            log.info(STR."Client channel failed to connected, loc : \{channel.loc()}");
+            log.info("Client channel failed to connected, loc : " + channel.loc());
         }
 
         @Override
         public void onConnected(Channel channel) {
-            log.info(STR."Client channel connected, loc : \{channel.loc()}");
+            log.info("Client channel connected, loc : " + channel.loc());
             task.set(Wheel.wheel().addPeriodicJob(() -> {
                 int seq = counter.getAndIncrement();
                 Msg msg = new Msg(seq, "Hello : %d".formatted(seq));
@@ -140,7 +140,7 @@ public class TagTest {
         @Override
         public Optional<TagMsg> onRecv(Channel channel, Object data) {
             if(data instanceof Msg(int tag, String content)) {
-                log.info(STR."Client receiving msg : \{content}");
+                log.info("Client receiving msg : " + content);
                 return Optional.of(new TagMsg(Allocator.HEAP.allocateFrom(ValueLayout.JAVA_INT, tag), content));
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -155,7 +155,7 @@ public class TagTest {
 
         @Override
         public void onRemoved(Channel channel) {
-            log.info(STR."Client channel removed, loc : \{channel.loc()}");
+            log.info("Client channel removed, loc : " + channel.loc());
         }
     }
 
@@ -163,18 +163,18 @@ public class TagTest {
 
         @Override
         public void onFailed(Channel channel) {
-            log.info(STR."Detecting channel failed from : \{channel.loc()}");
+            log.info("Detecting channel failed from : " + channel.loc());
         }
 
         @Override
         public void onConnected(Channel channel) {
-            log.info(STR."Detecting channel connected from : \{channel.loc()}");
+            log.info("Detecting channel connected from : " + channel.loc());
         }
 
         @Override
         public Optional<TagMsg> onRecv(Channel channel, Object data) {
             if(data instanceof Msg msg) {
-                log.info(STR."Msg received : [\{msg.content()}]");
+                log.info("Msg received : [" + msg.content() + "]");
                 channel.sendMsg(msg);
                 return Optional.empty();
             }else {
@@ -184,12 +184,12 @@ public class TagTest {
 
         @Override
         public void onShutdown(Channel channel) {
-            log.info(STR."Detecting channel shutdown : \{channel.loc()}");
+            log.info("Detecting channel shutdown : " + channel.loc());
         }
 
         @Override
         public void onRemoved(Channel channel) {
-            log.info(STR."Detecting channel removed : \{channel.loc()}");
+            log.info("Detecting channel removed : " + channel.loc());
         }
     }
 

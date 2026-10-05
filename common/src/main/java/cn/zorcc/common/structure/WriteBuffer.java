@@ -283,6 +283,15 @@ public final class WriteBuffer implements AutoCloseable {
     }
 
     /**
+     *   Converts current writeBuffer to an UTF-8 string and drains the buffer, so it can be reused right away.
+     *   The JSON reader nodes rely on this to turn a parsed token into a String without carrying the previous token over.
+     */
+    @Override
+    public String toString() {
+        return new String(asByteArray(), StandardCharsets.UTF_8);
+    }
+
+    /**
      *   Converts current writeBuffer to a segment, sharing the same scope
      */
     public MemorySegment asSegment() {

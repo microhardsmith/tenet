@@ -20,6 +20,6 @@ public final class FrameworkException extends RuntimeException {
     }
 
     public FrameworkException(ExceptionType exceptionType, String message, Throwable throwable, Object... args) {
-        super(STR."Type : \{exceptionType}, Msg : \{args == null ? message : String.format(message, args)}", throwable);
+        super("Type : " + exceptionType + ", Msg : " + (args == null ? message : String.format(message, args)), throwable);
     }
 }

@@ -11,7 +11,7 @@ public record HttpStatus(
         byte[] content
 ) {
     public HttpStatus(String code, String description) {
-        this(code, description, (STR."\{code} \{description}").getBytes(StandardCharsets.UTF_8));
+        this(code, description, (code + " " + description).getBytes(StandardCharsets.UTF_8));
     }
     public static final HttpStatus OK = new HttpStatus("200", "OK");
     public static final HttpStatus CREATED = new HttpStatus("201", "Created");

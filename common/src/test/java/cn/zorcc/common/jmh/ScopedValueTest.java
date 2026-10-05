@@ -14,7 +14,7 @@ public class ScopedValueTest extends JmhTest {
 
     @Benchmark
     public void testScopedValue(Blackhole blackhole) {
-        ScopedValue.runWhere(scopedValue, s, () -> {
+        ScopedValue.where(scopedValue, s).run(() -> {
             for(int i = 0; i < BATCH; i++) {
                 blackhole.consume(scopedValue.get());
             }

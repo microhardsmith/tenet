@@ -18,7 +18,7 @@ public final class ConfigUtil {
 
     public static void checkParam(int value, int min, int max) {
         if(value <= min || value >= max) {
-            throw new FrameworkException(ExceptionType.CONFIG, STR."Configuration error : \{value}");
+            throw new FrameworkException(ExceptionType.CONFIG, "Configuration error : " + value);
         }
     }
 

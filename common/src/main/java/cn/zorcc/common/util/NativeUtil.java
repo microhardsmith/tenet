@@ -72,7 +72,7 @@ public final class NativeUtil {
      */
     private static boolean runningFromJar() {
         String className = NativeUtil.class.getName().replace('.', '/');
-        String classJar = Objects.requireNonNull(NativeUtil.class.getResource(STR."/\{className}.class")).toString();
+        String classJar = Objects.requireNonNull(NativeUtil.class.getResource("/" + className + ".class")).toString();
         return classJar.startsWith("jar:");
     }
 
@@ -104,9 +104,9 @@ public final class NativeUtil {
      */
     private static String getDynamicLibraryPath(String identifier) {
         String fileName = switch (osType) {
-            case Windows -> STR."\{identifier}.dll";
-            case Linux -> STR."\{identifier}.so";
-            case MacOS -> STR."\{identifier}.dylib";
+            case Windows -> identifier + ".dll";
+            case Linux -> identifier + ".so";
+            case MacOS -> identifier + ".dylib";
             default -> throw new FrameworkException(ExceptionType.NATIVE, "Unrecognized operating system");
         };
         String defaultPath = libPath + Constants.SEPARATOR + fileName;
@@ -143,7 +143,7 @@ public final class NativeUtil {
      */
     public static MethodHandle methodHandle(SymbolLookup lookup, String methodName, FunctionDescriptor functionDescriptor, Linker.Option... options) {
         MemorySegment methodPointer = lookup.find(methodName)
-                .orElseThrow(() -> new FrameworkException(ExceptionType.NATIVE, STR."Unable to load target native method : \{methodName}"));
+                .orElseThrow(() -> new FrameworkException(ExceptionType.NATIVE, "Unable to load target native method : " + methodName));
         return linker.downcallHandle(methodPointer, functionDescriptor, options);
     }
 
@@ -157,7 +157,7 @@ public final class NativeUtil {
                 return linker.downcallHandle(methodPointer.get(), functionDescriptor, options);
             }
         }
-        throw new FrameworkException(ExceptionType.NATIVE, STR."Unable to load target native method : \{methodNames}");
+        throw new FrameworkException(ExceptionType.NATIVE, "Unable to load target native method : " + methodNames);
     }
 
     /**
@@ -191,7 +191,7 @@ public final class NativeUtil {
      *  Note that for methods from system library, there are no cache, every time a new MethodHandle would be created, and it's totally fine by JVM
      */
     public static MethodHandle nativeMethodHandle(String methodName, FunctionDescriptor functionDescriptor, Linker.Option... options) {
-        MemorySegment method = linker.defaultLookup().find(methodName).orElseThrow(() -> new FrameworkException(ExceptionType.NATIVE, STR."Unable to locate [\{methodName}] native method"));
+        MemorySegment method = linker.defaultLookup().find(methodName).orElseThrow(() -> new FrameworkException(ExceptionType.NATIVE, "Unable to locate [" + methodName + "] native method"));
         return linker.downcallHandle(method, functionDescriptor, options);
     }
 

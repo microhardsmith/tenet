@@ -9,10 +9,10 @@ public final class JsonParseException extends RuntimeException {
     }
 
     public JsonParseException(ReadBuffer readBuffer) {
-        super(STR."Failed to parse json, content : \{readBuffer}, index : \{readBuffer.currentIndex()}");
+        super("Failed to parse json, content : " + readBuffer + ", index : " + readBuffer.currentIndex());
     }
 
     public JsonParseException(Format format, Object value) {
-        super(STR."Failed to parse target format : \{format}, value : \{value}");
+        super("Failed to parse target format : " + format + ", value : " + value);
     }
 }

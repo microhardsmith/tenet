@@ -1,0 +1,8 @@
+{
+  "level" : "DEBUG",
+  "usingRpMalloc" : false,
+  "console" : null,
+  "file" : {
+    "dir" : "target/tenet-logs"
+  }
+}

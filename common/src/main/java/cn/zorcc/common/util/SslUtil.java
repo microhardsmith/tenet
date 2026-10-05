@@ -69,9 +69,9 @@ public final class SslUtil {
      */
     public static int throwException(int err, String operation, MemApi memApi) {
         if(err == Constants.SSL_ERROR_SSL){
-            throw new FrameworkException(ExceptionType.NETWORK, STR."\{operation} failed with SSL_ERROR_SSL, message : \{getErrDescription(memApi)}");
+            throw new FrameworkException(ExceptionType.NETWORK, operation + " failed with SSL_ERROR_SSL, message : " + getErrDescription(memApi));
         }else if(err == Constants.SSL_ERROR_SYSCALL) {
-            throw new FrameworkException(ExceptionType.NETWORK, STR."\{operation} failed with SSL_ERROR_SYSCALL, message : \{getErrDescription(memApi)}");
+            throw new FrameworkException(ExceptionType.NETWORK, operation + " failed with SSL_ERROR_SYSCALL, message : " + getErrDescription(memApi));
         }else {
             throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
         }

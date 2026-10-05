@@ -121,20 +121,20 @@ public class EchoTest {
 
         @Override
         public void onFailed(Channel channel) {
-            log.info(STR."Client channel failed to connect, loc : \{channel.loc()}");
+            log.info("Client channel failed to connect, loc : " + channel.loc());
         }
 
         @Override
         public void onConnected(Channel channel) {
-            log.info(STR."Client channel connected, loc : \{channel.loc()}");
-            task.set(Wheel.wheel().addPeriodicJob(() -> channel.sendMsg(STR."Hello : \{counter.getAndIncrement()}"), Duration.ZERO, Duration.ofSeconds(1)));
+            log.info("Client channel connected, loc : " + channel.loc());
+            task.set(Wheel.wheel().addPeriodicJob(() -> channel.sendMsg("Hello : " + counter.getAndIncrement()), Duration.ZERO, Duration.ofSeconds(1)));
             Wheel.wheel().addJob(() -> channel.shutdown(Duration.ofSeconds(5)), Duration.ofSeconds(10));
         }
 
         @Override
         public Optional<TagMsg> onRecv(Channel channel, Object data) {
             if(data instanceof String str) {
-                log.info(STR."Client receiving msg : \{str}");
+                log.info("Client receiving msg : " + str);
                 return Optional.empty();
             }else {
                 throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -152,7 +152,7 @@ public class EchoTest {
 
         @Override
         public void onRemoved(Channel channel) {
-            log.info(STR."Client channel removed, loc : \{channel.loc()}");
+            log.info("Client channel removed, loc : " + channel.loc());
             Runnable cancel = task.getAndSet(null);
             if(cancel != null) {
                 cancel.run();
@@ -163,18 +163,18 @@ public class EchoTest {
     private static class EchoServerHandler implements Handler {
         @Override
         public void onFailed(Channel channel) {
-            log.info(STR."Detecting channel failed to connect from \{channel.loc()}");
+            log.info("Detecting channel failed to connect from " + channel.loc());
         }
 
         @Override
         public void onConnected(Channel channel) {
-            log.info(STR."Detecting channel connected from : \{channel.loc()}");
+            log.info("Detecting channel connected from : " + channel.loc());
         }
 
         @Override
         public Optional<TagMsg> onRecv(Channel channel, Object data) {
             if(data instanceof String str) {
-                log.info(STR."Msg received : [\{str}]");
+                log.info("Msg received : [" + str + "]");
                 channel.sendMsg(str);
                 return Optional.empty();
             }else {
@@ -184,12 +184,12 @@ public class EchoTest {
 
         @Override
         public void onShutdown(Channel channel) {
-            log.info(STR."Detecting channel shutdown : \{channel.loc()}");
+            log.info("Detecting channel shutdown : " + channel.loc());
         }
 
         @Override
         public void onRemoved(Channel channel) {
-            log.info(STR."Detecting channel removed : \{channel.loc()}");
+            log.info("Detecting channel removed : " + channel.loc());
         }
     }
 

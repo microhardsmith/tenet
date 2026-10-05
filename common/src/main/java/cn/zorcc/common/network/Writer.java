@@ -14,6 +14,7 @@ import java.lang.foreign.ValueLayout;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.lang.ScopedValue;
 
 public record Writer(
         BlockingQueue<WriterTask> writerQueue,
@@ -44,10 +45,10 @@ public record Writer(
 
     private static Thread createWriterThread(NetConfig config, BlockingQueue<WriterTask> queue) {
         int sequence = counter.getAndIncrement();
-        return Thread.ofPlatform().name(STR."writer-\{sequence}").unstarted(() -> {
-            log.info(STR."Initializing writer thread, sequence : \{sequence}");
+        return Thread.ofPlatform().name("writer-" + sequence).unstarted(() -> {
+            log.info("Initializing writer thread, sequence : " + sequence);
             MemApi memApi = config.isEnableRpMalloc() ? TenetBinding.rpMallocThreadInitialize() : MemApi.DEFAULT;
-            ScopedValue.runWhere(MEM_SCOPE, memApi, () -> {
+            ScopedValue.where(MEM_SCOPE, memApi).run(() -> {
                 try(Allocator allocator = Allocator.newDirectAllocator(memApi)) {
                     IntMap<WriterNode> nodeMap = IntMap.newTreeMap(config.getWriterMapSize());
                     MemorySegment reservedSegment = allocator.allocate(ValueLayout.JAVA_BYTE, config.getWriterBufferSize());
@@ -55,7 +56,7 @@ public record Writer(
                 }catch (InterruptedException i) {
                     throw new FrameworkException(ExceptionType.NETWORK, "Writer thread interrupted", i);
                 }finally {
-                    log.info(STR."Exiting writer thread, sequence : \{sequence}");
+                    log.info("Exiting writer thread, sequence : " + sequence);
                     if(config.isEnableRpMalloc()) {
                         TenetBinding.rpMallocThreadFinalize();
                     }

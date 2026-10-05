@@ -18,7 +18,7 @@ public final class DefaultContextListener implements ContextListener {
 
     @Override
     public void onLoaded(Object target, Class<?> type) {
-        log.debug(STR."Container loaded for \{type.getName()}");
+        log.debug("Container loaded for " + type.getName());
     }
 
     @Override

@@ -73,7 +73,7 @@ public class AppHttpEventHandler implements AppHttpMapping {
             throw new FrameworkException(ExceptionType.CONTEXT, "Can't register HttpMapping after initialization");
         }
         Class<?> implClass = impl.getClass();
-        log.info(STR."Registering HttpMapping for class : \{implClass.getSimpleName()}");
+        log.info("Registering HttpMapping for class : " + implClass.getSimpleName());
         String prefix = implClass.getAnnotation(HttpMapping.class).prefix();
         for (Method method : ReflectUtil.getAllMethod(implClass)) {
             processMethod(impl, method, prefix);

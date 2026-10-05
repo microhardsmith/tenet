@@ -105,12 +105,12 @@ public final class PgHandler implements Handler {
 
     @Override
     public void onFailed(Channel channel) {
-        log.debug(STR."Failed to establish postgresql connection with loc : \{channel.loc()}");
+        log.debug("Failed to establish postgresql connection with loc : " + channel.loc());
     }
 
     @Override
     public void onConnected(Channel channel) {
-        log.debug(STR."Postgresql connection established, target loc : \{channel.loc()}");
+        log.debug("Postgresql connection established, target loc : " + channel.loc());
         try(WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer()) {
             writeBuffer.writeInt(Integer.MIN_VALUE);
             writeBuffer.writeInt(3 << 16);
@@ -154,7 +154,7 @@ public final class PgHandler implements Handler {
                 case Constants.PG_AUTH_MD5_PASSWORD -> handleMd5Msg(readBuffer, channel);
                 case Constants.PG_AUTH_CLEAR_TEXT_PASSWORD -> handleClearTextPasswordMsg(channel);
                 case Constants.PG_AUTH_SASL_PASSWORD -> handleSaslPasswordMsg(readBuffer, channel);
-                default -> throw new FrameworkException(ExceptionType.POSTGRESQL, STR."Unsupported postgresql authentication method, protocol code : \{authType}");
+                default -> throw new FrameworkException(ExceptionType.POSTGRESQL, "Unsupported postgresql authentication method, protocol code : " + authType);
             }
         }else {
             throw new FrameworkException(ExceptionType.POSTGRESQL, Constants.UNREACHED);
@@ -169,7 +169,7 @@ public final class PgHandler implements Handler {
                     .stringPreparation(StringPreparations.SASL_PREPARATION)
                     .selectMechanismBasedOnServerAdvertised(mechanisms.toArray(new String[0])).setup();
             String mechanism = scramClient.getScramMechanism().getName();
-            log.debug(STR."Postgresql using scram mechanism : \{mechanism}");
+            log.debug("Postgresql using scram mechanism : " + mechanism);
             scramSession = scramClient.scramSession("*");
             byte[] clientFirstMessage = scramSession.clientFirstMessage().getBytes(StandardCharsets.UTF_8);
             writeBuffer.writeStr(mechanism);
@@ -274,11 +274,11 @@ public final class PgHandler implements Handler {
         if(type == Constants.PG_PARAMETER_STATUS) {
             String key = readBuffer.readStr();
             String value = readBuffer.readStr();
-            log.debug(STR."Postgresql parameter status received, key : \{key}, value : \{value}");
+            log.debug("Postgresql parameter status received, key : " + key + ", value : " + value);
         }else if(type == Constants.PG_BACKEND_KEY_DATA) {
             int processId = readBuffer.readInt();
             int secretKey = readBuffer.readInt();
-            log.debug(STR."Postgresql backend key data received, processId : \{processId}, secretKey : \{secretKey}");
+            log.debug("Postgresql backend key data received, processId : " + processId + ", secretKey : " + secretKey);
         }else if(type == Constants.PG_READY) {
             if (readBuffer.readByte() == Constants.PG_TRANSACTION_IDLE) {
                 status = PgStatus.IDLE;
@@ -305,7 +305,7 @@ public final class PgHandler implements Handler {
     private void sendConfigureSchemaMsg(Channel channel, String schema) {
         state = CONFIGURING_SCHEMA;
         try(WriteBuffer writeBuffer = WriteBuffer.newHeapWriteBuffer()) {
-            writeBuffer.writeStr(STR."SET search_path TO \{schema} ");
+            writeBuffer.writeStr("SET search_path TO " + schema + " ");
             channel.sendMsg(new PgMsg(Constants.PG_SIMPLE_QUERY, writeBuffer.asSegment()));
         }
     }
@@ -322,9 +322,9 @@ public final class PgHandler implements Handler {
             }
         }
         if(state < READY_FOR_QUERY) {
-            throw new FrameworkException(ExceptionType.POSTGRESQL, STR."Authentification failed, Error response : \{errMap}");
+            throw new FrameworkException(ExceptionType.POSTGRESQL, "Authentification failed, Error response : " + errMap);
         }else {
-            log.error(STR."Error response : \{errMap}");
+            log.error("Error response : " + errMap);
         }
     }
 
@@ -335,7 +335,7 @@ public final class PgHandler implements Handler {
             ReadBuffer readBuffer = new ReadBuffer(data);
             String key = readBuffer.readStr();
             String value = readBuffer.readStr();
-            log.debug(STR."Parameter status updated, key : \{key}, value : \{value}");
+            log.debug("Parameter status updated, key : " + key + ", value : " + value);
         }else if(type == Constants.PG_READY) {
             state = READY_FOR_QUERY;
             // TODO add to manager

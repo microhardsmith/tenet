@@ -82,12 +82,12 @@ public final class PgConn {
     }
 
     private void handleParameterStatus(String key, String value) {
-        log.debug(STR."Receiving parameter status, key : \{key}, value : \{value}");
+        log.debug("Receiving parameter status, key : " + key + ", value : " + value);
         variable.getParameterStatus().put(key, value);
     }
 
     private void handleBackendData(int processId, int secretKey) {
-        log.debug(STR."Receiving processId : \{processId}, secretKey : \{secretKey}");
+        log.debug("Receiving processId : " + processId + ", secretKey : " + secretKey);
         variable.setProcessId(processId);
         variable.setSecretKey(secretKey);
     }
@@ -117,11 +117,11 @@ public final class PgConn {
             if(scramSession == null) {
                 throw new FrameworkException(ExceptionType.SQL, "Empty sasl session");
             }
-            log.debug(STR."Receiving server first msg : \{serverFirstMsg}");
+            log.debug("Receiving server first msg : " + serverFirstMsg);
             ScramSession.ServerFirstProcessor serverFirstProcessor = scramSession.receiveServerFirstMessage(serverFirstMsg);
             ScramSession.ClientFinalProcessor clientFinalProcessor = serverFirstProcessor.clientFinalProcessor(pgManager.pgConfig().getPassword());
             String clientFinalMsg = clientFinalProcessor.clientFinalMessage();
-            log.debug(STR."Generating client final msg ： \{clientFinalMsg}");
+            log.debug("Generating client final msg ： " + clientFinalMsg);
             variable.setClientFinalProcessor(clientFinalProcessor);
             channel.sendMsg(new PgAuthSaslResponseMsg(clientFinalMsg));
         }catch (ScramException e) {
@@ -136,10 +136,10 @@ public final class PgConn {
                     .stringPreparation(StringPreparations.SASL_PREPARATION)
                     .selectMechanismBasedOnServerAdvertised(mechanisms.toArray(new String[0])).setup();
             String mechanism = scramClient.getScramMechanism().getName();
-            log.debug(STR."Using mechanism : \{mechanism}");
+            log.debug("Using mechanism : " + mechanism);
             ScramSession scramSession = scramClient.scramSession("*");
             String clientFirstMsg = scramSession.clientFirstMessage();
-            log.debug(STR."Generating client first msg : \{clientFirstMsg}");
+            log.debug("Generating client first msg : " + clientFirstMsg);
             variable.setScramClient(scramClient);
             variable.setScramSession(scramSession);
             channel.sendMsg(new PgAuthSaslInitialResponseMsg(mechanism, clientFirstMsg));

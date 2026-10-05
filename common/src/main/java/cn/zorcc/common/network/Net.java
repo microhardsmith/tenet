@@ -71,7 +71,7 @@ public final class Net implements LifeCycle {
                             serverProviders.add(listenerTask.provider());
                             Socket socket = listenerTask.socket();
                             Loc loc = listenerTask.loc();
-                            log.info(STR."Server listenerTask registered for \{loc}");
+                            log.info("Server listenerTask registered for " + loc);
                             listenerMap.put(socket.intValue(), listenerTask);
                         }
                     }
@@ -89,7 +89,7 @@ public final class Net implements LifeCycle {
                             try{
                                 socketAndLoc = osNetworkLibrary.accept(serverLoc, serverSocket, listenerTask.socketConfig(), memApi);
                             }catch (RuntimeException e) {
-                                log.error(STR."Failed to accept connection on \{ serverLoc }", e);
+                                log.error("Failed to accept connection on " + serverLoc, e);
                                 continue ;
                             }
                             Socket clientSocket = socketAndLoc.socket();
@@ -215,7 +215,7 @@ public final class Net implements LifeCycle {
                         Wheel.wheel().addJob(() -> poller.submit(new PollerTask(PollerTaskType.UNBIND, channel, null)), duration);
                         osNetworkLibrary.ctlMux(poller.mux(), socket, Constants.NET_NONE, Constants.NET_W, MemApi.DEFAULT);
                     }else {
-                        throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to connect, errno : \{errno}");
+                        throw new FrameworkException(ExceptionType.NETWORK, "Failed to connect, errno : " + errno);
                     }
                 }else {
                     throw new FrameworkException(ExceptionType.NETWORK, Constants.UNREACHED);
@@ -286,7 +286,7 @@ public final class Net implements LifeCycle {
             if(config.isEnableRpMalloc()) {
                 TenetBinding.rpMallocFinalize();
             }
-            log.debug(STR."Exiting Net gracefully, cost : \{Duration.ofNanos(Clock.elapsed(nano)).toMillis()} ms");
+            log.debug("Exiting Net gracefully, cost : " + Duration.ofNanos(Clock.elapsed(nano)).toMillis() + " ms");
             state = Constants.STOPPED;
         } catch (InterruptedException e) {
             throw new FrameworkException(ExceptionType.CONTEXT, Constants.UNREACHED);

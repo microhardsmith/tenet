@@ -47,7 +47,7 @@ public interface Provider {
                 for (String caFile : caFiles.split(",")) {
                     MemorySegment file = allocator.allocateFrom(caFile.trim());
                     if(SslBinding.loadVerifyLocations(ctx, file, MemorySegment.NULL) != 1) {
-                        throw new FrameworkException(ExceptionType.NETWORK, STR."Can't load verify file : \{caFile}");
+                        throw new FrameworkException(ExceptionType.NETWORK, "Can't load verify file : " + caFile);
                     }
                 }
             }
@@ -55,7 +55,7 @@ public interface Provider {
                 for (String caPath : caPaths.split(",")) {
                     MemorySegment path = allocator.allocateFrom(caPath.trim());
                     if(SslBinding.loadVerifyLocations(ctx, MemorySegment.NULL, path) != 1) {
-                        throw new FrameworkException(ExceptionType.NETWORK, STR."Can't load verify dir : \{caPath}");
+                        throw new FrameworkException(ExceptionType.NETWORK, "Can't load verify dir : " + caPath);
                     }
                 }
             }

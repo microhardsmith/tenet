@@ -33,6 +33,6 @@ public record Loc (
 
     @Override
     public String toString() {
-        return STR."[\{ip == null || ip.isBlank() ? "localhost" : ip}:\{port}]";
+        return "[" + (ip == null || ip.isBlank() ? "localhost" : ip) + ":" + port + "]";
     }
 }

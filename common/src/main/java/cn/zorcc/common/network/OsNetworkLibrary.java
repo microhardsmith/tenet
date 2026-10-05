@@ -221,7 +221,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
      */
     default int check(int value, String errMsg) {
         if(value < 0) {
-            throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to \{errMsg} with err code : \{Math.abs(value)}");
+            throw new FrameworkException(ExceptionType.NETWORK, "Failed to " + errMsg + " with err code : " + Math.abs(value));
         }
         return value;
     }
@@ -244,7 +244,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
                 // If the current epoll_wait() were interrupted, we will do it again later
                 return 0;
             }else {
-                throw new FrameworkException(ExceptionType.NETWORK, STR."Mux wait failed with errno : \{errno}");
+                throw new FrameworkException(ExceptionType.NETWORK, "Mux wait failed with errno : " + errno);
             }
         }else {
             return r;
@@ -277,7 +277,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
             MemorySegment r = allocator.allocate(ipv4AddressSize(), ipv4AddressAlign());
             MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? MemorySegment.NULL : allocator.allocateFrom(loc.ip(), StandardCharsets.UTF_8);
             if(check(setIpv4SockAddr(r, ip, loc.shortPort()), "set ipv4 address") == 0) {
-                throw new FrameworkException(ExceptionType.NETWORK, STR."Ipv4 address is not valid : \{loc.ip()}");
+                throw new FrameworkException(ExceptionType.NETWORK, "Ipv4 address is not valid : " + loc.ip());
             }
             consumer.accept(r);
         }
@@ -288,7 +288,7 @@ public sealed interface OsNetworkLibrary permits OsNetworkLibrary.WindowsNetwork
             MemorySegment r = allocator.allocate(ipv6AddressSize(), ipv6AddressAlign());
             MemorySegment ip = loc.ip() == null || loc.ip().isBlank() ? MemorySegment.NULL : allocator.allocateFrom(loc.ip(), StandardCharsets.UTF_8);
             if(check(setIpv6SockAddr(r, ip, loc.shortPort()), "set ipv6 address") == 0) {
-                throw new FrameworkException(ExceptionType.NETWORK, STR."Ipv6 address is not valid : \{loc.ip()}");
+                throw new FrameworkException(ExceptionType.NETWORK, "Ipv6 address is not valid : " + loc.ip());
             }
             consumer.accept(r);
         }

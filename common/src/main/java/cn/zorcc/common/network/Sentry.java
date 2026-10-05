@@ -59,7 +59,7 @@ public interface Sentry {
             if(errOpt == 0) {
                 return Constants.NET_UPDATE;
             }else {
-                throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to establish connection, err opt : \{errOpt}");
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to establish connection, err opt : " + errOpt);
             }
         }
 
@@ -72,7 +72,7 @@ public interface Sentry {
         public void doClose() {
             int r = osNetworkLibrary.closeSocket(channel.socket());
             if(r < 0) {
-                throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to close socket, errno : \{Math.abs(r)}");
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to close socket, errno : " + Math.abs(r));
             }
         }
     }
@@ -118,7 +118,7 @@ public interface Sentry {
                         return SslUtil.throwException(SslBinding.sslGetErr(ssl, r), "SSL_set_fd()", Poller.localMemApi());
                     }
                 }else {
-                    throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to establish connection, err opt : \{errOpt}");
+                    throw new FrameworkException(ExceptionType.NETWORK, "Failed to establish connection, err opt : " + errOpt);
                 }
             }
         }
@@ -133,7 +133,7 @@ public interface Sentry {
             SslBinding.sslFree(ssl);
             int r = osNetworkLibrary.closeSocket(channel.socket());
             if(r < 0) {
-                throw new FrameworkException(ExceptionType.NETWORK, STR."Failed to close socket, errno : \{Math.abs(r)}");
+                throw new FrameworkException(ExceptionType.NETWORK, "Failed to close socket, errno : " + Math.abs(r));
             }
         }
 
@@ -170,7 +170,7 @@ public interface Sentry {
                 }
                 long verifyResult = SslBinding.sslGetVerifyResult(ssl);
                 if(verifyResult != 0) {
-                    throw new FrameworkException(ExceptionType.NETWORK, STR."Server certificate cannot be verified, verify result : \{verifyResult}");
+                    throw new FrameworkException(ExceptionType.NETWORK, "Server certificate cannot be verified, verify result : " + verifyResult);
                 }
                 SslBinding.x509Free(x509);
             }
