@@ -171,7 +171,19 @@ public final class ReadBuffer {
      */
     public static int searchPattern(long data, long pattern, ByteOrder byteOrder) {
         long mask = data ^ pattern; // this single line is the major cost that we are about 10% slower than the JDK version
-        long match = (mask - 0x0101010101010101L) & ~mask & 0x8080808080808080L;
+        /*
+           The textbook form is (mask - 0x0101010101010101L) & ~mask & 0x8080808080808080L, but that
+           subtraction borrows across byte lanes: a 0x01 lane that receives a borrow from a lower 0x00
+           lane also ends up with its high bit set and is reported as a match. That false positive is
+           harmless for little endian reads, where the reduction keeps the lowest set bit, but for big
+           endian reads the borrow travels toward the lowest array index, so the spurious match lands in
+           the most significant lane and wins the leading zeros reduction, reporting matchPos - 1.
+
+           Adding 0x7F to the low seven bits of each lane instead cannot carry out of its lane (0x7F + 0x7F
+           is 0xFE), so every lane is classified independently. OR-ing the original lane back in keeps a
+           match from being hidden by a lane whose high bit was already set.
+         */
+        long match = ~(((mask & 0x7F7F7F7F7F7F7F7FL) + 0x7F7F7F7F7F7F7F7FL) | mask) & 0x8080808080808080L;
         if(byteOrder == ByteOrder.BIG_ENDIAN) {
             return Long.numberOfLeadingZeros(match) >>> 3;
         }else if(byteOrder == ByteOrder.LITTLE_ENDIAN) {

@@ -196,4 +196,48 @@ public class ReadBufferTest {
             Assertions.assertEquals(Math.min(i, 8), i2);
         }
     }
+
+    /**
+     *   testPatternSearch picks its target byte and filler bytes at random, so the lane borrow bug it used to
+     *   hide behind only failed for a small fraction of the input space and surfaced as an intermittent build
+     *   failure. This exhausts every target byte and every position instead, so a regression in searchPattern
+     *   fails deterministically.
+     *
+     *   Filler bytes are the one case that actually mattered: a 0x01 lane adjacent to the match borrows across
+     *   the word and used to be misreported as a match in the big endian path, which returns matchPos - 1.
+     */
+    @Test
+    public void testPatternSearchExhaustive() {
+        for(int t = 0; t <= 0xFF; t++) {
+            final byte target = (byte) t;
+            long pattern = ReadBuffer.compilePattern(target);
+            for(int i = 0; i < 8; i++) {
+                final int matchPos = i;
+                MemorySegment segment = MemorySegment.ofArray(new long[1]);
+                for(int j = 0; j < 8; j++) {
+                    NativeUtil.setByte(segment, j, fillerByte(target, j));
+                }
+                NativeUtil.setByte(segment, i, target);
+
+                final String where = "target=0x" + Integer.toHexString(t) + ", matchPos=" + matchPos;
+                long le = segment.get(ValueLayout.JAVA_LONG, 0L);
+                Assertions.assertEquals(matchPos, ReadBuffer.searchPattern(le, pattern, ByteOrder.LITTLE_ENDIAN),
+                        () -> "little endian, " + where);
+
+                long be = segment.get(ValueLayout.JAVA_LONG.withOrder(ByteOrder.BIG_ENDIAN), 0L);
+                Assertions.assertEquals(matchPos, ReadBuffer.searchPattern(be, pattern, ByteOrder.BIG_ENDIAN),
+                        () -> "big endian, " + where);
+            }
+        }
+    }
+
+    /**
+     *   Returns a byte that differs from target, varying by slot so the word is not homogeneous. Slot 1
+     *   deliberately lands on 0x01 for every target other than 0x01 itself, which is the lane that triggers
+     *   the borrow.
+     */
+    private static byte fillerByte(byte target, int slot) {
+        int v = (slot * 37 + 11) & 0xFF;
+        return (byte) (v == (target & 0xFF) ? ((v + 1) & 0xFF) : v);
+    }
 }

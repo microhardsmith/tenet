@@ -115,7 +115,16 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <version>${maven-surefire-plugin.version}</version>
         <configuration>
-          <skipTests>false</skipTests>
+          <!--
+            Do NOT hardcode <skipTests> here. Explicit plugin configuration outranks the -D user property for
+            the same parameter, so a literal <skipTests>false</skipTests> would silently defeat
+            `mvn test -DskipTests` and `mvn test -Dmaven.test.skip`. Surefire already defaults to running tests.
+          -->
+          <!--
+            A -Dtest=LogTest filter empties the http-test execution, and vice versa. That is expected now
+            that the container tests are selected by tag, so an execution that matches nothing is not an error.
+          -->
+          <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
           <!--
             TENET_LIBRARY_PATH is read by NativeUtil via System.getProperty, an exported env var alone is not enough.
             log.file points at a test config that disables console output: ConsoleLogEventHandler writes to the native
@@ -177,9 +186,14 @@
                 <exclude>**/ContextTest*.java</exclude>
                 <exclude>**/RefMapTest.java</exclude>
                 <exclude>**/IntMapTest.java</exclude>
-                <exclude>**/HttpTest.java</exclude>
-                <exclude>**/LogTest.java</exclude>
               </excludes>
+              <!--
+                The two container tests are pulled out by tag, not by class name pattern. A -Dtest=HttpTest
+                overrides <includes> and <excludes> in every execution, which used to make that one test run
+                three times, binding the same fixed ports in quick succession and occasionally killing the
+                fork. Tags survive -Dtest, so each container test still runs exactly once per build.
+              -->
+              <excludedGroups>container-http,container-log</excludedGroups>
             </configuration>
           </execution>
           <execution>
@@ -189,9 +203,7 @@
               <goal>test</goal>
             </goals>
             <configuration>
-              <includes>
-                <include>**/HttpTest.java</include>
-              </includes>
+              <groups>container-http</groups>
             </configuration>
           </execution>
           <execution>
@@ -201,9 +213,7 @@
               <goal>test</goal>
             </goals>
             <configuration>
-              <includes>
-                <include>**/LogTest.java</include>
-              </includes>
+              <groups>container-log</groups>
             </configuration>
           </execution>
         </executions>

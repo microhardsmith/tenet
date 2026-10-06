@@ -3,6 +3,7 @@ package cn.zorcc.common.log;
 import cn.zorcc.common.Context;
 import cn.zorcc.common.LifeCycle;
 import cn.zorcc.common.structure.Wheel;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -19,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  *   test method. The assertions read the file sink back, which covers the log config load, WriteBuffer.toString() and
  *   FileLogEventHandler paths end to end.
  */
+@Tag("container-log")
 public class LogTest {
     private static final Logger log = new Logger(LogTest.class);
     private static final String INFO_MARKER = "tenet-log-marker-info";

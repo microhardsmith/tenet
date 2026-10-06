@@ -13,6 +13,7 @@ import cn.zorcc.common.http.HttpServerEncoder;
 import cn.zorcc.common.log.Logger;
 import cn.zorcc.common.log.LoggerConsumer;
 import cn.zorcc.common.structure.Wheel;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import javax.net.ssl.SSLContext;
@@ -39,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *   are all guarded by static single-instance / single-init flags. So all three original scenarios (http, https, both)
  *   are served by one Net inside one test method, and each scenario is verified with a real client request.
  */
+@Tag("container-http")
 public class HttpTest {
     private static final Logger log = new Logger(HttpTest.class);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
